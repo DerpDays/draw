@@ -1,0 +1,6 @@
+[default]
+extend-ignore-identifiers-re = ["lod_min_clamp", "lod_max_clamp"]
+
+[default.extend-identifiers]
+# *sigh* this just isn't worth the cost of fixing
+tesselation_cache = "tessellation"

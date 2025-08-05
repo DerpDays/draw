@@ -1,0 +1,20 @@
+[package]
+name = "atlas"
+version = { workspace = true }
+edition = { workspace = true }
+
+
+[dependencies]
+# TODO: thiserr instead
+anyhow = { workspace = true }
+
+tracing = { workspace = true }
+guillotiere = { workspace = true }
+rustc-hash = { workspace = true }
+
+wgpu = { workspace = true, optional = true }
+euclid = { workspace = true }
+
+[features]
+default = ["wgpu"]
+wgpu = ["dep:wgpu"]

@@ -1,0 +1,16 @@
+[package]
+name = "input"
+version = { workspace = true }
+edition = { workspace = true }
+
+
+[dependencies]
+bitflags = { workspace = true }
+serde = { workspace = true, optional = true }
+euclid = { workspace = true }
+
+smithay-client-toolkit = { workspace = true, optional = true, default-features = false }
+
+[features]
+default = ["sctk", "serde"]
+sctk = ["dep:smithay-client-toolkit"]

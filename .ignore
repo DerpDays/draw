@@ -1,0 +1,6 @@
+resources/
+.gitignore
+.ignore
+.ignore
+Cargo.lock
+crates/taffy_rounding_patch

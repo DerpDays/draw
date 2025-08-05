@@ -1,0 +1,22 @@
+[package]
+name = "graphics"
+version = { workspace = true }
+edition = { workspace = true }
+
+
+[dependencies]
+atlas = { workspace = true }
+
+bytemuck = { workspace = true }
+lyon = { workspace = true }
+serde = { workspace = true }
+
+tracing = { workspace = true }
+
+parley = { workspace = true }
+swash = { workspace = true }
+
+euclid = { workspace = true }
+color = { workspace = true }
+wgpu = { workspace = true }
+usvg = { workspace = true }

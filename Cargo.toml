@@ -1,0 +1,83 @@
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+
+
+[workspace]
+package = { edition = "2024", version = "0.1.0" }
+resolver = "2"
+members = [
+  "platform/wayland",
+
+  "crates/renderer",
+  "crates/graphics",
+  "crates/atlas",
+  "crates/canvas",
+  "crates/input",
+  "crates/gui",
+]
+default-members = ["platform/wayland"]
+
+[workspace.dependencies]
+renderer = { path = "./crates/renderer" }
+atlas = { path = "./crates/atlas" }
+graphics = { path = "./crates/graphics" }
+canvas = { path = "./crates/canvas" }
+input = { path = "./crates/input", default-features = false }
+gui = { path = "./crates/gui" }
+
+anyhow = "1.0.98"
+bytemuck = "1.23.1"
+bitflags = "2.9.1"
+color = { version = "0.3.1", features = ["serde", "bytemuck"] }
+
+
+# wayland deps
+ashpd = "0.11.0"
+smithay-client-toolkit = { version = "0.19.2", default-features = false }
+
+dirs = "6.0.0"
+futures-util = "0.3.31"
+lyon = { version = "1.0.1", features = ["serialization"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.141"
+strum = { version = "0.27.2", features = ["derive"] }
+tokio = { version = "1.47.0", features = ["full"] }
+tracing = "0.1.41"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+wayland-backend = { version = "0.3.10", features = ["client_system", "log"] }
+wayland-client = "0.31.10"
+wgpu = { version = "26.0.1", default-features = false, features = [
+  "std",
+  "parking_lot",
+  "vulkan",
+  "wgsl",
+  "webgpu",
+] }
+
+wayland-protocols = { version = "0.32.8", features = ["client"] }
+euclid = "0.22.11"
+
+# cosmic-text = { version = "0.14.2", features = ["vi"] }
+guillotiere = "0.6.2"
+usvg = "0.45.1"
+taffy = "0.8.3"
+
+
+rustc-hash = "2.1.1"
+
+accesskit = { version = "0.21.0" }
+rstar = { version = "0.12.2" }
+
+
+swash = { version = "0.2.5", features = ["scale"] }
+parley = { version = "0.5.0" }
+# fontique = { version = "0.5.0" }
+# peniko = { version = "0.4.0" }
+# kurbo = { version = "0.11.2" }
+
+[patch.crates-io]
+taffy = { path = "./crates/taffy_rounding_patch" }

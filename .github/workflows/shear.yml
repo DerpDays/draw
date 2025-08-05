@@ -1,0 +1,24 @@
+# Remove unused dependencies from Cargo.toml
+name: Cargo Shear
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  cargo-shear:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Cargo Shear
+        uses: taiki-e/install-action@v2.56.3
+        with:
+          tool: cargo-shear@1.3.3
+
+      - name: Run Cargo Shear
+        run: |
+          cargo shear

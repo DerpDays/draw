@@ -1,0 +1,28 @@
+[package]
+name = "wayland"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+canvas = { workspace = true }
+renderer = { workspace = true }
+input = { workspace = true, features = ["sctk", "serde"] }
+
+anyhow = { workspace = true }
+ashpd = { workspace = true }
+dirs = { workspace = true }
+futures-util = { workspace = true }
+euclid = { workspace = true }
+strum = { workspace = true }
+tokio = { workspace = true }
+
+tracing = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+wgpu = { workspace = true }
+
+smithay-client-toolkit = { workspace = true, default-features = true }
+wayland-backend = { workspace = true }
+wayland-client = { workspace = true }
+wayland-protocols = { workspace = true }

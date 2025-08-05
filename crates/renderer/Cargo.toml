@@ -1,0 +1,15 @@
+[package]
+name = "renderer"
+version = { workspace = true }
+edition = { workspace = true }
+
+
+[dependencies]
+graphics = { workspace = true }
+
+anyhow = { workspace = true }
+bytemuck = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+
+wgpu = { workspace = true }
