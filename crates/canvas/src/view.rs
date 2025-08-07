@@ -1,3 +1,4 @@
+use euclid::default::Size2D;
 use graphics::{
     systems::{SystemsOwned, TextState, TextureState},
     Drawable,
@@ -42,7 +43,12 @@ pub enum InteractionKind {
 }
 
 impl<T: RedrawRequest + Clone + 'static> View<T> {
-    pub fn new(renderer: &renderer::State, viewport: lyon::math::Size, redraw_manager: T) -> Self {
+    pub fn new(
+        renderer: &renderer::State,
+        viewport: Size2D<f32>,
+        scale_factor: f64,
+        redraw_manager: T,
+    ) -> Self {
         let text = TextState::default();
         let texture = TextureState::new(&renderer.device);
         let projection = Projection::new(viewport);
@@ -51,7 +57,7 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
         let canvas = Canvas::new(&mut systems.to_ref(&renderer.device, &renderer.queue));
 
         let mut gui_buffer = GrowableMeshBuffer::new(&renderer.device, 1024, 2048);
-        let mut gui = UITree::new(viewport);
+        let mut gui = UITree::new(viewport, scale_factor);
 
         let root_node = gui.root_node();
 
@@ -97,8 +103,8 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
         }
     }
 
-    pub fn update_viewport(&mut self, viewport: lyon::math::Size) {
-        self.app.gui.update_viewport(viewport);
+    pub fn update_viewport(&mut self, viewport: Size2D<f32>, scale_factor: f64) {
+        self.app.gui.update_viewport(viewport, scale_factor);
         self.projection.set_viewport(viewport);
         self.redraw_manager.request_redraw();
         info!("Updated the viewport size to: {viewport:?}!");

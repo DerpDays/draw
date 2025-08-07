@@ -43,7 +43,7 @@ pub trait View {
     fn configure(&mut self, state: &mut ShareableState, width: u32, height: u32);
 
     fn set_scale_factor(&mut self, state: &mut ShareableState, scale_factor: f64);
-    fn get_scale_factor(&self) -> Option<f64>;
+    fn get_scale_factor(&self) -> f64;
 
     fn pointer_event(
         &mut self,

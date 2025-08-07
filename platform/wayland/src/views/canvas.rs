@@ -17,7 +17,7 @@ use wayland_client::{
     Proxy,
 };
 
-use crate::fractional_scale::FractionalScale;
+use crate::{fractional_scale::FractionalScale, viewporter::Viewport};
 use crate::{OverlayMode, RedrawManager, ShareableState};
 
 use crate::views::{LayerShellView, View};
@@ -26,10 +26,11 @@ use crate::views::{LayerShellView, View};
 pub struct LayerShellCanvasView {
     pub layer_surface: LayerSurface,
     pub fractional_scale: FractionalScale,
+    pub viewport: Viewport,
     pub wgpu_surface: wgpu::Surface<'static>,
 
     pub scale_factor: Option<f64>,
-    pub size: Size2D<f64>,
+    pub physical_size: Size2D<u32>,
 
     pub canvas: canvas::view::View<RedrawManager>,
     pub previous_cursor_icon: Option<CursorIcon>,
@@ -69,25 +70,23 @@ impl LayerShellCanvasView {
             .find(|mode| mode.current)
             .context("cannot determine output size: display has no current mode")?;
 
-        let (width, height) = current_mode.dimensions;
-
-        // TODO: niri gives these output sizes already scaled
-        let uwidth: NonZero<u32> = u32::try_from(width)
-            .context("display width must be positive")?
-            .try_into()
-            .context("display width must not be zero")?;
-        let uheight: NonZero<u32> = u32::try_from(height)
-            .context("display height must be positive")?
-            .try_into()
-            .context("display height must not be zero")?;
+        let physical_size: Size2D<u32> =
+            Size2D::new(current_mode.dimensions.0, current_mode.dimensions.1)
+                .try_cast()
+                .expect("monitor dimensions should be positive");
 
         let fractional_scale = state
             .wayland
             .fractional_state
             .get_scale(layer_surface.wl_surface(), &state.wayland.queue_handle);
 
-        let canvas_viewport = Size2D::new(width as f64, height as f64);
-        layer_surface.set_size(uwidth.into(), uheight.into());
+        let viewport = state
+            .wayland
+            .viewporter
+            .get_viewport(layer_surface.wl_surface(), &state.wayland.queue_handle);
+        viewport.set_destination(current_mode.dimensions.0, current_mode.dimensions.1);
+
+        layer_surface.set_size(physical_size.width, physical_size.height);
         // initial commit before we attach wgpu to the surface.
 
         // INFO: WGPU stuff
@@ -123,11 +122,12 @@ impl LayerShellCanvasView {
         Ok(Self {
             layer_surface,
             wgpu_surface,
+            viewport,
             fractional_scale,
 
             mode,
-            size: canvas_viewport,
-            canvas: canvas::view::View::new(&state.wgpu, canvas_viewport.cast(), redraw_manager),
+            physical_size,
+            canvas: canvas::view::View::new(&state.wgpu, physical_size.cast(), 1., redraw_manager),
             previous_cursor_icon: None,
 
             scale_factor: None,
@@ -214,26 +214,28 @@ impl View for LayerShellCanvasView {
 
     #[instrument(name = "LayerShellCanvasView::configure", skip_all)]
     fn configure(&mut self, state: &mut ShareableState, width: u32, height: u32) {
-        trace!("configuring canvas with size: {width}x{height}");
+        trace!(
+            "configuring canvas with size: {width}x{height} : self.monitor_size: {:?}",
+            self.physical_size
+        );
+
+        // let logical_size = (self.physical_size.cast() / self.get_scale_factor())
+        //     .ceil()
+        //     .cast();
         self.wgpu_surface.configure(
             &state.wgpu.device,
             &wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: state.wgpu.texture_format,
-                width,
-                height,
+                width: self.physical_size.width,
+                height: self.physical_size.height,
                 present_mode: wgpu::PresentMode::Mailbox,
                 desired_maximum_frame_latency: 0,
                 alpha_mode: wgpu::CompositeAlphaMode::PreMultiplied,
                 view_formats: vec![],
             },
         );
-        let scale_factor = self.scale_factor.unwrap_or(1.);
-        // if new_size != self.size {
-        //     self.size = new_size;
-        //
-        //     self.set_scale_factor(state, self.scale_factor.unwrap_or(1.));
-        // }
+
         if !self.configured {
             self.configured = true;
             _ = self.set_mode(state, self.mode);
@@ -246,11 +248,10 @@ impl View for LayerShellCanvasView {
         themed_pointer: &ThemedPointer,
         event: &PointerEvent,
     ) {
-        let position = Point2D::new(event.position.0 as f32, event.position.1 as f32);
-        // let position = lyon::math::point(
-        //     (event.position.0 * self.scale_factor.unwrap_or(1.)) as f32,
-        //     (event.position.1 * self.scale_factor.unwrap_or(1.)) as f32,
-        // );
+        // let position = Point2D::new(event.position.0 as f32, event.position.1 as f32);
+        let position: Point2D<f32> =
+            (Point2D::from(event.position) * self.scale_factor.unwrap_or(1.)).cast();
+        tracing::trace!("mouse pos: {position:?}");
         let kind = input::sctk::pointer_event(&event.kind);
         if kind == MouseEventKind::Enter {
             self.previous_cursor_icon = None;
@@ -284,17 +285,20 @@ impl View for LayerShellCanvasView {
     }
     fn set_scale_factor(&mut self, state: &mut ShareableState, scale_factor: f64) {
         tracing::warn!("scale factor for canvas: {scale_factor}");
-        let new_scaled_size = (self.size / scale_factor).ceil();
+        let logical_size = (self.physical_size.cast() / scale_factor).ceil().cast();
         self.layer_surface
-            .set_size(new_scaled_size.width as u32, new_scaled_size.height as u32);
-        self.canvas.update_viewport(new_scaled_size.cast());
+            .set_size(self.physical_size.width, self.physical_size.height);
+        self.canvas
+            .update_viewport(self.physical_size.cast(), self.get_scale_factor());
+        self.viewport
+            .set_destination(logical_size.width, logical_size.height);
         self.layer_surface.commit();
 
         self.scale_factor = Some(scale_factor);
         _ = self.render(state);
     }
 
-    fn get_scale_factor(&self) -> Option<f64> {
-        self.scale_factor
+    fn get_scale_factor(&self) -> f64 {
+        self.scale_factor.unwrap_or(1.)
     }
 }

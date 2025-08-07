@@ -20,6 +20,7 @@ use crate::{
 
 pub struct UITree<T> {
     pub viewport: Size2D<f32>,
+    pub scale_factor: f64,
     capture: Capture,
 
     inner: TaffyTree<TreeNode<T>>,
@@ -76,7 +77,7 @@ pub enum Focusable {
 }
 
 impl<T: Default> UITree<T> {
-    pub fn new(size: Size2D<f32>) -> Self {
+    pub fn new(viewport: Size2D<f32>, scale_factor: f64) -> Self {
         let mut inner = TaffyTree::new();
         let root_node = inner
             .new_leaf_with_context(
@@ -92,7 +93,8 @@ impl<T: Default> UITree<T> {
         let render_order = ZIndexOrdering::empty(root_node);
 
         Self {
-            viewport: size,
+            viewport,
+            scale_factor,
             capture: Capture::default(),
 
             inner,
@@ -241,8 +243,11 @@ impl<T> UITree<T> {
         self.inner.print_tree(root);
     }
 
-    pub const fn update_viewport(&mut self, size: Size2D<f32>) {
+    pub const fn update_viewport(&mut self, size: Size2D<f32>, scale_factor: f64) {
         self.viewport = size;
+        self.scale_factor = scale_factor;
+
+        self.render_order_dirty = true;
         self.layout_dirty = true;
     }
 }

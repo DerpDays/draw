@@ -133,18 +133,17 @@ impl<C: ApplyCoordinates> Text<C> {
 
     pub fn set_content(&mut self, content: String) {
         self.content = content;
-        self.layout = None;
-        self.render_cache = None;
+        self.clear_cache();
     }
 
     pub fn clear_cache(&mut self) {
         self.render_cache = None;
+        self.layout = None;
     }
 
     pub fn update_rect(&mut self, area: Box2D<f32>) {
-        self.render_cache = None;
-        self.layout = None;
         self.area = make_positive_box(area);
+        self.clear_cache();
     }
 
     fn prepare_layout(&mut self, systems: &mut Systems) -> Layout<ColorBrush> {
@@ -476,10 +475,6 @@ impl<C: ApplyCoordinates> Drawable for Text<C> {
         self.layout = Some(layout);
         // Update the stored glyph allocations, so that unused allocations can be dropped
         self.render_cache = Some(result.clone());
-        tracing::info!(
-            "self is the following: {self:#?}, with area min: {:?}",
-            self.area.min
-        );
         self.render_cache.as_ref().unwrap()
     }
 

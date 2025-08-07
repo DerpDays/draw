@@ -156,9 +156,14 @@ impl<C: ApplyCoordinates> Rectangle<C> {
     }
 
     #[inline]
-    pub fn size(&self) -> Size2D<f32> {
+    pub const fn size(&self) -> Size2D<f32> {
         self.size
     }
+    #[inline]
+    pub const fn origin(&self) -> Point2D<f32> {
+        self.origin
+    }
+
     pub fn set_size(&mut self, size: Size2D<f32>) {
         self.size = size;
         self.apply_area_to_color();
