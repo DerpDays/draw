@@ -74,6 +74,10 @@ impl ZIndexOrdering {
         stack.reverse();
 
         while let Some(node) = stack.pop() {
+            // check if the node has display none
+            if tree.get_style(node).display == taffy::Display::None {
+                continue;
+            }
             let z_indexing = tree.get_zindex_properties(node);
             if z_indexing.isolate_z {
                 sorted.push((

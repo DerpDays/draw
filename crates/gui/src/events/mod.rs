@@ -61,6 +61,11 @@ impl<S: HandlesEvent<MouseEvent> + Element> MouseEventHandler<S> for S {
 }
 
 pub trait KeyboardEventHandler<S: Element> {
+    /// Assign a keyboard handler to this element.
+    ///
+    /// ```rust
+    /// SomeWidget::new().keyboard_handler(|this, ctx| ..);
+    /// ```
     fn keyboard_handler<F>(self, func: F) -> Self
     where
         F: Fn(&mut S, &mut EventContext<KeyboardEvent, S::Message>) + 'static;
@@ -220,14 +225,19 @@ pub struct EventContext<E, M: Clone> {
     /// The node currently handling the event.
     current_node: NodeId,
 
+    /// Prevent the default behaviour of this widget.
+    prevent_default: bool,
     /// If set, indicates that a redraw is requested after event processing.
     redraw: Option<Redraw>,
     /// If set, indicates that this node is requesting keyboard focus.
-    requesting_kb_focus: Option<NodeId>,
+    requesting_kb_focus_capture: Option<NodeId>,
+    requesting_kb_focus_release: bool,
     /// If set, indicates that this node is requesting mouse capture.
     requesting_mouse_capture: Option<NodeId>,
     /// If set, indicates that a node in the propagation path is requesting mouse release.
     requesting_mouse_release: bool,
+    /// If set, indicates that an event may have changed the size of the layout.
+    requesting_relayout: Vec<NodeId>,
     /// Accumulated messages emitted during the event lifecycle, along with their associated node.
     pub messages: Vec<(NodeId, Vec<M>)>,
 
@@ -248,6 +258,14 @@ impl<E, M: Clone> EventContext<E, M> {
         self.propagating = false;
     }
 
+    /// Prevents the default action from being taken for the given event.
+    ///
+    /// NOTE: This does not stop all default actions from being taken, only those that are in
+    /// direct associated with the given widgets event handler.
+    pub const fn prevent_default(&mut self) {
+        self.prevent_default = true;
+    }
+
     /// Requests a redraw after the event is processed.
     ///
     /// If a redraw has already been set, it will be updated only if the new redraw
@@ -263,10 +281,13 @@ impl<E, M: Clone> EventContext<E, M> {
     ///
     /// If a node prior in the event propagation chain has requested focus, then focus will be only
     /// requested for that prior node instead of the new node provided.
-    pub fn request_keyboard_focus(&mut self, node: NodeId) {
-        if self.requesting_kb_focus.is_none() {
-            self.requesting_kb_focus = Some(node);
+    pub const fn request_kb_focus_capture(&mut self, node: NodeId) {
+        if self.requesting_kb_focus_capture.is_none() {
+            self.requesting_kb_focus_capture = Some(node);
         }
+    }
+    pub const fn request_kb_focus_release(&mut self) {
+        self.requesting_kb_focus_release = true;
     }
     /// Requests mouse capture for the given node.
     ///
@@ -279,6 +300,10 @@ impl<E, M: Clone> EventContext<E, M> {
     }
     pub const fn request_mouse_release(&mut self) {
         self.requesting_mouse_release = true;
+    }
+
+    pub fn request_relayout(&mut self, node: NodeId) {
+        self.requesting_relayout.push(node);
     }
 
     /// Pushes messages to be handled later, associated with the current node.
@@ -300,6 +325,11 @@ impl<E, M: Clone> EventContext<E, M> {
     pub const fn current_phase(&self) -> EventPhase {
         self.event_phase
     }
+    /// Helper method to match when the current phase is not capturing.
+    /// See [`EventPhase`] for more detail on each lifecycle.
+    pub const fn in_capture_phase(&self) -> bool {
+        matches!(self.event_phase, EventPhase::Capturing)
+    }
 
     /// Returns `true` if the event supports bubbling.
     pub const fn bubbles(&self) -> bool {
@@ -316,13 +346,28 @@ impl<E, M: Clone> EventContext<E, M> {
         self.current_node
     }
 
-    /// Whether a redraw is required after processing this event
+    /// Whether the default behaviour should be prevented.
+    pub const fn is_preventing_default(&self) -> bool {
+        self.prevent_default
+    }
+    /// Whether a redraw is required after processing this event.
     pub const fn is_requesting_redraw(&self) -> Option<Redraw> {
         self.redraw
     }
+    /// Whether the layout should be recalculated after processing this event.
+    pub const fn is_requesting_relayout(&self) -> &Vec<NodeId> {
+        &self.requesting_relayout
+    }
     /// Whether a node is requesting keyboard focus.
-    pub const fn is_requesting_kb_focus(&self) -> Option<NodeId> {
-        self.requesting_kb_focus
+    pub const fn is_requesting_kb_focus_capture(&self) -> Option<NodeId> {
+        self.requesting_kb_focus_capture
+    }
+    /// Whether the event is requesting keyboard focus release.
+    ///
+    /// As captured events are directly sent to the node (no event propagation), this indicates
+    /// that the target node requested the keyboard focus release.
+    pub const fn is_requesting_kb_focus_release(&self) -> bool {
+        self.requesting_kb_focus_release
     }
     /// Whether a node is requesting mouse capture.
     pub const fn is_requesting_mouse_capture(&self) -> Option<NodeId> {
@@ -355,8 +400,12 @@ impl<E, M: Clone> EventContext<E, M> {
             target_node,
             current_node: target_node,
 
+            prevent_default: false,
             redraw: None,
-            requesting_kb_focus: None,
+            requesting_relayout: Vec::new(),
+
+            requesting_kb_focus_capture: None,
+            requesting_kb_focus_release: false,
             requesting_mouse_capture: None,
             requesting_mouse_release: false,
 
@@ -379,8 +428,12 @@ impl<E, M: Clone> EventContext<E, M> {
             target_node: node,
             current_node: node,
 
+            prevent_default: false,
             redraw: None,
-            requesting_kb_focus: None,
+            requesting_relayout: Vec::new(),
+
+            requesting_kb_focus_capture: None,
+            requesting_kb_focus_release: false,
             requesting_mouse_capture: None,
             requesting_mouse_release: false,
 
@@ -403,6 +456,10 @@ impl<E, M: Clone> EventContext<E, M> {
     pub(crate) fn push_event(&mut self, event: TreeEvent) {
         self.events.push((self.current_node, event))
     }
+    /// Pushes messages to be handled later, associated with the current node.
+    pub(crate) fn push_event_node(&mut self, node: NodeId, event: TreeEvent) {
+        self.events.push((node, event))
+    }
     pub(crate) fn tree_commands(&self) -> &Vec<TreeCommand> {
         &self.tree_commands
     }
@@ -410,6 +467,7 @@ impl<E, M: Clone> EventContext<E, M> {
     pub(crate) fn into_result(self) -> EventResult<M> {
         EventResult {
             redraw: self.redraw,
+            relayout: self.requesting_relayout,
             messages: self.messages,
             events: self.events,
         }
@@ -419,7 +477,9 @@ impl<E, M: Clone> EventContext<E, M> {
 #[derive(Clone, Debug)]
 pub struct EventResult<M: Clone> {
     /// If set, indicates that a redraw is requested after event processing.
-    redraw: Option<Redraw>,
+    pub(crate) redraw: Option<Redraw>,
+    /// Indicates that a relayout is requested for the given nodes after event processing.
+    relayout: Vec<NodeId>,
     /// Accumulated messages emitted from all events dispatched.
     messages: Vec<(NodeId, Vec<M>)>,
 
@@ -431,6 +491,7 @@ impl<M: Clone> EventResult<M> {
     pub(crate) const fn empty() -> Self {
         Self {
             redraw: None,
+            relayout: Vec::new(),
             messages: vec![],
             events: vec![],
         }
@@ -438,6 +499,10 @@ impl<M: Clone> EventResult<M> {
 
     pub(crate) fn take_new_events(&mut self) -> Vec<(NodeId, TreeEvent)> {
         std::mem::take(&mut self.events)
+    }
+
+    pub(crate) fn take_relayouting(&mut self) -> Vec<NodeId> {
+        std::mem::take(&mut self.relayout)
     }
 
     pub(crate) fn combine(&mut self, other: Self) {
@@ -448,6 +513,7 @@ impl<M: Clone> EventResult<M> {
                 self.redraw = Some(redraw_other);
             }
         }
+        self.relayout.extend(other.relayout);
         self.messages.extend(other.messages);
         self.events.extend(other.events);
     }
@@ -458,5 +524,9 @@ impl<M: Clone> EventResult<M> {
     /// Whether a redraw is required after processing this event
     pub const fn is_requesting_redraw(&self) -> Option<Redraw> {
         self.redraw
+    }
+    /// Whether a redraw is required after processing this event
+    pub const fn is_requesting_relayout(&self) -> &Vec<NodeId> {
+        &self.relayout
     }
 }

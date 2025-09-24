@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use canvas::RedrawRequest;
+use canvas::{view, RedrawRequest};
 use fractional_scale::FractionalScaleHandler;
 use keyboard::Keyboard;
 use tracing::{info, instrument, trace, warn};
@@ -52,7 +52,7 @@ pub mod views;
 use crate::global_binds::{ShortcutEvents, Shortcuts, WaylandKeybinds};
 use crate::views::{View, ViewManager};
 
-// FIXME: use this
+// TODO: use is_wayland() function to detect.
 #[allow(unused)]
 pub fn is_wayland() -> bool {
     std::env::var("XDG_SESSION_TYPE").map_or_else(
@@ -101,7 +101,6 @@ pub struct ShareableState {
 pub struct Data {
     pub mode: OverlayMode,
     pub first_surface: Option<WlSurface>,
-    // pub toolbar: crate::iced::IcedProgram<Toolbar>,
 }
 
 /// Indicates the mode that the overlay is currently in.
@@ -388,6 +387,8 @@ impl CompositorHandler for State {
         info!("`surface_leave` called");
     }
 }
+
+// TODO: rewrite this into a client-server architecture.
 impl OutputHandler for State {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.shareable.wayland.output_state
@@ -422,7 +423,8 @@ impl LayerShellHandler for State {
             .iter_mut()
             .position(|v| &v.layer_surface == layer)
         {
-            self.views.layer_shell_views.remove(view_idx);
+            let view = self.views.layer_shell_views.remove(view_idx);
+            std::mem::drop(view.wgpu_surface);
         }
     }
 

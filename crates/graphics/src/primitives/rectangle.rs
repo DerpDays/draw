@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
-use color::{PremulColor, Srgb};
-use euclid::default::{Box2D, Point2D, Size2D};
+use color::{AlphaColor, PremulColor, Srgb};
+use euclid::default::{Box2D, Point2D, Size2D, Vector2D};
 use lyon::path::{Path, Winding};
 use lyon::tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers};
 use serde::{Deserialize, Serialize};
@@ -20,8 +20,8 @@ pub struct Options {
 }
 impl Options {
     pub const DEFAULT: Self = Self {
-        color: BasicColor::Solid(PremulColor::new([0.4, 0.4, 0.4, 1.])),
-        stroke_color: BasicColor::Solid(PremulColor::new([1., 1., 1., 1.])),
+        color: BasicColor::Solid(AlphaColor::new([0.4, 0.4, 0.4, 1.])),
+        stroke_color: BasicColor::Solid(AlphaColor::new([1., 1., 1., 1.])),
         stroke_width: 0.,
         rounding: Rounding::DEFAULT,
         box_sizing: BoxSizing::BorderBox,
@@ -126,6 +126,14 @@ impl<C: ApplyCoordinates> Rectangle<C> {
         (self.fill_path, self.stroke_path) = Self::build_path(&origin, &size, &self.options);
         self.clear_cache();
     }
+
+    pub fn translate(&mut self, dx: Vector2D<f32>) {
+        self.origin += dx;
+        self.apply_area_to_color();
+        (self.fill_path, self.stroke_path) =
+            Self::build_path(&self.origin, &self.size, &self.options);
+        self.render_cache.as_mut().map(|x| x.translate(dx));
+    }
     pub fn update_options(&mut self, options: Options) {
         self.options = options;
         self.apply_area_to_color();
@@ -174,7 +182,9 @@ impl<C: ApplyCoordinates> Rectangle<C> {
     fn vertex_linear_gradient(gradient: &BasicLinearGradient, vertex: &FillVertex<'_>) -> Vertex {
         Vertex::with_color(
             vertex.position(),
-            C::apply(VertexKind::Color(gradient.get_point(vertex.position()))),
+            C::apply(VertexKind::Color(
+                gradient.get_point(vertex.position()).premultiply(),
+            )),
         )
     }
     fn vertex_solid(color: PremulColor<Srgb>, vertex: &FillVertex<'_>) -> Vertex {
@@ -182,7 +192,7 @@ impl<C: ApplyCoordinates> Rectangle<C> {
     }
     fn as_vertex_fn(color: BasicColor) -> impl Fn(FillVertex<'_>) -> Vertex {
         move |vertex: FillVertex<'_>| match color {
-            BasicColor::Solid(color) => Self::vertex_solid(color, &vertex),
+            BasicColor::Solid(color) => Self::vertex_solid(color.premultiply(), &vertex),
             BasicColor::LinearGradient(gradient) => {
                 Self::vertex_linear_gradient(&gradient, &vertex)
             }

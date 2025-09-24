@@ -33,8 +33,7 @@ impl SeatHandler for State {
     ) {
         match capability {
             Capability::Keyboard => {
-                // FIXME: dedup
-                let callback: RepeatCallback<State> = Box::new(move |state, keyboard, event| {
+                let callback: RepeatCallback<State> = Box::new(|state, keyboard, event| {
                     let Some(kb) = state.keyboards.values().find(|x| x.id() == keyboard.id())
                     else {
                         warn!("keyboard event `release_key` dispatched for keyboard not in state");

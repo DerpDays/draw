@@ -130,6 +130,14 @@ pub(crate) mod widget {
                     Widget::Layout => {},
                 }
             }
+            fn name(&self) -> &'static str {
+                match self {
+                    $( Widget::$variant(w) => w.name(), )*
+
+                    Widget::Other(w) => w.name(),
+                    Widget::Layout => "layout",
+                }
+            }
 
         };
     }
@@ -153,7 +161,6 @@ pub(crate) mod event_handlers {
         };
     }
 
-    /// Internal macro to generate HandlesEvent impls with documentation.
     macro_rules! impl_event_handler {
         (
             $widget:ident,

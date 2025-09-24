@@ -1,9 +1,22 @@
-Draw is an annotation tool primarily for linux (with more platforms coming).
+Draw is an annotation tool primarily for wayland linux (with more platforms coming).
 
 It allows you to draw and annotate ontop of your desktop easily through configurable keybinds (such as hold to draw, toggle, etc).
 
 Similar to annotation tools from remote desktop solutions (but aiming to be more feature-full) and dedicated software such as epicpen.
 Aims to make it easier to reach for than excalidraw, mermaid or similar tools for explaining things.
+
+To run the wayland application in its current form:
+```bash
+# Clone the repository
+git clone https://github.com/DerpDays/draw.git
+# Install rustup (skip if you already have rustup installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Install the nightly toolchain (skip if you already have a recent nightly toolchain installed).
+rustup toolchain install nightly
+# Run the wayland program.
+cargo +nightly run -p wl
+```
+
 
 Currently supports in some or full capacity:
 - Image and partial SVG rendering.
@@ -11,7 +24,6 @@ Currently supports in some or full capacity:
 - Interface for swapping tools, and changing their options.
 - Customisable text rendering.
 - Wayland fractional scaling.
-
 
 What is currently in the works (locally or in some branch):
 - PDF support

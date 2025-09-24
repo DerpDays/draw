@@ -2,7 +2,7 @@ use graphics::{get_empty_mesh, Mesh, Systems, Vertex};
 use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
-    events::{BlurEvent, EventContext, EventHandler, FocusEvent, HandlesEvent},
+    events::{BlurEvent, EventContext, EventHandler, FocusEvent},
     widgets::Widget,
     Element,
 };

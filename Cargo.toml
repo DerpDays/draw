@@ -10,6 +10,7 @@ package = { edition = "2024", version = "0.1.0" }
 resolver = "2"
 members = [
   "platform/wayland",
+  "platform/wl",
 
   "crates/renderer",
   "crates/graphics",
@@ -17,8 +18,10 @@ members = [
   "crates/canvas",
   "crates/input",
   "crates/gui",
+  "crates/gui_reactive",
+  "platform/wl",
 ]
-default-members = ["platform/wayland"]
+default-members = ["platform/wl"]
 
 [workspace.dependencies]
 renderer = { path = "./crates/renderer" }
@@ -27,16 +30,26 @@ graphics = { path = "./crates/graphics" }
 canvas = { path = "./crates/canvas" }
 input = { path = "./crates/input", default-features = false }
 gui = { path = "./crates/gui" }
+gui_reactive = { path = "./crates/gui_reactive" }
 
 anyhow = "1.0.98"
+clap = { version = "4.5.45", features = ["derive"] }
+color-eyre = "0.6.5"
+bincode = "2.0.1"
+thiserror = "2.0.12"
+
+async-executor = "1.13.2"
+futures-lite = "2.6.1"
+
 bytemuck = "1.23.1"
 bitflags = "2.9.1"
 color = { version = "0.3.1", features = ["serde", "bytemuck"] }
 
 
 # wayland deps
-ashpd = "0.11.0"
-smithay-client-toolkit = { version = "0.19.2", default-features = false }
+ashpd = "0.12.0"
+smithay-client-toolkit = { version = "0.20.0", default-features = false }
+wayland-backend = { version = "0.3.10", default-features = false }
 
 dirs = "6.0.0"
 futures-util = "0.3.31"
@@ -48,8 +61,6 @@ tokio = { version = "1.47.0", features = ["full"] }
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-wayland-backend = { version = "0.3.10", features = ["client_system", "log"] }
-wayland-client = "0.31.10"
 wgpu = { version = "26.0.1", default-features = false, features = [
   "std",
   "parking_lot",
@@ -58,13 +69,12 @@ wgpu = { version = "26.0.1", default-features = false, features = [
   "webgpu",
 ] }
 
-wayland-protocols = { version = "0.32.8", features = ["client"] }
 euclid = "0.22.11"
 
 # cosmic-text = { version = "0.14.2", features = ["vi"] }
 guillotiere = "0.6.2"
 usvg = "0.45.1"
-taffy = "0.8.3"
+taffy = "0.9.1"
 
 
 rustc-hash = "2.1.1"

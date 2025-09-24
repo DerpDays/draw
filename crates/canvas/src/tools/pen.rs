@@ -6,19 +6,15 @@ use input::{Key, Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
 #[derive(Clone, Debug)]
 pub struct PenTool {
-    drag: Option<Primitive<CanvasCoordinates>>,
+    pub drag: Option<Primitive<CanvasCoordinates>>,
     pub color: PremulColor<Srgb>,
 }
-impl PenTool {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
+
 impl Default for PenTool {
     fn default() -> Self {
         Self {
             drag: Default::default(),
-            color: PremulColor::new([1., 1., 1., 1.]),
+            color: PremulColor::BLACK,
         }
     }
 }

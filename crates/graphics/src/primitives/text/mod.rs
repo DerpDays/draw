@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use color::{PremulColor, Srgb};
+use color::{AlphaColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D, Vector2D};
 use parley::{
     swash::{
@@ -24,7 +24,6 @@ use atlas::{
 };
 
 mod options;
-pub use options::{FontStretch, FontStyle, FontWeight};
 
 #[derive(Clone, Debug, Default)]
 pub struct TextureAtlasKeys {
@@ -34,30 +33,33 @@ pub struct TextureAtlasKeys {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Options {
-    pub color: PremulColor<Srgb>,
-
-    pub font_size: f32,
-    pub line_height: f32,
+    pub color: AlphaColor<Srgb>,
 
     pub font_family: options::FontFamily,
-    pub font_weight: FontWeight,
-    pub font_style: FontStyle,
-    pub font_stretch: FontStretch,
-
-    pub alignment: options::Alignment,
+    pub font_size: f32,
+    pub font_style: options::FontStyle,
+    pub font_weight: options::FontWeight,
+    pub font_width: options::FontWidth,
+    pub line_height: options::LineHeight,
+    pub overflow_wrap: options::OverflowWrap,
+    pub whitespace_collapse: options::WhiteSpaceCollapse,
+    pub word_break_strength: options::WordBreakStrength,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
-            color: PremulColor::new([1., 0., 0., 1.]),
-            line_height: 28.,
+            color: AlphaColor::WHITE,
+
+            font_family: parley::FontFamily::Generic(parley::GenericFamily::UiSansSerif).into(),
             font_size: 16.,
-            font_family: options::FontFamily::Name("JetBrainsMono Nerd Font".to_string()),
-            font_weight: FontWeight::Normal,
-            font_style: FontStyle::Normal,
-            font_stretch: FontStretch::Normal,
-            alignment: options::Alignment::Left,
+            font_style: parley::FontStyle::default().into(),
+            font_weight: parley::FontWeight::default().into(),
+            font_width: parley::FontWidth::default().into(),
+            line_height: parley::LineHeight::default().into(),
+            overflow_wrap: parley::OverflowWrap::default().into(),
+            whitespace_collapse: parley::WhiteSpaceCollapse::Preserve.into(),
+            word_break_strength: parley::WordBreakStrength::default().into(),
         }
     }
 }
@@ -112,28 +114,19 @@ impl<C: ApplyCoordinates> Text<C> {
         }
     }
 
-    fn glyph_to_mesh<T: AtlasFormat>(
-        area: Box2D<f32>,
-        glyph: &Arc<AllocatedTexture<T, TextureData>>,
-        atlas: &LayeredAtlas<T, CacheKey, TextureData>,
-        kind: VertexKind,
-    ) -> Mesh<Vertex> {
-        Mesh::from_texture_mesh(glyph.to_mesh(area, atlas), C::apply(kind))
+    pub fn content(&self) -> &String {
+        &self.content
     }
-    pub fn content(&self) -> String {
-        self.content.clone()
-    }
-
-    pub fn translate(&mut self, dx: Vector2D<f32>) {
-        self.area.translate(dx);
-        if let Some(cache) = &mut self.render_cache {
-            cache.translate(dx);
-        }
-    }
-
     pub fn set_content(&mut self, content: String) {
         self.content = content;
         self.clear_cache();
+    }
+
+    pub fn translate(&mut self, dx: Vector2D<f32>) {
+        self.area = self.area.translate(dx);
+        if let Some(cache) = &mut self.render_cache {
+            cache.translate(dx);
+        }
     }
 
     pub fn clear_cache(&mut self) {
@@ -144,6 +137,61 @@ impl<C: ApplyCoordinates> Text<C> {
     pub fn update_rect(&mut self, area: Box2D<f32>) {
         self.area = make_positive_box(area);
         self.clear_cache();
+    }
+}
+impl<C: ApplyCoordinates> Text<C> {
+    fn glyph_to_mesh<T: AtlasFormat>(
+        area: Box2D<f32>,
+        glyph: &Arc<AllocatedTexture<T, TextureData>>,
+        atlas: &LayeredAtlas<T, CacheKey, TextureData>,
+        kind: VertexKind,
+    ) -> Mesh<Vertex> {
+        Mesh::from_texture_mesh(glyph.to_mesh(area, atlas), C::apply(kind))
+    }
+
+    fn create_layout(&mut self, systems: &mut Systems) -> Layout<ColorBrush> {
+        let layout = self
+            .layout
+            .get_or_insert_with(|| Layout::<ColorBrush>::new());
+        if let Some(layout) = self.layout.take() {
+            return layout;
+        }
+
+        let max_advance = None;
+
+        let mut builder = systems.text.layout_ctx.ranged_builder(
+            &mut systems.text.font_ctx,
+            &self.content,
+            1.25,
+            true,
+        );
+
+        // Set default text colour styles (set foreground text color)
+        let color_brush = ColorBrush {
+            color: self.options.color.premultiply(),
+        };
+        let brush_style = StyleProperty::Brush(color_brush);
+
+        builder.push_default(brush_style);
+
+        builder.push_default(FontStack::Single(self.options.font_family.clone().into()));
+        builder.push_default(StyleProperty::FontSize(self.options.font_size));
+        builder.push_default(StyleProperty::FontWeight(self.options.font_weight.into()));
+        builder.push_default(StyleProperty::FontStyle(self.options.font_style.into()));
+        builder.push_default(StyleProperty::FontWidth(self.options.font_width.into()));
+        builder.push_default(StyleProperty::LineHeight(self.options.line_height.into()));
+        builder.push_default(StyleProperty::OverflowWrap(
+            self.options.overflow_wrap.into(),
+        ));
+        // builder.push_default(self.options.whitespace_collapse.into());
+        builder.push_default(StyleProperty::WordBreak(
+            self.options.word_break_strength.into(),
+        ));
+
+        let mut layout: Layout<ColorBrush> = builder.build(&self.content);
+        layout.break_all_lines(max_advance);
+        layout.align(max_advance, Alignment::Start, AlignmentOptions::default());
+        layout
     }
 
     fn prepare_layout(&mut self, systems: &mut Systems) -> Layout<ColorBrush> {
@@ -162,7 +210,7 @@ impl<C: ApplyCoordinates> Text<C> {
 
         // Set default text colour styles (set foreground text color)
         let color_brush = ColorBrush {
-            color: self.options.color,
+            color: self.options.color.premultiply(),
         };
         let brush_style = StyleProperty::Brush(color_brush);
         // let font_stack = FontStack::Single(FontFamily::Generic(parley::GenericFamily::SystemUi));
@@ -230,8 +278,6 @@ impl<C: ApplyCoordinates> Text<C> {
             let glyph_x = run_x + glyph.x;
             let glyph_y = run_y - glyph.y;
             run_x += glyph.advance;
-            tracing::info!("rendering glyph!!!!!");
-            tracing::info!("mesh size before: {}", mesh.indices.len());
 
             self.render_glyph(
                 queue,
@@ -247,7 +293,6 @@ impl<C: ApplyCoordinates> Text<C> {
                 glyph_x,
                 glyph_y,
             );
-            tracing::info!("mesh size after: {}", mesh.indices.len());
         }
 
         // Draw decorations: underline & strikethrough
@@ -298,6 +343,36 @@ impl<C: ApplyCoordinates> Text<C> {
         ));
     }
 
+    fn try_glyph_cache<F: AtlasFormat>(
+        mesh: &mut Mesh<Vertex>,
+        cache_key: CacheKey,
+        atlas: &mut LayeredAtlas<F, CacheKey, TextureData>,
+        atlas_keys: &mut Vec<Arc<AllocatedTexture<F, TextureData>>>,
+        position: Point2D<f32>,
+        vertex_kind: VertexKind,
+    ) -> Result<(), ()> {
+        let glyph = atlas.is_allocated(cache_key).ok_or(())?;
+        let area: Box2D<f32> = match glyph.data {
+            TextureData::Text(data) => Box2D::from_origin_and_size(
+                Point2D::new(
+                    position.x as i32 + data.placement_left,
+                    position.y as i32 - data.placement_top,
+                )
+                .cast(),
+                Size2D::new(data.width, data.height).cast(),
+            ),
+            _ => unreachable!("glyph can only have associated data of type TextureData::Text"),
+        };
+        mesh.append(&Self::glyph_to_mesh(
+            area,
+            &glyph,
+            &atlas,
+            C::apply(vertex_kind),
+        ));
+        atlas_keys.push(glyph);
+        Ok(())
+    }
+
     fn render_glyph(
         &mut self,
         queue: &wgpu::Queue,
@@ -312,8 +387,36 @@ impl<C: ApplyCoordinates> Text<C> {
         glyph: Glyph,
         glyph_x: f32,
         glyph_y: f32,
-    ) -> Option<()> {
+    ) -> Result<(), ()> {
         // TODO: try get glyphs from atlas first before rendering
+
+        let cache_key = CacheKey::Text(GlyphCacheKey {
+            font_index,
+            glyph_id: glyph.id,
+            font_size_bits: font_size.to_bits(),
+        });
+        let position = Point2D::new(glyph_x, glyph_y);
+
+        if let Ok(_) = Self::try_glyph_cache(
+            mesh,
+            cache_key.clone(),
+            mask_atlas,
+            &mut self.atlas_keys.mask_glyphs,
+            position,
+            VertexKind::MaskTexture(brush.color),
+        ) {
+            return Ok(());
+        };
+        if let Ok(_) = Self::try_glyph_cache(
+            mesh,
+            cache_key.clone(),
+            color_atlas,
+            &mut self.atlas_keys.color_glyphs,
+            position,
+            VertexKind::ColorTexture,
+        ) {
+            return Ok(());
+        };
 
         // Compute the fractional offset
         // You'll likely want to quantize this in a real renderer
@@ -345,21 +448,12 @@ impl<C: ApplyCoordinates> Text<C> {
             Point2D::new(glyph_x as f32, glyph_y as f32),
             Size2D::new(glyph_width as f32, glyph_height as f32),
         );
-        tracing::info!(
-            "glyph rendering with area: {glyph_area:?} aka: {glyph_width}x{glyph_height}"
-        );
-        tracing::info!("glyph data len: {:?}", rendered_glyph.data.len());
 
         let texture = UnallocatedTexture::new(
             rendered_glyph.data.as_ref(),
             rendered_glyph.placement.width,
             rendered_glyph.placement.height,
         );
-        let cache_key = CacheKey::Text(GlyphCacheKey {
-            font_index,
-            glyph_id: glyph.id,
-            font_size_bits: font_size.to_bits(),
-        });
 
         match rendered_glyph.content {
             Content::SubpixelMask => unimplemented!(),
@@ -372,7 +466,7 @@ impl<C: ApplyCoordinates> Text<C> {
                         Some(cache_key),
                         TextureData::Text(TextData::from_swash(&rendered_glyph)),
                     )
-                    .ok()?;
+                    .map_err(|_| ())?;
                 mesh.append(&Self::glyph_to_mesh(
                     glyph_area,
                     &allocated_glyph,
@@ -390,7 +484,7 @@ impl<C: ApplyCoordinates> Text<C> {
                         Some(cache_key),
                         TextureData::Text(TextData::from_swash(&rendered_glyph)),
                     )
-                    .ok()?;
+                    .map_err(|_| ())?;
                 mesh.append(&Self::glyph_to_mesh(
                     glyph_area,
                     &allocated_glyph,
@@ -400,7 +494,7 @@ impl<C: ApplyCoordinates> Text<C> {
                 self.atlas_keys.color_glyphs.push(allocated_glyph);
             }
         };
-        Some(())
+        Ok(())
     }
 }
 
@@ -420,39 +514,10 @@ impl<C: ApplyCoordinates> Drawable for Text<C> {
         // Reset the atlas keys
         self.atlas_keys = Default::default();
 
-        // Selection
-        // TODO: handle completion
-        // Cursor
-
-        let geom = cursor.geometry(&layout, 2.);
-        let clusters = cursor.visual_clusters(&layout);
-
-        if let Some(clus) = clusters[1] {
-            result.append(&Mesh::new_color_quad(
-                Box2D::new(
-                    start_position + Size2D::new(geom.x0 as f32, geom.y0 as f32),
-                    start_position + Size2D::new(geom.x0 as f32 + clus.advance(), geom.y1 as f32),
-                ),
-                C::apply(VertexKind::Color(PremulColor::new([1., 1., 1., 0.3]))),
-            ));
-        } else if let Some(clus) = clusters[0] {
-            result.append(&Mesh::new_color_quad(
-                Box2D::new(
-                    start_position + Size2D::new(geom.x0 as f32, geom.y0 as f32),
-                    start_position + Size2D::new(geom.x0 as f32 + clus.advance(), geom.y1 as f32),
-                ),
-                C::apply(VertexKind::Color(PremulColor::new([1., 1., 1., 0.3]))),
-            ));
-        }
-
         for line in layout.lines() {
-            tracing::info!("render glyph line");
-            // Iterate over GlyphRun's within each line
             for item in line.items() {
-                tracing::info!("render glyph item");
                 match item {
                     PositionedLayoutItem::GlyphRun(glyph_run) => {
-                        tracing::info!("render glyph run");
                         self.render_glyph_run(systems, &glyph_run, start_position, &mut result);
                     }
                     PositionedLayoutItem::InlineBox(inline_box) => {
@@ -465,7 +530,7 @@ impl<C: ApplyCoordinates> Drawable for Text<C> {
                                         inline_box.y + inline_box.height,
                                     ),
                             ),
-                            C::apply(VertexKind::Color(self.options.color)),
+                            C::apply(VertexKind::Color(self.options.color.premultiply())),
                         ));
                     }
                 }
@@ -473,16 +538,11 @@ impl<C: ApplyCoordinates> Drawable for Text<C> {
         }
 
         self.layout = Some(layout);
-        // Update the stored glyph allocations, so that unused allocations can be dropped
         self.render_cache = Some(result.clone());
         self.render_cache.as_ref().unwrap()
     }
 
     fn bounding_box(&self) -> Box2D<f32> {
-        // Box2D::new(
-        //     self.center - Size::new(self.max_width / 2., 10.),
-        //     self.center + Size::new(self.max_width / 2., 10.),
-        // )
         self.area
     }
 

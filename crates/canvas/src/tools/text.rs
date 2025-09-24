@@ -1,4 +1,4 @@
-use color::{PremulColor, Srgb};
+use color::{AlphaColor, Srgb};
 use euclid::default::{Box2D, Size2D};
 use graphics::primitives::{Text, TextOptions};
 use graphics::{CanvasCoordinates, Drawable, Primitive, Systems};
@@ -12,7 +12,7 @@ use input::{
 #[derive(Clone, Debug)]
 pub struct TextTool {
     current: Option<Primitive<CanvasCoordinates>>,
-    pub color: PremulColor<Srgb>,
+    pub color: AlphaColor<Srgb>,
 }
 
 impl TextTool {
@@ -25,7 +25,7 @@ impl Default for TextTool {
     fn default() -> Self {
         Self {
             current: None,
-            color: PremulColor::new([1., 1., 1., 1.]),
+            color: AlphaColor::new([1., 0., 0., 1.]),
         }
     }
 }
@@ -49,6 +49,7 @@ impl Tool for TextTool {
                     String::new(),
                     TextOptions {
                         color: self.color,
+                        font_size: 20.,
                         ..Default::default()
                     },
                     Box2D::from_origin_and_size(event.position, Size2D::new(f32::MAX, f32::MAX)),
@@ -76,10 +77,10 @@ impl Tool for TextTool {
                 };
 
                 if key == Key::SpecialKey(input::SpecialKey::Tab) {
-                    if self.color == PremulColor::WHITE {
-                        self.color = PremulColor::BLACK
+                    if self.color == AlphaColor::WHITE {
+                        self.color = AlphaColor::BLACK
                     } else {
-                        self.color = PremulColor::WHITE
+                        self.color = AlphaColor::WHITE
                     };
                 }
 
@@ -88,7 +89,7 @@ impl Tool for TextTool {
                 };
                 match current {
                     Primitive::Text(text) => {
-                        let mut content = text.content();
+                        let mut content = text.content().clone();
                         match key {
                             Key::SpecialKey(special_key) => match special_key {
                                 SpecialKey::Delete | SpecialKey::Backspace => {

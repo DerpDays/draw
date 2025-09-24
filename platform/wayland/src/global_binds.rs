@@ -55,8 +55,6 @@ pub struct Bound;
 impl<'a> WaylandKeybinds<'a, ()> {
     pub async fn new_session() -> Result<WaylandKeybinds<'a, Bindable>> {
         trace!("Creating new global shortcuts instance");
-        // FIXME: register host app
-        //
         let app_id = AppID::from_str("com.drawthings.app").context("invalid app_id")?;
         if let Err(e) = register_host_app(app_id).await {
             warn!(

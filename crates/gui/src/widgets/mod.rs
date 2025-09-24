@@ -1,3 +1,4 @@
+use euclid::default::{Point2D, Vector2D};
 use graphics::{get_empty_mesh, Mesh, Systems};
 
 use crate::events::{BlurEvent, ChangeEvent, EventContext, FocusEvent};
@@ -45,6 +46,8 @@ impl_as_variants! {
     svg => Svg(SvgWidget<M>),
     background => Background(BackgroundWidget<M>),
     transition_background => TransitionBackground(TransitionBackgroundWidget<M>),
+    text_input => TextInput(TextInputWidget<M>),
+    slider => Slider(SliderWidget<M>),
 }
 
 impl<M: Clone> Element for Widget<M> {
@@ -121,5 +124,31 @@ impl WidgetInteractionState {
     }
     pub const fn empty() -> Self {
         Self::new(false, false, false, false)
+    }
+}
+
+pub(crate) enum LayoutChange {
+    Translate(Vector2D<f32>),
+    Rerender,
+}
+
+pub(crate) fn parse_layout_change(
+    new_layout: taffy::Layout,
+    prev_layout: taffy::Layout,
+) -> LayoutChange {
+    let mut new_no_loc = new_layout;
+    new_no_loc.location = taffy::Point::zero();
+
+    let mut prev_no_loc = prev_layout;
+    prev_no_loc.location = taffy::Point::zero();
+
+    // if only the location changed between these
+    if new_no_loc == prev_no_loc {
+        LayoutChange::Translate(
+            Point2D::new(new_layout.location.x, new_layout.location.y)
+                - Point2D::new(prev_layout.location.x, prev_layout.location.y),
+        )
+    } else {
+        LayoutChange::Rerender
     }
 }

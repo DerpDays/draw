@@ -8,6 +8,7 @@ edition = { workspace = true }
 atlas = { workspace = true }
 
 bytemuck = { workspace = true }
+thiserror = { workspace = true }
 lyon = { workspace = true }
 serde = { workspace = true }
 

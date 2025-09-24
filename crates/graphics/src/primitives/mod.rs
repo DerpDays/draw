@@ -7,10 +7,9 @@ mod svg;
 mod text;
 mod triangle;
 
-use euclid::default::Box2D;
 use serde::{Deserialize, Serialize};
 
-use crate::{ApplyCoordinates, Drawable, Mesh, Systems, Vertex};
+use crate::{ApplyCoordinates, Drawable, Vertex};
 
 pub use ellipse::{Ellipse, Options as EllipseOptions};
 pub use line::{Line, Options as LineOptions};
@@ -26,52 +25,37 @@ pub enum Primitive<C: ApplyCoordinates + Clone> {
     Ellipse(Ellipse<C>),
     Line(Line<C>),
     Pen(Pen<C>),
-    Rectangle(Rectangle<C>),
     Quad(Quad<C>),
-    Triangle(Triangle<C>),
-    Text(Text<C>),
+    Rectangle(Rectangle<C>),
     Svg(Svg<C>),
+    Text(Text<C>),
+    Triangle(Triangle<C>),
 }
 
-// TODO: (low_priority) use macro to expand
+macro_rules! delegate_primitive {
+    (
+        $( $variant:ident ),*
+    ) => {
+        fn render(&mut self, systems: &mut $crate::Systems) -> &$crate::Mesh<Vertex> {
+            match self {
+                $( Primitive::$variant(w) => w.render(systems), )*
+            }
+        }
+        fn is_dirty(&self) -> bool {
+            match self {
+                $( Primitive::$variant(w) => w.is_dirty(), )*
+            }
+        }
+        fn bounding_box(&self) -> euclid::default::Box2D<f32> {
+            match self {
+                $( Primitive::$variant(w) => w.bounding_box(), )*
+            }
+        }
+    };
+}
 
 impl<C: ApplyCoordinates + Clone> Drawable<Vertex> for Primitive<C> {
-    fn render(&mut self, systems: &mut Systems) -> &Mesh<Vertex> {
-        match self {
-            Primitive::Ellipse(elem) => elem.render(systems),
-            Primitive::Line(elem) => elem.render(systems),
-            Primitive::Pen(elem) => elem.render(systems),
-            Primitive::Rectangle(elem) => elem.render(systems),
-            Primitive::Quad(elem) => elem.render(systems),
-            Primitive::Triangle(elem) => elem.render(systems),
-            Primitive::Text(elem) => elem.render(systems),
-            Primitive::Svg(elem) => elem.render(systems),
-        }
-    }
-    fn bounding_box(&self) -> Box2D<f32> {
-        match self {
-            Primitive::Ellipse(elem) => elem.bounding_box(),
-            Primitive::Line(elem) => elem.bounding_box(),
-            Primitive::Pen(elem) => elem.bounding_box(),
-            Primitive::Rectangle(elem) => elem.bounding_box(),
-            Primitive::Quad(elem) => elem.bounding_box(),
-            Primitive::Triangle(elem) => elem.bounding_box(),
-            Primitive::Text(elem) => elem.bounding_box(),
-            Primitive::Svg(elem) => elem.bounding_box(),
-        }
-    }
-    fn is_dirty(&self) -> bool {
-        match self {
-            Primitive::Ellipse(elem) => elem.is_dirty(),
-            Primitive::Line(elem) => elem.is_dirty(),
-            Primitive::Pen(elem) => elem.is_dirty(),
-            Primitive::Rectangle(elem) => elem.is_dirty(),
-            Primitive::Quad(elem) => elem.is_dirty(),
-            Primitive::Triangle(elem) => elem.is_dirty(),
-            Primitive::Text(elem) => elem.is_dirty(),
-            Primitive::Svg(elem) => elem.is_dirty(),
-        }
-    }
+    delegate_primitive!(Ellipse, Line, Pen, Quad, Rectangle, Svg, Text, Triangle);
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]

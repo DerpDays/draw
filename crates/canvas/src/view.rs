@@ -1,9 +1,9 @@
-use euclid::default::Size2D;
+use euclid::{default::Size2D, Point2D};
 use graphics::{
     systems::{SystemsOwned, TextState, TextureState},
     Drawable,
 };
-use tracing::{info, instrument};
+use tracing::info;
 
 use gui::prelude::{EventResult, Redraw};
 use gui::UITree;
@@ -61,9 +61,12 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
 
         let root_node = gui.root_node();
 
-        let (toolbar_id, tool_nodes) =
-            crate::ui::toolbar::create_toolbar(&mut gui, ToolKind::default());
-        _ = gui.add_child(gui.root_node(), toolbar_id);
+        let toolbar = crate::ui::toolbar::Toolbar::build(
+            &mut gui,
+            Point2D::new(100., 100.),
+            ToolKind::default(),
+        );
+        _ = gui.add_child(gui.root_node(), toolbar.visibility_container());
 
         let options = OptionsTree::build(&mut gui, root_node);
 
@@ -80,8 +83,8 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
             drag_start: None,
 
             selected_tool: ToolKind::default(),
-            tool_nodes,
 
+            toolbar,
             options,
 
             modifiers: Modifiers::empty(),
@@ -123,9 +126,10 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
             self.handle_tool(*tool, messages, renderer);
             return;
         };
+        tracing::trace!("attempting to send keyboard event to gui");
         // Otherwise pass the event to the gui event handler
         if let Some(events) = self.app.gui.keyboard_event(event.clone()) {
-            self.handle_gui(events);
+            self.handle_gui(events, renderer);
         } else {
             let messages = self.app.selected_tool.keyboard_event(
                 &mut self.systems.to_ref(&renderer.device, &renderer.queue),
@@ -169,7 +173,7 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
             };
 
             self.last_interaction = InteractionKind::Gui;
-            return self.handle_gui(result);
+            return self.handle_gui(result, renderer);
         }
         // Otherwise, since the event wasn't for the gui, pass it on to the selected tool,
         // here we need to handle enter/exit events for the tools if the selected tool has changed.
@@ -222,7 +226,11 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
             .or(result)
     }
 
-    pub fn handle_gui(&mut self, events: EventResult<Message>) -> Option<CursorIcon> {
+    pub fn handle_gui(
+        &mut self,
+        events: EventResult<Message>,
+        renderer: &renderer::State,
+    ) -> Option<CursorIcon> {
         let mut cursor_icon = None;
         for (node, messages) in events.messages() {
             for message in messages {
@@ -232,6 +240,11 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
             }
         }
 
+        // if events.is_requesting_relayout() {
+        //     self.app
+        //         .gui
+        //         .update_layout(&mut self.systems.to_ref(&renderer.device, &renderer.queue));
+        // }
         if let Some(redraw) = events.is_requesting_redraw() {
             match redraw {
                 Redraw::Now => self.redraw_manager.request_redraw(),
@@ -308,7 +321,6 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
         cursor_icon
     }
 
-    #[instrument(skip_all)]
     pub fn render(
         &mut self,
         state: &renderer::State,
@@ -316,7 +328,7 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
         pipeline: &DrawPipeline,
     ) {
         let start = std::time::Instant::now();
-        let binds = self.binds.get_or_insert(Binds {
+        let binds = self.binds.get_or_insert_with(|| Binds {
             projection: ProjectionBind::new(state, &pipeline.bind_group_layouts, &self.projection),
             texture_atlases: pipeline.bind_group_layouts.new_texture_atlas_bind_group(
                 &state.device,
@@ -351,7 +363,9 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
                     .render(&mut self.systems.to_ref(&state.device, &state.queue)),
             );
         }
+        tracing::trace!("Render preparation time took: {:?}", start.elapsed());
 
+        let start = std::time::Instant::now();
         let frame = surface.get_current_texture().unwrap();
         let view = frame
             .texture
@@ -403,7 +417,6 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
             }
 
             if self.app.gui_buffer.num_indices > 0 {
-                tracing::trace!("drawing gui buffer new");
                 render_pass.set_vertex_buffer(0, self.app.gui_buffer.vertex.buf.slice(..));
                 render_pass.set_index_buffer(
                     self.app.gui_buffer.index.buf.slice(..),
@@ -415,6 +428,6 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
 
         state.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
-        tracing::trace!("Time taken to render: {:?}", start.elapsed());
+        tracing::trace!("Actual rendering took {:?}", start.elapsed());
     }
 }

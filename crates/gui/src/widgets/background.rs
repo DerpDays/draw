@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use euclid::default::Point2D;
+use euclid::default::{Point2D, Size2D};
 use graphics::{
     primitives::{Rectangle, RectangleOptions},
     Drawable, Mesh, Systems, Vertex, ViewportCoordinates,
@@ -8,8 +8,8 @@ use graphics::{
 use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
-    events::{EventContext, EventHandler, HandlesEvent},
-    widgets::Widget,
+    events::{EventContext, EventHandler},
+    widgets::{parse_layout_change, LayoutChange, Widget},
     Element,
 };
 
@@ -28,6 +28,7 @@ crate::macros::event_handlers::impl_event_handler! {
     KeyboardEvent => keyboard_handler,
 }
 
+// FIXME: handle BorderBox and ContentBox
 impl<M: Clone> BackgroundWidget<M> {
     pub fn new(options: RectangleOptions) -> Self {
         let rect = Rectangle::new(Point2D::zero(), lyon::math::Size::zero(), options);
@@ -53,11 +54,17 @@ impl<M: Clone> Element for BackgroundWidget<M> {
 
     fn render(&mut self, systems: &mut Systems, layout: taffy::Layout) -> &Mesh<Vertex> {
         if self.layout != layout {
-            self.layout = layout;
-            self.rect.update_area(
-                Point2D::new(layout.location.x, layout.location.y),
-                lyon::math::Size::new(layout.size.width, layout.size.height),
-            );
+            match parse_layout_change(layout, self.layout) {
+                LayoutChange::Translate(dx) => {
+                    self.rect.translate(dx);
+                }
+                LayoutChange::Rerender => {
+                    self.rect.update_area(
+                        Point2D::new(layout.location.x, layout.location.y),
+                        Size2D::new(layout.size.width, layout.size.height),
+                    );
+                }
+            }
         }
         self.rect.render(systems)
     }
@@ -85,7 +92,7 @@ impl<M: Clone> Element for BackgroundWidget<M> {
 #[derive(Clone)]
 pub struct TransitionBackgroundWidget<M: Clone> {
     rect: Rectangle<ViewportCoordinates>,
-    tessellation: Option<Mesh<Vertex>>,
+    render_cache: Option<Mesh<Vertex>>,
     layout: taffy::Layout,
 
     pub mouse_handler: EventHandler<MouseEvent, Self>,
@@ -110,7 +117,7 @@ impl<M: Clone> TransitionBackgroundWidget<M> {
         Self {
             rect,
             layout: taffy::Layout::new(),
-            tessellation: None,
+            render_cache: None,
 
             mouse_handler: EventHandler::none(),
             keyboard_handler: EventHandler::none(),
@@ -122,9 +129,9 @@ impl<M: Clone> TransitionBackgroundWidget<M> {
         }
     }
 
-    fn update_tessellation_cache(&mut self, systems: &mut Systems) -> &Mesh<Vertex> {
-        self.tessellation = Some(self.rect.render(systems).clone());
-        self.tessellation.as_ref().unwrap()
+    fn update_render_cache(&mut self, systems: &mut Systems) -> &Mesh<Vertex> {
+        self.render_cache = Some(self.rect.render(systems).clone());
+        self.render_cache.as_ref().unwrap()
     }
 
     pub fn change_options(
@@ -141,7 +148,7 @@ impl<M: Clone> TransitionBackgroundWidget<M> {
         }
         self.prev_options = self.rect.options().clone();
         self.options = options;
-        self.tessellation = None;
+        self.render_cache = None;
     }
 
     pub fn is_mid_transition(&self) -> bool {
@@ -162,18 +169,25 @@ impl<M: Clone> Element for TransitionBackgroundWidget<M> {
 
     fn render(&mut self, systems: &mut Systems, layout: taffy::Layout) -> &Mesh<Vertex> {
         if self.layout != layout {
-            self.layout = layout;
-            self.tessellation = None;
-            self.rect.update_area(
-                Point2D::new(layout.location.x, layout.location.y),
-                lyon::math::Size::new(layout.size.width, layout.size.height),
-            );
+            match parse_layout_change(layout, self.layout) {
+                LayoutChange::Translate(dx) => {
+                    self.rect.translate(dx);
+                    self.render_cache.as_mut().map(|x| x.translate(dx));
+                }
+                LayoutChange::Rerender => {
+                    self.rect.update_area(
+                        Point2D::new(layout.location.x, layout.location.y),
+                        Size2D::new(layout.size.width, layout.size.height),
+                    );
+                    self.clear_cache();
+                }
+            }
         }
-        if let Some(ref cache) = self.tessellation {
+        if let Some(ref cache) = self.render_cache {
             return cache;
         }
         let Some(start_time) = self.transition_start else {
-            return self.update_tessellation_cache(systems);
+            return self.update_render_cache(systems);
         };
 
         let elapsed = Instant::now() - start_time;
@@ -192,7 +206,7 @@ impl<M: Clone> Element for TransitionBackgroundWidget<M> {
         } else {
             self.transition_start = None;
             self.rect.update_options(self.options);
-            self.update_tessellation_cache(systems)
+            self.update_render_cache(systems)
         }
     }
     fn mouse_event(&mut self, ctx: &mut EventContext<MouseEvent, M>) {
@@ -204,11 +218,12 @@ impl<M: Clone> Element for TransitionBackgroundWidget<M> {
     }
 
     fn is_dirty(&self) -> bool {
-        self.tessellation.is_none() || self.rect.is_dirty()
+        self.render_cache.is_none() || self.rect.is_dirty()
     }
 
     fn clear_cache(&mut self) {
-        self.tessellation = None;
+        self.render_cache = None;
+        self.rect.clear_cache();
     }
 
     fn focusable(&self) -> bool {

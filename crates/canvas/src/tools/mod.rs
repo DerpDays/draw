@@ -13,7 +13,7 @@ mod eraser;
 mod grab;
 mod highlighter;
 mod line;
-mod pen;
+pub mod pen;
 mod rectangle;
 mod select;
 mod text;
@@ -34,6 +34,7 @@ pub enum ToolKind {
     Eraser,
     Zoom,
 }
+
 #[derive(Clone, Debug, Default)]
 pub struct Tools {
     pub grab: grab::GrabTool,
@@ -47,53 +48,6 @@ pub struct Tools {
     pub highlighter: highlighter::HighlighterTool,
     pub eraser: eraser::EraserTool,
     pub zoom: zoom::ZoomTool,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ToolNodeMap {
-    grab: NodeId,
-    select: NodeId,
-    pen: NodeId,
-    line: NodeId,
-    arrow: NodeId,
-    rectangle: NodeId,
-    ellipse: NodeId,
-    text: NodeId,
-    highlighter: NodeId,
-    eraser: NodeId,
-    zoom: NodeId,
-}
-impl ToolNodeMap {
-    pub const fn zero() -> Self {
-        Self {
-            grab: NodeId::new(0),
-            select: NodeId::new(0),
-            pen: NodeId::new(0),
-            line: NodeId::new(0),
-            arrow: NodeId::new(0),
-            rectangle: NodeId::new(0),
-            ellipse: NodeId::new(0),
-            text: NodeId::new(0),
-            highlighter: NodeId::new(0),
-            eraser: NodeId::new(0),
-            zoom: NodeId::new(0),
-        }
-    }
-    pub const fn set(&mut self, kind: ToolKind, node_id: NodeId) {
-        match kind {
-            ToolKind::Grab => self.grab = node_id,
-            ToolKind::Select => self.select = node_id,
-            ToolKind::Pen => self.pen = node_id,
-            ToolKind::Line => self.line = node_id,
-            ToolKind::Arrow => self.arrow = node_id,
-            ToolKind::Rectangle => self.rectangle = node_id,
-            ToolKind::Ellipse => self.ellipse = node_id,
-            ToolKind::Text => self.text = node_id,
-            ToolKind::Highlighter => self.highlighter = node_id,
-            ToolKind::Eraser => self.eraser = node_id,
-            ToolKind::Zoom => self.zoom = node_id,
-        }
-    }
 }
 
 impl ToolKind {
@@ -123,21 +77,6 @@ impl ToolKind {
         }
     }
 
-    pub const fn get_node_id(&self, node_map: &ToolNodeMap) -> NodeId {
-        match self {
-            ToolKind::Grab => node_map.grab,
-            ToolKind::Select => node_map.select,
-            ToolKind::Pen => node_map.pen,
-            ToolKind::Line => node_map.line,
-            ToolKind::Arrow => node_map.arrow,
-            ToolKind::Rectangle => node_map.rectangle,
-            ToolKind::Ellipse => node_map.ellipse,
-            ToolKind::Text => node_map.text,
-            ToolKind::Highlighter => node_map.highlighter,
-            ToolKind::Eraser => node_map.eraser,
-            ToolKind::Zoom => node_map.zoom,
-        }
-    }
     pub fn mouse_event(
         &self,
         systems: &mut Systems,

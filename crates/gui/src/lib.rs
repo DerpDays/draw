@@ -66,4 +66,8 @@ pub trait Element {
 
     fn change_event_f32(&mut self, ctx: &mut EventContext<ChangeEvent<f32>, Self::Message>) {}
     fn change_event_string(&mut self, ctx: &mut EventContext<ChangeEvent<String>, Self::Message>) {}
+
+    fn name(&self) -> &'static str {
+        "unnamed"
+    }
 }

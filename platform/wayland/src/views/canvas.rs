@@ -1,4 +1,4 @@
-use std::{num::NonZero, ptr::NonNull};
+use std::ptr::NonNull;
 
 use anyhow::{Context, Result};
 use euclid::default::{Point2D, Size2D};
@@ -25,7 +25,7 @@ use crate::views::{LayerShellView, View};
 // Layer shell view implementation
 pub struct LayerShellCanvasView {
     pub layer_surface: LayerSurface,
-    pub fractional_scale: FractionalScale,
+    _fractional_scale: FractionalScale,
     pub viewport: Viewport,
     pub wgpu_surface: wgpu::Surface<'static>,
 
@@ -123,7 +123,7 @@ impl LayerShellCanvasView {
             layer_surface,
             wgpu_surface,
             viewport,
-            fractional_scale,
+            _fractional_scale: fractional_scale,
 
             mode,
             physical_size,

@@ -7,10 +7,7 @@ use input::{KeyboardEvent, MouseButton, MouseEvent, MouseEventKind};
 use taffy::Layout;
 
 use crate::{
-    events::{
-        BlurEvent, ChangeEvent, EventContext, EventHandler, EventPhase, FocusEvent, HandlesEvent,
-        Redraw,
-    },
+    events::{BlurEvent, ChangeEvent, EventContext, EventHandler, EventPhase, FocusEvent, Redraw},
     widgets::{Widget, WidgetInteractionState},
     Element,
 };
@@ -41,12 +38,6 @@ crate::macros::event_handlers::impl_event_handler! {
     BlurEvent => blur_handler,
     ChangeEvent<f32> => change_handler,
 }
-
-// impl<M: Clone> HandlesEvent<ChangeEvent<f32>> for SliderWidget<M> {
-//     fn handler_mut(&mut self) -> &mut EventHandler<ChangeEvent<f32>, Self> {
-//         &mut self.change_handler
-//     }
-// }
 
 impl<M: Clone> SliderWidget<M> {
     pub fn new(steps: u64, initial_value: f32, min_value: f32, max_value: f32) -> Self {
@@ -98,6 +89,21 @@ impl<M: Clone> SliderWidget<M> {
             }));
             self.value = value;
         }
+    }
+
+    pub fn update_content_silent_no_redraw(&mut self, value: f32) {
+        let value = value.clamp(self.min_value, self.max_value);
+
+        let range = self.max_value - self.min_value;
+        let step_size = range / (self.steps) as f32;
+        // snap it to the step size
+        self.value = self.min_value + (((value - self.min_value) / step_size).round() * step_size);
+    }
+    pub fn range(&self) -> (f32, f32) {
+        (self.min_value, self.max_value)
+    }
+    pub fn value(&self) -> f32 {
+        self.value
     }
 }
 

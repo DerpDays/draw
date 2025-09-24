@@ -1,49 +1,109 @@
-use color::{PremulColor, Srgb};
+use color::{AlphaColor, Srgb};
 use graphics::{primitives::RectangleOptions, BasicColor, Rounding};
 use gui::{
     prelude::*,
     widgets::{BackgroundWidget, Widget},
     UITree,
 };
+use input::{MouseButton, MouseEventKind};
 
-use crate::ui::{styles::colors, Message};
+use crate::ui::{options::OptionsMessage, styles::colors, Message};
 
-pub struct ColorSwatches {
+pub struct ColorSwatches<const N: usize> {
     pub container: NodeId,
-    swatches: [PremulColor<Srgb>; 4],
-    swatch_nodes: [NodeId; 4],
-    color_picker_button: NodeId,
+    pub selected_swatch: usize,
+
+    swatch_nodes: [NodeId; N],
+    pub swatch_colors: [AlphaColor<Srgb>; N],
+    swatch_containers: [NodeId; N],
 }
 
-impl ColorSwatches {
+const ACTIVE_BORDER: AlphaColor<Srgb> = colors::BORDER_SELECTED;
+const INACTIVE_BORDER: AlphaColor<Srgb> = colors::TRANSPARENT;
+const BORDER_WIDTH: f32 = 1.;
+const BORDER_ROUNDING: f32 = 5.;
+const SWATCH_ROUNDING: f32 = 5.;
+
+impl<const N: usize> ColorSwatches<N> {
+    pub fn update_swatch(
+        &mut self,
+        tree: &mut UITree<Widget<Message>>,
+        id: usize,
+        color: AlphaColor<Srgb>,
+    ) {
+        self.swatch_colors[id] = color;
+        tree.get_node_mut(self.swatch_nodes[id])
+            .as_background_mut()
+            .expect("swatch nodes can only be of type background")
+            .change_options(RectangleOptions {
+                color: color.into(),
+                rounding: Rounding::all(SWATCH_ROUNDING),
+                ..RectangleOptions::DEFAULT
+            });
+    }
+
+    pub fn update_selected(&mut self, tree: &mut UITree<Widget<Message>>, id: usize) {
+        tree.get_node_mut(self.swatch_containers[self.selected_swatch])
+            .as_background_mut()
+            .expect("swatch nodes can only be of type background")
+            .change_options(RectangleOptions {
+                color: colors::TRANSPARENT.into(),
+                stroke_color: INACTIVE_BORDER.into(),
+                stroke_width: BORDER_WIDTH,
+                rounding: Rounding::all(BORDER_ROUNDING),
+                ..RectangleOptions::DEFAULT
+            });
+        self.selected_swatch = id;
+        tree.get_node_mut(self.swatch_containers[self.selected_swatch])
+            .as_background_mut()
+            .expect("swatch nodes can only be of type background")
+            .change_options(RectangleOptions {
+                color: colors::BLACK.into(),
+                stroke_color: ACTIVE_BORDER.into(),
+                stroke_width: BORDER_WIDTH,
+                rounding: Rounding::all(BORDER_ROUNDING),
+                ..RectangleOptions::DEFAULT
+            });
+    }
+
     pub fn build(
         tree: &mut UITree<Widget<Message>>,
-        swatches: &[PremulColor<Srgb>; 4],
-    ) -> ColorSwatches {
+        swatches: &[AlphaColor<Srgb>; N],
+        selected: usize,
+    ) -> ColorSwatches<N> {
         let container = tree.new_leaf(
             Widget::Layout,
             Style {
                 display: Display::Flex,
-                padding: Rect::length(10.),
                 gap: Size::length(10.),
                 ..Style::DEFAULT
             },
         );
 
-        let swatch_nodes = std::array::from_fn(|i| {
+        let swatch_containers = std::array::from_fn(|i| {
             let node = tree.new_leaf(
                 BackgroundWidget::new(RectangleOptions {
-                    color: BasicColor::Solid(swatches[i]),
-                    stroke_color: colors::BORDER.into(),
-                    stroke_width: 1.,
-                    rounding: Rounding::all(5.),
+                    color: if i == selected {
+                        colors::BLACK.into()
+                    } else {
+                        colors::TRANSPARENT.into()
+                    },
+                    stroke_color: if i == selected {
+                        ACTIVE_BORDER.into()
+                    } else {
+                        INACTIVE_BORDER.into()
+                    },
+                    stroke_width: BORDER_WIDTH,
+                    rounding: Rounding::all(BORDER_ROUNDING),
                     ..RectangleOptions::DEFAULT
                 })
                 .as_widget(),
                 Style {
                     display: Display::Flex,
+                    justify_items: Some(JustifyItems::Center),
+                    align_items: Some(AlignItems::Center),
                     size: Size::length(25.),
-                    gap: Size::length(10.),
+                    padding: Rect::length(3.),
                     ..Style::DEFAULT
                 },
             );
@@ -51,41 +111,41 @@ impl ColorSwatches {
             node
         });
 
-        let separator = tree.new_leaf(
-            BackgroundWidget::new(RectangleOptions::only_color(colors::FOREGROUND)).as_widget(),
-            Style {
-                size: Size {
-                    width: Dimension::length(2.),
-                    height: Dimension::percent(1.),
+        let swatch_nodes = std::array::from_fn(|i| {
+            let node = tree.new_leaf(
+                BackgroundWidget::new(RectangleOptions {
+                    color: BasicColor::Solid(swatches[i]),
+                    rounding: Rounding::all(SWATCH_ROUNDING),
+                    ..RectangleOptions::DEFAULT
+                })
+                .mouse_handler(move |_, ctx| {
+                    if !ctx.in_capture_phase() {
+                        match ctx.payload().kind {
+                            MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
+                                ctx.push_messages(vec![OptionsMessage::SelectSwatch(i).into()]);
+                                ctx.request_redraw(Redraw::Now);
+                            }
+                            _ => {}
+                        }
+                    }
+                })
+                .as_widget(),
+                Style {
+                    size: Size::percent(1.),
+                    ..Style::DEFAULT
                 },
-                ..Style::DEFAULT
-            },
-        );
-        tree.add_child(container, separator);
-
-        let node = tree.new_leaf(
-            BackgroundWidget::new(RectangleOptions {
-                color: BasicColor::Solid(PremulColor::new([0.4, 0.4, 0.2, 1.])),
-                stroke_color: colors::BORDER.into(),
-                stroke_width: 1.,
-                rounding: Rounding::all(5.),
-                ..RectangleOptions::DEFAULT
-            })
-            .as_widget(),
-            Style {
-                display: Display::Flex,
-                size: Size::length(25.),
-                gap: Size::length(10.),
-                ..Style::DEFAULT
-            },
-        );
-        tree.add_child(container, node);
+            );
+            tree.add_child(swatch_containers[i], node);
+            node
+        });
 
         Self {
             container,
-            swatches: *swatches,
+            selected_swatch: 0,
+
             swatch_nodes,
-            color_picker_button: NodeId::new(0),
+            swatch_colors: *swatches,
+            swatch_containers,
         }
     }
 }

@@ -1,8 +1,19 @@
-use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
+use graphics::Mesh;
+use thiserror::Error;
 use wgpu::BufferUsages;
 
-use graphics::Mesh;
+pub mod reexports {
+    pub use wgpu;
+}
+
+#[derive(Error, Debug)]
+pub enum InitError {
+    #[error("failed to get a wgpu adapter")]
+    NoAdapter(#[from] wgpu::RequestAdapterError),
+    #[error("failed to get a wgpu device")]
+    NoDevice(#[from] wgpu::RequestDeviceError),
+}
 
 pub struct State {
     /// this *is not* to be used to request a new device.
@@ -16,7 +27,7 @@ pub struct State {
 }
 
 impl State {
-    pub async fn init() -> Result<Self> {
+    pub async fn init() -> Result<Self, InitError> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -24,8 +35,7 @@ impl State {
                 force_fallback_adapter: false,
                 compatible_surface: None,
             })
-            .await
-            .context("Failed to find an appropriate adapter")?;
+            .await?;
 
         let features = wgpu::Features::empty();
         let (device, queue) = adapter
@@ -36,27 +46,23 @@ impl State {
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
             })
-            .await
-            .context("Failed to create device")?;
+            .await?;
 
-        tracing::warn!("wgpu device limits: {:?}", device.limits());
+        tracing::warn!("new wgpu device created with limits: {:?}", device.limits());
 
         let texture_format = wgpu::TextureFormat::Bgra8Unorm;
 
         Ok(State {
             adapter,
-
             instance,
             device,
             queue,
-
             texture_format,
         })
     }
 }
 
 /// Owned growable buffer, the underlying buffer is destroyed when dropped.
-/// TODO: make this actually drop
 pub struct GrowableBuffer {
     pub buf: wgpu::Buffer,
     pub len: u64,
@@ -64,6 +70,12 @@ pub struct GrowableBuffer {
 
     usages: BufferUsages,
     label: Option<&'static str>,
+}
+
+impl Drop for GrowableBuffer {
+    fn drop(&mut self) {
+        self.buf.destroy();
+    }
 }
 
 impl GrowableBuffer {
@@ -88,17 +100,12 @@ impl GrowableBuffer {
             buf,
             len: 0,
             capacity,
-
             usages,
             label,
         }
     }
-    pub fn replace(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        data: &[u8],
-    ) -> Result<()> {
+
+    pub fn replace(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8]) {
         let len = data.len() as u64;
         if len > self.capacity {
             self.grow(
@@ -110,15 +117,9 @@ impl GrowableBuffer {
         }
         queue.write_buffer(&self.buf, 0, data);
         self.len = data.len() as u64;
-        Ok(())
     }
-    pub fn write(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        offset: u64,
-        data: &[u8],
-    ) -> Result<()> {
+
+    pub fn write(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, offset: u64, data: &[u8]) {
         let end = offset + data.len() as u64;
         if end > self.capacity {
             self.grow(
@@ -130,16 +131,10 @@ impl GrowableBuffer {
         }
         self.len = self.len.max(end);
         queue.write_buffer(&self.buf, offset, data);
-        Ok(())
     }
 
     // appends data to the growable buffer, returns the index where the data was written to.
-    pub fn append(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        data: &[u8],
-    ) -> Result<u64> {
+    pub fn append(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8]) -> u64 {
         let end = self.len + data.len() as u64;
         if end > self.capacity {
             self.grow(
@@ -150,7 +145,7 @@ impl GrowableBuffer {
             );
         }
         queue.write_buffer(&self.buf, self.len, data);
-        let res = Ok(self.len);
+        let res = self.len;
         self.len = end;
         res
     }
@@ -183,6 +178,7 @@ impl GrowableBuffer {
     pub fn len(&self) -> u64 {
         self.len
     }
+
     pub fn capacity(&self) -> u64 {
         self.capacity
     }
@@ -223,19 +219,17 @@ impl GrowableMeshBuffer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         mesh: &Mesh<V>,
-    ) -> Result<()>
-    where
+    ) where
         V: Clone + Pod + Zeroable,
     {
         self.vertex.replace(
             device,
             queue,
             bytemuck::cast_slice(mesh.vertices.as_slice()),
-        )?;
+        );
         self.index
-            .replace(device, queue, bytemuck::cast_slice(mesh.indices.as_slice()))?;
+            .replace(device, queue, bytemuck::cast_slice(mesh.indices.as_slice()));
         self.num_indices = mesh.indices.len() as u32;
-        Ok(())
     }
 
     pub fn write_mesh<V>(
@@ -245,8 +239,7 @@ impl GrowableMeshBuffer {
         vertex_offset: i64,
         indices_offset: i64,
         mut mesh: graphics::Mesh<V>,
-    ) -> Result<()>
-    where
+    ) where
         V: Clone + Pod + Zeroable,
     {
         let insertion_offset = {
@@ -255,14 +248,14 @@ impl GrowableMeshBuffer {
                     device,
                     queue,
                     bytemuck::cast_slice(mesh.vertices.as_slice()),
-                )?
+                )
             } else {
                 self.vertex.write(
                     device,
                     queue,
                     vertex_offset as u64,
                     bytemuck::cast_slice(mesh.vertices.as_slice()),
-                )?;
+                );
                 vertex_offset as u64
             }
         };
@@ -273,16 +266,15 @@ impl GrowableMeshBuffer {
 
         if indices_offset.is_negative() {
             self.index
-                .append(device, queue, bytemuck::cast_slice(mesh.indices.as_slice()))?;
+                .append(device, queue, bytemuck::cast_slice(mesh.indices.as_slice()));
         } else {
             self.index.write(
                 device,
                 queue,
                 indices_offset as u64,
                 bytemuck::cast_slice(mesh.indices.as_slice()),
-            )?;
+            );
         };
-        Ok(())
     }
 }
 

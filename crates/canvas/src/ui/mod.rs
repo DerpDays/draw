@@ -1,12 +1,15 @@
 use euclid::default::Point2D;
 
 use gui::{prelude::*, tree::ZIndexProperties, widgets::Widget, UITree};
-use input::{CursorIcon, Modifiers};
+use input::{CursorIcon, Modifiers, MouseButton, MouseEventKind};
 use renderer::GrowableMeshBuffer;
 
 use crate::{
-    tools::{ToolKind, ToolNodeMap},
-    ui::options::{OptionsMessage, OptionsTree},
+    tools::ToolKind,
+    ui::{
+        options::{OptionsMessage, OptionsTree},
+        toolbar::Toolbar,
+    },
     RedrawRequest,
 };
 
@@ -35,7 +38,7 @@ pub struct Application {
 
     pub selected_tool: ToolKind,
 
-    pub tool_nodes: ToolNodeMap,
+    pub toolbar: Toolbar,
     pub options: OptionsTree,
 
     pub modifiers: Modifiers,
@@ -66,18 +69,8 @@ pub fn handle_message<T: RedrawRequest + Clone + 'static>(
                 app.selected_tool,
                 tool_kind
             );
-
-            app.gui
-                .get_node_mut(app.selected_tool.get_node_id(&app.tool_nodes))
-                .as_button_mut()
-                .map(|x| x.set_active(false));
             app.selected_tool = *tool_kind;
-            app.gui
-                .get_node_mut(app.selected_tool.get_node_id(&app.tool_nodes))
-                .as_button_mut()
-                .map(|x| x.set_active(true));
-
-            tracing::info!("called swap tool to : {tool_kind:?}");
+            app.toolbar.swap_tool(&mut app.gui, *tool_kind);
         }
         Message::StartGrab(point) => {
             let style = app.gui.relative_layout(node);
@@ -139,4 +132,45 @@ pub fn handle_message<T: RedrawRequest + Clone + 'static>(
         }
     };
     cursor_icon
+}
+
+pub fn grab_fn<T>(_: &mut T, ctx: &mut EventContext<MouseEvent, Message>) {
+    match ctx.current_phase() {
+        EventPhase::Bubbling | EventPhase::AtTarget | EventPhase::Direct => {
+            match ctx.payload().kind {
+                MouseEventKind::Enter => {
+                    ctx.push_messages(vec![Message::CursorIcon(CursorIcon::Grab)])
+                }
+                MouseEventKind::Leave => ctx.push_messages(vec![
+                    Message::CursorIcon(CursorIcon::default()),
+                    Message::EndGrab,
+                ]),
+                MouseEventKind::Motion { .. } => {
+                    ctx.push_messages(vec![Message::HandleGrabMove(ctx.payload().position)])
+                }
+                MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
+                    ctx.push_messages(vec![
+                        Message::MoveTop(ctx.current_node()),
+                        Message::CursorIcon(CursorIcon::Grabbing),
+                        Message::StartGrab(ctx.payload().position),
+                    ]);
+                    ctx.request_mouse_capture(ctx.current_node());
+                }
+                MouseEventKind::Release { button, .. } if button == MouseButton::Left => {
+                    ctx.push_messages(vec![
+                        Message::CursorIcon(CursorIcon::Grab),
+                        Message::EndGrab,
+                    ]);
+                    ctx.request_mouse_release();
+                }
+                _ => {}
+            }
+        }
+        EventPhase::Capturing => match ctx.payload().kind {
+            MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
+                ctx.push_messages(vec![Message::MoveTop(ctx.current_node())])
+            }
+            _ => {}
+        },
+    };
 }

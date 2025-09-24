@@ -1,4 +1,4 @@
-use color::PremulColor;
+use color::AlphaColor;
 use euclid::Size2D;
 use graphics::{
     primitives::{Rectangle, RectangleOptions},
@@ -57,7 +57,7 @@ impl Tool for RectangleTool {
                         event.position,
                         Size2D::zero(),
                         RectangleOptions {
-                            stroke_color: PremulColor::WHITE.into(),
+                            stroke_color: AlphaColor::WHITE.into(),
                             stroke_width: 2.,
                             box_sizing: graphics::BoxSizing::BorderBox,
                             ..RectangleOptions::DEFAULT

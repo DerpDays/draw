@@ -1,4 +1,3 @@
-use anyhow::Result;
 use euclid::default::Point2D;
 use graphics::Drawable;
 use graphics::Primitive;
@@ -10,6 +9,7 @@ use std::collections::HashMap;
 use graphics::{CanvasCoordinates, Mesh};
 
 type C = CanvasCoordinates;
+
 /// A trait that describes a scene containing shapes, with serialization support.
 /// The scene is responsible for shape management, layer ordering, and converting to/from a serializable state.
 #[derive(Serialize, Deserialize, Default)]
@@ -96,9 +96,7 @@ impl Scene {
 
     /// Get shapes in render (layer) order.
     pub fn tessellate(&mut self, systems: &mut Systems) -> Mesh<Vertex> {
-        let keys = self.ordering.clone();
-
-        let (vertex_count, index_count) = keys
+        let (vertex_count, index_count) = self.ordering
             .iter()
             .filter_map(|key| {
                 self.nodes.get_mut(key).map(|node| {
@@ -113,7 +111,7 @@ impl Scene {
             indices: Vec::with_capacity(index_count),
         };
 
-        for key in keys {
+        for key in &self.ordering {
             if let Some(node) = self.nodes.get_mut(&key) {
                 result.append(node.render(systems));
             }
@@ -122,16 +120,4 @@ impl Scene {
         result
     }
 
-    /// Serialize the scene.
-    pub fn serialize(&self) -> Result<String> {
-        todo!()
-    }
-
-    /// Deserialize a scene.
-    pub fn deserialize(serialized: &str) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        todo!()
-    }
 }

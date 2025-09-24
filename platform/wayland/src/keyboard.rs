@@ -1,5 +1,7 @@
 use input::sctk::KeyEventKind;
-use smithay_client_toolkit::seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers};
+use smithay_client_toolkit::seat::keyboard::{
+    KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers,
+};
 use tracing::warn;
 use wayland_backend::client::ObjectId;
 use wayland_client::{
@@ -84,7 +86,7 @@ impl KeyboardHandler for State {
             return;
         };
 
-        if event.keysym == Keysym::Escape {
+        if event.keysym == Keysym::Escape && kb.last_modifiers.alt {
             for view in &mut self.views.canvas_views() {
                 let _ = view.set_mode(&mut self.shareable, crate::OverlayMode::Hidden);
                 if let Err(e) = view.render(&mut self.shareable) {
@@ -133,6 +135,7 @@ impl KeyboardHandler for State {
         keyboard: &WlKeyboard,
         _serial: u32,
         modifiers: Modifiers,
+        _: RawModifiers,
         _layout: u32,
     ) {
         let Some(kb) = self
@@ -144,7 +147,6 @@ impl KeyboardHandler for State {
             return;
         };
         kb.last_modifiers = modifiers;
-        // dispatch the event
         let Some(surface) = &kb.last_surface else {
             return;
         };
@@ -153,5 +155,14 @@ impl KeyboardHandler for State {
             &mut self.shareable,
             &KeyEventKind::ModifiersChanged(modifiers),
         );
+    }
+    fn repeat_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wayland_client::protocol::wl_keyboard::WlKeyboard,
+        _: u32,
+        _: KeyEvent,
+    ) {
     }
 }

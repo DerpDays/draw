@@ -4,7 +4,7 @@ use std::{borrow::Borrow, sync::OnceLock};
 
 use atlas::{TextureMesh, TextureVertex};
 use bytemuck::{Pod, Zeroable};
-use color::{HueDirection, PremulColor, Srgb};
+use color::{AlphaColor, HueDirection, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Vector2D};
 use lyon::{math::Point, path::builder::BorderRadii};
 use serde::{Deserialize, Serialize};
@@ -42,7 +42,6 @@ where
     pub fn append(&mut self, indexed: &Mesh<V>) {
         let offset = self.vertices.len() as u32;
         self.vertices.extend(&indexed.vertices);
-        // TODO: move this to offset_indices
         self.indices
             .extend(indexed.indices.iter().map(|i| offset + i))
     }
@@ -293,8 +292,8 @@ pub struct RadialGradient {
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BasicLinearGradient {
-    pub(crate) start_color: PremulColor<Srgb>,
-    pub(crate) end_color: PremulColor<Srgb>,
+    pub(crate) start_color: AlphaColor<Srgb>,
+    pub(crate) end_color: AlphaColor<Srgb>,
 
     pub(crate) p1: Point2D<f32>,
     pub(crate) p2: Point2D<f32>,
@@ -302,7 +301,7 @@ pub struct BasicLinearGradient {
     pub(crate) spread: SpreadMethod,
 }
 impl BasicLinearGradient {
-    pub const fn new(start_color: PremulColor<Srgb>, end_color: PremulColor<Srgb>) -> Self {
+    pub const fn new(start_color: AlphaColor<Srgb>, end_color: AlphaColor<Srgb>) -> Self {
         Self {
             start_color,
             end_color,
@@ -312,8 +311,8 @@ impl BasicLinearGradient {
         }
     }
     pub const fn new_with_points(
-        start_color: PremulColor<Srgb>,
-        end_color: PremulColor<Srgb>,
+        start_color: AlphaColor<Srgb>,
+        end_color: AlphaColor<Srgb>,
         p1: Point2D<f32>,
         p2: Point2D<f32>,
         spread_method: SpreadMethod,
@@ -335,7 +334,7 @@ impl BasicLinearGradient {
         BasicColor::LinearGradient(self)
     }
 
-    pub fn get_point(&self, point: Point2D<f32>) -> PremulColor<Srgb> {
+    pub fn get_point(&self, point: Point2D<f32>) -> AlphaColor<Srgb> {
         // Vector from start to end
         let direction = self.p2 - self.p1;
         // Squared length of the gradient vector
@@ -390,7 +389,7 @@ impl BasicLinearGradient {
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum BasicColor {
-    Solid(PremulColor<Srgb>),
+    Solid(AlphaColor<Srgb>),
     LinearGradient(BasicLinearGradient),
 }
 
@@ -429,8 +428,8 @@ impl BasicColor {
     }
 }
 
-impl From<PremulColor<Srgb>> for BasicColor {
-    fn from(value: PremulColor<Srgb>) -> Self {
+impl From<AlphaColor<Srgb>> for BasicColor {
+    fn from(value: AlphaColor<Srgb>) -> Self {
         Self::Solid(value)
     }
 }

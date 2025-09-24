@@ -1,10 +1,11 @@
-use crate::tools::{Tool, ToolMessage};
 use euclid::default::Size2D;
 use graphics::{
     primitives::{Svg, SvgOptions},
     Systems,
 };
 use input::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
+
+use crate::tools::{Tool, ToolMessage};
 
 #[derive(Clone, Debug, Copy, Default, PartialEq)]
 pub struct HighlighterTool {}
@@ -26,8 +27,11 @@ impl Tool for HighlighterTool {
                 vec![ToolMessage::Commit(graphics::Primitive::Svg(Svg::new(
                     event.position.round(),
                     Size2D::new(105.2898 * 2., 74.635 * 2.),
-                    include_bytes!("../../../../test.svg").to_vec(),
-                    SvgOptions::default(),
+                    include_bytes!("../../../../resources/typst_test.svg").to_vec(),
+                    SvgOptions {
+                        quantize: true,
+                        ..Default::default()
+                    },
                 )))]
             }
             _ => vec![],

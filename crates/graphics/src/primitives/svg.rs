@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use color::{PremulColor, Srgb};
+use color::{AlphaColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D, Transform2D, Vector2D};
 use lyon::path::{FillRule, LineCap, LineJoin};
 use lyon::tessellation::{
@@ -11,13 +11,14 @@ use serde::{Deserialize, Serialize};
 use usvg::tiny_skia_path::PathSegment;
 use usvg::{Node, Paint, PaintOrder, Tree};
 
-use crate::{ApplyCoordinates, Drawable, Mesh, Systems};
+use crate::{get_empty_mesh, ApplyCoordinates, Drawable, Mesh, Systems};
 use crate::{Vertex, VertexKind};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Options {
-    pub fill_color: Option<PremulColor<Srgb>>,
-    pub stroke_color: Option<PremulColor<Srgb>>,
+    pub fill_color: Option<AlphaColor<Srgb>>,
+    pub stroke_color: Option<AlphaColor<Srgb>>,
+    pub quantize: bool,
 }
 
 impl Default for Options {
@@ -25,6 +26,7 @@ impl Default for Options {
         Self {
             fill_color: None,
             stroke_color: None,
+            quantize: true,
         }
     }
 }
@@ -83,7 +85,7 @@ impl<C: ApplyCoordinates> Svg<C> {
 
     pub fn fill_path(&self, lyon_path: &lyon::path::Path, fill: &usvg::Fill) -> Mesh<Vertex> {
         let color = self.options.fill_color.unwrap_or(match fill.paint() {
-            Paint::Color(paint_color) => PremulColor::from_rgba8(
+            Paint::Color(paint_color) => AlphaColor::from_rgba8(
                 paint_color.red,
                 paint_color.green,
                 paint_color.blue,
@@ -92,7 +94,7 @@ impl<C: ApplyCoordinates> Svg<C> {
             // TODO: support fill types for svg
             _ => {
                 tracing::error!("fill types other than color are not supported for svg yet");
-                PremulColor::TRANSPARENT
+                AlphaColor::TRANSPARENT
             }
         });
         let fill_rule = match fill.rule() {
@@ -103,11 +105,18 @@ impl<C: ApplyCoordinates> Svg<C> {
         let mut tessellator = FillTessellator::new();
         let mut buffers = VertexBuffers::<Vertex, u32>::new();
         let mut builder = BuffersBuilder::new(&mut buffers, |vertex: FillVertex<'_>| {
-            Vertex::with_color(vertex.position(), C::apply(VertexKind::Color(color)))
+            Vertex::with_color(
+                if self.options.quantize {
+                    vertex.position().round()
+                } else {
+                    vertex.position()
+                },
+                C::apply(VertexKind::Color(color.premultiply())),
+            )
         });
         // TODO: Properly fill with the right colors, etc.
         let options = FillOptions::default()
-            .with_tolerance(0.1)
+            .with_tolerance(0.01)
             .with_fill_rule(fill_rule);
         _ = tessellator.tessellate_path(lyon_path, &options, &mut builder);
 
@@ -119,7 +128,7 @@ impl<C: ApplyCoordinates> Svg<C> {
 
     pub fn stroke_path(&self, lyon_path: &lyon::path::Path, stroke: &usvg::Stroke) -> Mesh<Vertex> {
         let color = self.options.stroke_color.unwrap_or(match stroke.paint() {
-            Paint::Color(paint_color) => PremulColor::from_rgba8(
+            Paint::Color(paint_color) => AlphaColor::from_rgba8(
                 paint_color.red,
                 paint_color.green,
                 paint_color.blue,
@@ -128,7 +137,7 @@ impl<C: ApplyCoordinates> Svg<C> {
             // TODO: support fill types for svg
             _ => {
                 tracing::error!("fill types other than color are not supported for svg yet");
-                PremulColor::TRANSPARENT
+                AlphaColor::TRANSPARENT
             }
         });
         let stroke_width = stroke.width().get();
@@ -148,11 +157,18 @@ impl<C: ApplyCoordinates> Svg<C> {
         let mut tessellator = StrokeTessellator::new();
         let mut buffers = VertexBuffers::<Vertex, u32>::new();
         let mut builder = BuffersBuilder::new(&mut buffers, |vertex: StrokeVertex<'_, '_>| {
-            Vertex::with_color(vertex.position(), C::apply(VertexKind::Color(color)))
+            Vertex::with_color(
+                if self.options.quantize {
+                    vertex.position().round()
+                } else {
+                    vertex.position()
+                },
+                C::apply(VertexKind::Color(color.premultiply())),
+            )
         });
         // TODO: Properly fill with the right colors, etc.
         let options = StrokeOptions::default()
-            .with_tolerance(0.1)
+            .with_tolerance(0.01)
             .with_line_width(stroke_width)
             .with_start_cap(line_cap)
             .with_end_cap(line_cap)
@@ -174,8 +190,10 @@ impl<C: ApplyCoordinates> Drawable for Svg<C> {
         }
 
         let mut result = Mesh::empty();
-        let tree = Tree::from_data(self.data.as_slice(), &usvg::Options::default())
-            .expect("invalid svg --- TODO: dont die");
+        let Ok(tree) = Tree::from_data(self.data.as_slice(), &usvg::Options::default()) else {
+            tracing::error!("tried to render an invalid SVG");
+            return get_empty_mesh();
+        };
 
         // Push root's children in reverse order onto the stack
         let mut stack: Vec<&Node> = tree.root().children().iter().rev().collect();

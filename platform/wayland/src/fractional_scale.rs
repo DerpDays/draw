@@ -1,11 +1,9 @@
+use smithay_client_toolkit::globals::GlobalData;
 use wayland_client::globals::{BindError, GlobalList};
 use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
-
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1;
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
-
-use smithay_client_toolkit::globals::GlobalData;
 
 #[derive(Debug)]
 #[allow(unused)]
@@ -87,9 +85,11 @@ where
         qh: &QueueHandle<D>,
     ) {
         match event {
-            wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::Event::PreferredScale { scale } => {
+            wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::Event::PreferredScale {
+                scale,
+            } => {
                 state.preferred_scale(conn, qh, surface, scale);
-            },
+            }
             _ => unreachable!("WpFractionalScaleV1 should only have a preferred_scale event"),
         }
     }

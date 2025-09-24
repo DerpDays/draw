@@ -1,26 +1,27 @@
-use std::marker::PhantomData;
-
-use color::{Hsl, PremulColor};
+use color::AlphaColor;
 use euclid::default::Point2D;
 use graphics::primitives::{RectangleOptions, TextOptions};
-use graphics::{BasicLinearGradient, Rounding};
+use graphics::Rounding;
 
 use gui::prelude::*;
 use gui::tree::{UITree, ZIndexProperties};
-use gui::widgets::{BackgroundWidget, ContainerWidget, SliderWidget, TextWidget, Widget};
+use gui::widgets::{BackgroundWidget, ContainerWidget, TextWidget, Widget};
+use input::{CursorIcon, MouseEventKind};
 
-use input::{CursorIcon, MouseButton, MouseEvent, MouseEventKind};
-
+use crate::tools::ToolKind;
+use crate::ui::options::color_picker::ColorPickerTree;
 use crate::ui::options::color_swatches::ColorSwatches;
 use crate::ui::styles::{colors, floating_grab};
 use crate::ui::Message;
 
+mod color_picker;
 mod color_swatches;
 mod rectangle;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptionsMessage {
-    ColorPicker(ColorPickerMessage),
+    ColorPicker(color_picker::ColorPickerMessage),
+    SelectSwatch(usize),
 }
 
 impl From<OptionsMessage> for Message {
@@ -32,58 +33,67 @@ impl From<OptionsMessage> for Message {
 pub struct OptionsTree {
     pub grab_area_node: NodeId,
     pub background_node: NodeId,
+    pub swatches: color_swatches::ColorSwatches<4>,
     pub color_picker: ColorPickerTree,
-}
 
-pub fn grab_fn(_: &mut ContainerWidget<Message>, ctx: &mut EventContext<MouseEvent, Message>) {
-    match ctx.current_phase() {
-        EventPhase::Bubbling | EventPhase::AtTarget | EventPhase::Direct => {
-            match ctx.payload().kind {
-                MouseEventKind::Enter => {
-                    ctx.push_messages(vec![Message::CursorIcon(CursorIcon::Grab)])
-                }
-                MouseEventKind::Leave => ctx.push_messages(vec![
-                    Message::CursorIcon(CursorIcon::default()),
-                    Message::EndGrab,
-                ]),
-                MouseEventKind::Motion { .. } => {
-                    ctx.push_messages(vec![Message::HandleGrabMove(ctx.payload().position)])
-                }
-                MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
-                    ctx.push_messages(vec![
-                        Message::MoveTop(ctx.current_node()),
-                        Message::CursorIcon(CursorIcon::Grabbing),
-                        Message::StartGrab(ctx.payload().position),
-                    ]);
-                    ctx.request_mouse_capture(ctx.current_node());
-                }
-                MouseEventKind::Release { button, .. } if button == MouseButton::Left => {
-                    ctx.push_messages(vec![
-                        Message::CursorIcon(CursorIcon::Grab),
-                        Message::EndGrab,
-                    ]);
-                    ctx.request_mouse_release();
-                }
-                _ => {}
-            }
-        }
-        EventPhase::Capturing => match ctx.payload().kind {
-            MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
-                ctx.push_messages(vec![Message::MoveTop(ctx.current_node())])
-            }
-            _ => {}
-        },
-    };
+    is_shown: bool,
 }
 
 impl OptionsTree {
+    pub fn swap_tool(&mut self, tool: ToolKind) {
+        let should_show = match tool {
+            ToolKind::Grab => false,
+            ToolKind::Select => false,
+            ToolKind::Eraser => false,
+            ToolKind::Zoom => false,
+            _ => true,
+        };
+        if self.is_shown && !should_show {
+        } else if !self.is_shown && should_show {
+        };
+    }
+
     pub fn update(&mut self, tree: &mut UITree<Widget<Message>>, message: &OptionsMessage) {
         match message {
-            OptionsMessage::ColorPicker(message) => self.color_picker.update(tree, message),
+            OptionsMessage::ColorPicker(message) => {
+                self.color_picker.update(tree, message);
+                self.swatches.update_swatch(
+                    tree,
+                    self.swatches.selected_swatch,
+                    self.color_picker.color.convert(),
+                );
+            }
+            OptionsMessage::SelectSwatch(swatch_id) => {
+                if self.swatches.selected_swatch == *swatch_id {
+                    // toggle the color picker
+                    if tree.get_style(self.color_picker.container).display != Display::None {
+                        tree.set_style(
+                            self.color_picker.container,
+                            color_picker::color_picker_container_style(),
+                        );
+                    } else {
+                        tree.set_style(
+                            self.color_picker.container,
+                            Style {
+                                display: Display::Flex,
+                                ..color_picker::color_picker_container_style()
+                            },
+                        );
+                    }
+                } else {
+                    self.swatches.update_selected(tree, *swatch_id);
+                    self.color_picker.update(
+                        tree,
+                        &color_picker::ColorPickerMessage::UpdateColor(
+                            self.swatches.swatch_colors[*swatch_id..*swatch_id + 1][0],
+                        ),
+                    );
+                }
+            }
         }
     }
     pub fn build(tree: &mut UITree<Widget<Message>>, root: NodeId) -> Self {
-        let grab_area = ContainerWidget::new(true).mouse_handler(grab_fn);
+        let grab_area = ContainerWidget::new(true).mouse_handler(crate::ui::grab_fn);
         let grab_area_node = tree.new_leaf_with_z(
             grab_area.as_widget(),
             floating_grab(100., Point2D::new(100., 500.)),
@@ -94,13 +104,30 @@ impl OptionsTree {
         );
         tree.add_child(root, grab_area_node);
 
+        let container = tree.new_leaf(
+            ContainerWidget::new(false)
+                .mouse_handler(|_, ctx| {
+                    if !ctx.in_capture_phase() && ctx.payload().kind == MouseEventKind::Enter {
+                        ctx.push_messages(vec![Message::CursorIcon(CursorIcon::Default)]);
+                    }
+                })
+                .as_widget(),
+            Style::DEFAULT,
+        );
+        tree.add_child(grab_area_node, container);
+
         let background_node = tree.new_leaf(
             BackgroundWidget::new(RectangleOptions {
                 color: colors::BACKGROUND.into(),
                 rounding: Rounding::all(5.),
                 stroke_width: 3.,
-                stroke_color: PremulColor::new([0.9, 0.9, 0.9, 1.]).into(),
-                box_sizing: graphics::BoxSizing::ContentBox,
+                stroke_color: AlphaColor::new([0.9, 0.9, 0.9, 1.]).into(),
+                ..RectangleOptions::DEFAULT
+            })
+            .mouse_handler(|_, ctx| {
+                if !ctx.in_capture_phase() {
+                    ctx.stop_propagation();
+                }
             })
             .as_widget(),
             Style {
@@ -111,13 +138,13 @@ impl OptionsTree {
                 ..Style::DEFAULT
             },
         );
-        tree.add_child(grab_area_node, background_node);
+        tree.add_child(container, background_node);
 
         let color_picker_label = tree.new_leaf(
             TextWidget::new(
-                "Color Picker".to_string(),
+                "Rectangle Tool".to_string(),
                 TextOptions {
-                    color: PremulColor::new([1., 1., 1., 1.]),
+                    color: AlphaColor::new([1., 1., 1., 1.]),
                     font_size: 16.,
                     ..Default::default()
                 },
@@ -136,293 +163,131 @@ impl OptionsTree {
         tree.add_child(background_node, color_picker_label);
         let color_picker = ColorPickerTree::build(tree);
 
-        let color_picker_container = tree.new_leaf(
-            BackgroundWidget::new(RectangleOptions {
-                color: colors::BACKGROUND.into(),
-                rounding: Rounding::all(5.),
-                stroke_width: 3.,
-                stroke_color: PremulColor::new([0.9, 0.9, 0.9, 1.]).into(),
-                box_sizing: graphics::BoxSizing::ContentBox,
-            })
-            .as_widget(),
+        let swatches_container = tree.new_leaf(
+            Widget::Layout,
             Style {
-                position: Position::Absolute,
-                inset: Rect {
-                    left: LengthPercentageAuto::percent(1.25),
-                    ..auto()
-                },
-                padding: Rect::length(10.),
+                display: Display::Flex,
+                align_items: Some(AlignItems::Center),
+                gap: Size::length(10.),
                 ..Style::DEFAULT
             },
         );
-        tree.add_child(background_node, color_picker_container);
-        tree.add_child(color_picker_container, color_picker.container);
 
+        tree.add_child(background_node, swatches_container);
+
+        let swatches_label = tree.new_leaf(
+            TextWidget::new(
+                "Fill Color: ".to_string(),
+                TextOptions {
+                    color: AlphaColor::new([1., 1., 1., 1.]),
+                    font_size: 13.,
+                    ..Default::default()
+                },
+            )
+            .as_widget(),
+            Style::DEFAULT,
+        );
+
+        tree.add_child(swatches_container, swatches_label);
         let swatches = ColorSwatches::build(
             tree,
             &[
-                PremulColor::WHITE,
-                PremulColor::BLACK,
-                PremulColor::new([1., 0., 0., 1.]),
-                PremulColor::new([0., 1., 0., 1.]),
+                AlphaColor::WHITE,
+                AlphaColor::BLACK,
+                AlphaColor::new([1., 0., 0., 1.]),
+                AlphaColor::new([0., 1., 0., 1.]),
             ],
+            0,
         );
-        tree.add_child(background_node, swatches.container);
+        tree.add_child(swatches_container, swatches.container);
+        tree.add_child(background_node, color_picker.container);
 
         Self {
             grab_area_node,
             background_node,
+            swatches,
             color_picker,
+            is_shown: true,
         }
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum ColorPickerMessage {
-    UpdateHue(f32),
-    UpdateSaturation(f32),
-    UpdateLightness(f32),
+pub enum OptionsType {
+    ColorSwatches,
+    Float {
+        label: Option<&'static str>,
+    },
+    IconRadio {
+        label: Option<&'static str>,
+        options: Vec<RadioOption>,
+    },
 }
-
-impl From<ColorPickerMessage> for Message {
-    fn from(value: ColorPickerMessage) -> Self {
-        OptionsMessage::ColorPicker(value).into()
-    }
-}
-
-struct ColorPickerTree {
-    container: NodeId,
-
-    hue: f32,
-    saturation: f32,
-    lightness: f32,
-
-    hue_slider: SliderTree<6, [f32; 3]>,
-    saturation_slider: SliderTree<1, [f32; 3]>,
-    lightness_slider: SliderTree<2, [f32; 3]>,
-}
-
-impl ColorPickerTree {
-    pub fn update(&mut self, tree: &mut UITree<Widget<Message>>, message: &ColorPickerMessage) {
-        match message {
-            ColorPickerMessage::UpdateHue(value) => {
-                self.hue = *value;
-                self.saturation_slider
-                    .update_background(tree, [self.hue, self.saturation, self.lightness]);
-                self.lightness_slider
-                    .update_background(tree, [self.hue, self.saturation, self.lightness]);
-            }
-            ColorPickerMessage::UpdateSaturation(value) => {
-                self.saturation = *value;
-                self.hue_slider
-                    .update_background(tree, [self.hue, self.saturation, self.lightness]);
-                self.lightness_slider
-                    .update_background(tree, [self.hue, self.saturation, self.lightness]);
-            }
-            ColorPickerMessage::UpdateLightness(value) => {
-                self.lightness = *value;
-                self.hue_slider
-                    .update_background(tree, [self.hue, self.saturation, self.lightness]);
-                self.saturation_slider
-                    .update_background(tree, [self.hue, self.saturation, self.lightness]);
-            }
-        }
-    }
-    pub fn build(tree: &mut UITree<Widget<Message>>) -> Self {
-        let container = tree.new_leaf(
-            Widget::Layout,
-            Style {
-                display: Display::Flex,
-                flex_direction: FlexDirection::Column,
-                gap: Size::from_length(10.),
-                ..Default::default()
-            },
-        );
-
-        let initial_hsl = [0., 100., 50.];
-
-        let hue_slider = SliderTree::new(
-            tree,
-            container,
-            (0., 3600.),
-            3600,
-            initial_hsl[0] * 10.,
-            |[_, saturation, lightness]| {
-                std::array::from_fn(|i| {
-                    let start_hue = i as f32 * 60.;
-                    RectangleOptions::only_color(BasicLinearGradient::new(
-                        PremulColor::<Hsl>::new([start_hue, saturation, lightness, 1.]).convert(),
-                        PremulColor::<Hsl>::new([start_hue + 60., saturation, lightness, 1.])
-                            .convert(),
-                    ))
-                })
-            },
-            initial_hsl,
-            |val| ColorPickerMessage::UpdateHue(val / 10.).into(),
-        );
-        let saturation_slider = SliderTree::new(
-            tree,
-            container,
-            (0., 1000.),
-            1000,
-            initial_hsl[1] * 10.,
-            |[hue, _, lightness]| {
-                std::array::from_fn(|i| {
-                    RectangleOptions::only_color(BasicLinearGradient::new(
-                        PremulColor::<Hsl>::new([hue, 0., lightness, 1.]).convert(),
-                        PremulColor::<Hsl>::new([hue, 100., lightness, 1.]).convert(),
-                    ))
-                })
-            },
-            initial_hsl,
-            |val| ColorPickerMessage::UpdateSaturation(val / 10.).into(),
-        );
-        let lightness_slider = SliderTree::new(
-            tree,
-            container,
-            (0., 1000.),
-            1000,
-            initial_hsl[2] * 10.,
-            |[hue, saturation, _]| {
-                std::array::from_fn(|i| {
-                    RectangleOptions::only_color(BasicLinearGradient::new(
-                        PremulColor::<Hsl>::new([hue, saturation, (i * 50) as f32, 1.]).convert(),
-                        PremulColor::<Hsl>::new([hue, saturation, ((i + 1) * 50) as f32, 1.])
-                            .convert(),
-                    ))
-                })
-            },
-            initial_hsl,
-            |val| ColorPickerMessage::UpdateLightness(val / 10.).into(),
-        );
-        Self {
-            hue: initial_hsl[0],
-            saturation: initial_hsl[1],
-            lightness: initial_hsl[2],
-
-            container,
-            hue_slider,
-            saturation_slider,
-            lightness_slider,
-        }
-    }
-}
-fn slider_indicator_style(value: f32, start: f32, end: f32) -> Style {
-    Style {
-        position: Position::Absolute,
-        size: Size::percent(1.),
-        inset: Rect {
-            left: LengthPercentageAuto::percent((value - start) / (end - start)),
-            ..Rect::auto()
-        },
-        ..Style::DEFAULT
-    }
-}
-
-struct SliderTree<const N: usize, T> {
-    slider: NodeId,
-    indicator: NodeId,
-    background_parts: [NodeId; N],
-    background_fn: fn(T) -> [RectangleOptions; N],
-    _marker: PhantomData<T>,
-}
-
-impl<const N: usize, T> SliderTree<N, T> {
-    pub fn update_background(&self, tree: &mut UITree<Widget<Message>>, value: T) {
-        let individual_part_backgrounds = (self.background_fn)(value);
-        for (idx, node_id) in self.background_parts.iter().enumerate() {
-            let widget = tree.get_node_mut(*node_id).as_background_mut().unwrap();
-            widget.change_options(individual_part_backgrounds[idx]);
-        }
-    }
-    pub fn new(
+impl OptionsType {
+    pub fn build_ui<T>(
+        &self,
         tree: &mut UITree<Widget<Message>>,
-        root: NodeId,
-        range: (f32, f32),
-        steps: u64,
-        initial_value: f32,
-        background_fn: fn(T) -> [RectangleOptions; N],
-        background_init_val: T,
-        on_change: impl Fn(f32) -> Message + 'static,
-    ) -> SliderTree<N, T> {
-        let indicator_container = tree.new_leaf(
-            Widget::Layout,
-            slider_indicator_style(initial_value, range.0, range.1),
-        );
-        let indicator_node = tree.new_leaf(
-            BackgroundWidget::new(RectangleOptions::only_color(PremulColor::new([
-                1., 1., 1., 1.,
-            ])))
-            .as_widget(),
-            Style {
-                position: Position::Relative,
-                size: Size {
-                    width: Dimension::length(3.),
-                    height: Dimension::percent(1.),
-                },
-                inset: Rect {
-                    left: LengthPercentageAuto::length(-1.5),
-                    ..Rect::auto()
-                },
-                ..Style::DEFAULT
-            },
-        );
-        tree.add_child(indicator_container, indicator_node);
-
-        let indicator_container_clone = indicator_container;
-        let slider_widget = SliderWidget::new(steps, initial_value, range.0, range.1)
-            .mouse_handler(|_, ctx| {
-                if ctx.current_phase() != EventPhase::Capturing {
-                    if ctx.payload().kind == MouseEventKind::Enter {
-                        ctx.push_messages(vec![Message::CursorIcon(CursorIcon::Pointer)]);
-                    }
-                    ctx.stop_propagation();
-                }
-            })
-            .change_handler(move |_, ctx| {
-                if ctx.current_phase() != EventPhase::Capturing {
-                    let val = ctx.payload().new;
-                    ctx.push_tree_command(gui::tree::TreeCommand::SetStyle {
-                        node: indicator_container_clone,
-                        style: slider_indicator_style(val, range.0, range.1),
-                    });
-                    ctx.push_messages(vec![on_change(val)]);
-                }
-            });
-
-        let slider_style = Style {
-            display: Display::Flex,
-            size: Size::from_lengths(256., 36.),
-            min_size: Size::from_lengths(192., 24.),
-            ..Default::default()
-        };
-        let slider_node = tree.new_leaf(slider_widget.as_widget(), slider_style);
-        tree.add_child(root, slider_node);
-
-        // Build background parts colors
-        let individual_part_backgrounds = background_fn(background_init_val);
-
-        let background_parts = std::array::from_fn(|i| {
-            let background_part = BackgroundWidget::new(individual_part_backgrounds[i]);
-            let part_node = tree.new_leaf(
-                background_part.as_widget(),
-                Style {
-                    flex_grow: 1.,
-                    ..Default::default()
-                },
-            );
-            tree.add_child(slider_node, part_node);
-            part_node
-        });
-
-        tree.add_child(slider_node, indicator_container);
-
-        SliderTree {
-            slider: slider_node,
-            indicator: indicator_container,
-            background_parts,
-            background_fn: background_fn,
-            _marker: PhantomData,
+        val_fn: fn(T) -> Message,
+    ) -> NodeId {
+        match self {
+            OptionsType::ColorSwatches => ColorPickerTree::build(tree).container,
+            OptionsType::Float { label } => todo!(),
+            OptionsType::IconRadio { label, options } => todo!(),
         }
     }
 }
+
+pub struct RadioOption {
+    label: &'static str,
+    icon: &'static [u8],
+}
+
+enum ToolOptionsUpdate {
+    Line(LineOptionsUpdate),
+}
+
+struct LineSettings {
+    color: AlphaColor<color::Srgb>,
+    width: f32,
+}
+impl LineSettings {}
+
+enum LineOptionsUpdate {
+    UpdateColor(AlphaColor<color::Srgb>),
+    UpdateWidth(f32),
+}
+impl From<LineOptionsUpdate> for Message {
+    fn from(value: LineOptionsUpdate) -> Self {
+        // Self::ToolOptions(ToolOptionsUpdate::Line(value))
+        todo!()
+    }
+}
+
+// struct ArrowSettings {
+//     color: AlphaColor<color::Srgb>,
+//     width: f32,
+//
+//     line_snap_angle: f32,
+// }
+// struct RectangleSettings {
+//     color: AlphaColor<color::Srgb>,
+//     width: f32,
+//
+//     line_snap_angle: f32,
+// }
+// struct EllipseSettings {
+//     color: AlphaColor<color::Srgb>,
+//     width: f32,
+//
+//     line_snap_angle: f32,
+// }
+//
+// struct TextSettings {
+//     options: graphics::primitives::TextOptions,
+// }
+//
+// struct HighlighterSettings {
+//     color: AlphaColor<color::Srgb>,
+//     width: f32,
+//
+//     line_snap_angle: f32,
+// }

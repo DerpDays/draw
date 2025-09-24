@@ -7,7 +7,7 @@ use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
     events::{EventContext, EventHandler},
-    widgets::Widget,
+    widgets::{parse_layout_change, LayoutChange, Widget},
     Element,
 };
 
@@ -39,6 +39,9 @@ impl<M: Clone> TextWidget<M> {
             keyboard_handler: EventHandler::none(),
         }
     }
+
+    /// # CORRECTNESS
+    /// You must remeasure the layout after calling this function.
     pub fn update_content(&mut self, content: String) {
         self.inner.set_content(content);
     }
@@ -53,23 +56,18 @@ impl<M: Clone> Element for TextWidget<M> {
 
     fn render(&mut self, systems: &mut Systems, layout: taffy::Layout) -> &Mesh<Vertex> {
         if self.layout != layout {
-            let mut merged_layout = self.layout;
-            merged_layout.location = layout.location;
-
-            if merged_layout == layout {
-                // if only the position changed, move the origin of the svg.
-                self.inner.translate(
-                    Point2D::new(layout.location.x, layout.location.y)
-                        - Point2D::new(self.layout.location.x, self.layout.location.y),
-                );
-            } else {
-                // otherwise we need to completely update the svg, which means re-tessellating.
-                self.inner.update_rect(Box2D::from_origin_and_size(
-                    Point2D::new(layout.location.x, layout.location.y),
-                    Size2D::new(layout.size.width, layout.size.height),
-                ));
+            match parse_layout_change(layout, self.layout) {
+                LayoutChange::Translate(dx) => {
+                    self.inner.translate(dx);
+                }
+                LayoutChange::Rerender => {
+                    tracing::info!("rerendering text");
+                    self.inner.update_rect(Box2D::from_origin_and_size(
+                        Point2D::new(layout.location.x, layout.location.y),
+                        Size2D::new(layout.size.width, layout.size.height),
+                    ));
+                }
             }
-
             self.layout = layout;
         }
         self.inner.render(systems)

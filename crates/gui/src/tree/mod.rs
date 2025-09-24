@@ -1,7 +1,7 @@
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics::{Drawable, Mesh, Systems, Vertex};
 use input::{KeyboardEvent, MouseEvent, MouseEventKind};
-use taffy::{prelude::TaffyMaxContent, Layout, NodeId, Size, Style, TaffyTree};
+use taffy::{prelude::TaffyMaxContent, CacheTree, Layout, NodeId, Size, Style, TaffyTree};
 
 mod layout;
 mod zindex;
@@ -10,7 +10,7 @@ use layout::Linear;
 pub use zindex::ZIndexProperties;
 
 use crate::{
-    events::{EventContext, EventPhase, EventResult, TreeEvent},
+    events::{BlurEvent, EventContext, EventPhase, EventResult, FocusEvent, TreeEvent},
     tree::{
         layout::{HittableLayout, LayoutTree},
         zindex::ZIndexOrdering,
@@ -23,7 +23,7 @@ pub struct UITree<T> {
     pub scale_factor: f64,
     capture: Capture,
 
-    inner: TaffyTree<TreeNode<T>>,
+    inner: Box<TaffyTree<TreeNode<T>>>,
     root_node: NodeId,
 
     layout_tree: LayoutTree<Linear>,
@@ -78,7 +78,7 @@ pub enum Focusable {
 
 impl<T: Default> UITree<T> {
     pub fn new(viewport: Size2D<f32>, scale_factor: f64) -> Self {
-        let mut inner = TaffyTree::new();
+        let mut inner = Box::new(TaffyTree::new());
         let root_node = inner
             .new_leaf_with_context(
                 Style::DEFAULT,
@@ -149,7 +149,6 @@ impl<T> UITree<T> {
     /// Providing a node that already has a parent is undefined behaviour, and will likely lead to
     /// it not rendering correctly.
     pub fn add_child(&mut self, parent: NodeId, child: NodeId) {
-        tracing::info!("adding child!!!!! parent: {parent:?} child: {child:?}");
         self.inner.add_child(parent, child).unwrap();
         self.layout_dirty = true;
         self.render_order_dirty = true;
@@ -166,11 +165,15 @@ impl<T> UITree<T> {
         self.layout_dirty = true;
     }
 
-    /// Adds a node as a child of another node.
+    /// Sets the style of a given node.
     pub fn set_style(&mut self, node: NodeId, style: Style) {
         self.inner.set_style(node, style).unwrap();
         self.layout_dirty = true;
         self.render_order_dirty = true;
+    }
+    /// Gets the style of a given node.
+    pub fn get_style(&self, node: NodeId) -> &Style {
+        self.inner.style(node).unwrap()
     }
 
     /// Returns an iterator of NodeId's at a given position in z-index order.
@@ -254,19 +257,39 @@ impl<T> UITree<T> {
 
 impl<T: Element> UITree<T> {
     pub fn update_layout(&mut self, systems: &mut Systems) {
+        // for node in std::mem::take(&mut self.relayout_nodes) {
+        //     self.inner
+        //         .compute_layout_with_measure(
+        //             node,
+        //             Size::MAX_CONTENT,
+        //             |known_dimensions, available_space, _, ctx, style| {
+        //                 if let Size {
+        //                     width: Some(width),
+        //                     height: Some(height),
+        //                 } = known_dimensions
+        //                 {
+        //                     return Size { width, height };
+        //                 }
+        //                 let ctx = ctx.expect("All nodes in the taffy tree have an inner ctx");
+        //                 ctx.inner.measure(systems, available_space, style)
+        //             },
+        //         )
+        //         .expect("failed to compute layout");
+        // }
         self.inner
             .compute_layout_with_measure(
                 self.root_node,
                 Size::MAX_CONTENT,
                 |known_dimensions, available_space, _, ctx, style| {
+                    tracing::info!("remeasuring!");
                     if let Size {
                         width: Some(width),
                         height: Some(height),
                     } = known_dimensions
                     {
+                        tracing::info!("known dimensions!");
                         return Size { width, height };
                     }
-
                     let ctx = ctx.expect("All nodes in the taffy tree have an inner ctx");
                     ctx.inner.measure(systems, available_space, style)
                 },
@@ -436,13 +459,31 @@ where
         Some(result)
     }
 
-    fn handle_mouse_capture<E>(&mut self, ctx: &mut EventContext<E, T::Message>) {
+    #[inline]
+    const fn handle_mouse_capture<E>(&mut self, ctx: &mut EventContext<E, T::Message>) {
         if let Some(capture) = ctx.is_requesting_mouse_capture() {
-            tracing::info!("setting mouse capture!");
             self.capture.mouse_capture = Some(capture);
         } else if ctx.is_requesting_mouse_release() {
-            tracing::info!("releasing mouse capture");
             self.capture.mouse_capture = None;
+        }
+    }
+
+    #[inline]
+    fn handle_kb_focus<E>(&mut self, ctx: &mut EventContext<E, T::Message>) {
+        if let Some(capture) = ctx.is_requesting_kb_focus_capture() {
+            if let Some(prev) = self.capture.kb_focus {
+                tracing::info!("pushed new blur event");
+                ctx.push_event_node(prev, TreeEvent::BlurEvent(BlurEvent));
+            }
+            self.capture.kb_focus = Some(capture);
+            tracing::info!("pushed new focus event");
+            ctx.push_event_node(capture, TreeEvent::FocusEvent(FocusEvent));
+        } else if ctx.is_requesting_kb_focus_release() {
+            if let Some(prev) = self.capture.kb_focus {
+                tracing::info!("pushed new blur event");
+                ctx.push_event_node(prev, TreeEvent::BlurEvent(BlurEvent));
+            }
+            self.capture.kb_focus = None;
         }
     }
 
@@ -496,12 +537,14 @@ where
                 })
             }
             TreeEvent::FocusEvent(payload) => {
+                tracing::warn!("dispatching focus event");
                 let ctx = EventContext::new(payload, false, target_node);
                 self.dispatch_generic_event(ctx, |node, ctx| {
                     node.focus_event(ctx);
                 })
             }
             TreeEvent::BlurEvent(payload) => {
+                tracing::warn!("dispatching blur event");
                 let ctx = EventContext::new(payload, false, target_node);
                 self.dispatch_generic_event(ctx, |node, ctx| {
                     node.blur_event(ctx);
@@ -575,6 +618,8 @@ where
         mut ctx: EventContext<E, T::Message>,
     ) -> EventResult<T::Message> {
         self.handle_mouse_capture(&mut ctx);
+        self.handle_kb_focus(&mut ctx);
+
         for command in ctx.tree_commands() {
             match command {
                 TreeCommand::AddChild { parent, child } => {
@@ -591,16 +636,34 @@ where
                 }
             }
         }
+
         let mut result = ctx.into_result();
+
         for (node_id, event) in result.take_new_events() {
+            tracing::info!("new event: {event:?}");
             result.combine(self.dispatch_tree_event(node_id, event));
+        }
+        if !result.is_requesting_relayout().is_empty() {
+            self.layout_dirty = true;
+            self.inner.cache_clear(self.root_node);
+            for node_id in result.take_relayouting() {
+                self.inner.cache_clear(node_id);
+                let mut current = node_id;
+                while let Some(parent) = self.parent(current) {
+                    self.inner.cache_clear(parent);
+                    current = parent;
+                }
+            }
         }
         result
     }
 
     pub fn keyboard_event(&mut self, event: KeyboardEvent) -> Option<EventResult<T::Message>> {
         // Only handle keyboard events if a node currently has keyboard focus.
+        tracing::trace!("checking kb_focus {:?}", self.capture.kb_focus);
         let node = self.capture.kb_focus?;
+
+        tracing::trace!("there is a focused node.");
 
         let mut ctx = EventContext::direct(event, node);
         self.get_node_mut(node).keyboard_event(&mut ctx);
@@ -608,7 +671,7 @@ where
     }
 }
 
-impl<T: Element> Drawable<Vertex> for UITree<T> {
+impl<M: Clone> Drawable<Vertex> for UITree<crate::widgets::Widget<M>> {
     fn render(&mut self, systems: &mut Systems) -> &Mesh<Vertex> {
         let start = std::time::Instant::now();
         if self.render_order_dirty {
@@ -620,6 +683,7 @@ impl<T: Element> Drawable<Vertex> for UITree<T> {
 
         let start = std::time::Instant::now();
         if self.layout_dirty {
+            tracing::info!("layout dirty, starting layout update now");
             self.update_layout(systems);
         }
         tracing::trace!("Time taken to update layout: {:?}", start.elapsed());
@@ -635,11 +699,11 @@ impl<T: Element> Drawable<Vertex> for UITree<T> {
 
         let mut mesh = Mesh::empty();
         for node in self.render_order.render_order().clone() {
-            mesh.append(self.draw_node(systems, node))
+            mesh.append(self.draw_node(systems, node));
         }
 
         self.render_cache = Some(mesh.clone());
-        tracing::trace!("Time taken to tessellate: {:?}", start.elapsed());
+        tracing::trace!("Time taken to render gui: {:?}", start.elapsed());
         self.render_cache.as_ref().unwrap()
     }
     fn bounding_box(&self) -> Box2D<f32> {

@@ -20,6 +20,8 @@ struct VertexOutput {
     @location(3) tex_coords: vec2<f32>,
 };
 
+// TODO: simplify by removing viewport/world space vertex kinds, and instead just pass a single projection matrix.
+
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var out: VertexOutput;
@@ -35,6 +37,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     out.tex_coords = input.tex_coords;
     return out;
 }
+
+// TODO: Add support for clipping through the discard statement within the fragment shader (determined using a min/max xy vertex attribute).
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {

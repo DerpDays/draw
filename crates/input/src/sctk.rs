@@ -180,7 +180,11 @@ pub fn key(key: &KeyEvent) -> Key {
             if let Some(repr) = &key.utf8 {
                 Key::Character(repr.clone())
             } else {
-                Key::Unknown
+                if let Some(repr) = key.keysym.key_char() {
+                    Key::Character(repr.to_string())
+                } else {
+                    Key::Unknown
+                }
             }
         }
         _ => special_key,
