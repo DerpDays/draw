@@ -26,9 +26,9 @@ pub mod widgets;
 pub use tree::UITree;
 
 pub mod prelude {
+    pub use crate::Element;
     pub use crate::events::*;
     pub use crate::events::{EventContext, EventPhase, HandlesEvent, Redraw};
-    pub use crate::Element;
     pub use taffy::prelude::*;
 }
 

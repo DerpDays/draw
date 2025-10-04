@@ -1,12 +1,14 @@
 use std::{
     collections::HashMap,
     pin::Pin,
-    sync::{Arc, Mutex, RwLock},
+    sync::{atomic::Ordering, Arc, Mutex, RwLock},
     time::Duration,
 };
 
+use graphics::{Mesh, Systems, Vertex};
 use input::{MouseEvent, MouseEventKind};
 use reactive_graph::owner::Owner;
+use slotmap::{SecondaryMap, SlotMap};
 use taffy::{AvailableSpace, CacheTree, Size};
 
 pub mod events;
@@ -19,86 +21,66 @@ mod zindex;
 use crate::{
     events::{BlurEvent, EventContext, EventPhase},
     layout_tree::LayoutTree,
-    tree::{DynNode, DynNodeId, IntoView, Node, NodeForEach, NodeVisitor},
+    tree::{Element, ElementBuilder, Node, Widget},
     zindex::ZIndexOrdering,
 };
 
-pub struct Tree<T: Node + 'static> {
+pub mod prelude {
+    pub use crate::events::*;
+    pub use crate::events::{EventContext, EventPhase};
+    pub use taffy::prelude::*;
+}
+
+pub mod reexports {
+    pub use any_spawner;
+    pub use reactive_graph;
+    pub use reactive_stores;
+    pub use taffy;
+}
+
+slotmap::new_key_type! { pub struct ElementId; }
+
+pub struct Tree {
     pub owner: Owner,
     pub manager: TreeManager,
-    pub inner: Pin<Box<T>>,
-    capture: Capture,
 
+    root_node: ElementId,
+    alloc: SlotMap<ElementId, Element>,
+    node_parents: SecondaryMap<ElementId, Option<ElementId>>,
+
+    capture: Capture,
     size: Size<AvailableSpace>,
 
-    node_info: HashMap<DynNodeId, NodeInfo>,
+    // node_info: HashMap<DynNodeId, NodeInfo>,
     render_order: ZIndexOrdering,
     pub layout_tree: LayoutTree,
 }
 
-#[derive(Debug)]
-struct NodeInfo {
-    parent: Option<DynNodeId>,
-    children: Vec<DynNodeId>,
-}
-
-struct NodeMapBuilder(HashMap<DynNodeId, NodeInfo>);
-impl NodeMapBuilder {
-    fn build<T: Node + 'static>(tree: &T) -> HashMap<DynNodeId, NodeInfo> {
-        let mut hashmap = HashMap::with_capacity(1000);
-        // Topmost node has no parent.
-        hashmap.insert(
-            tree.node_id(),
-            NodeInfo {
-                parent: None,
-                children: vec![],
-            },
-        );
-        let mut res = Self(hashmap);
-        tree.children().for_each_recursive_parent(&mut res, tree);
-        res.0
-    }
-}
-
-impl NodeVisitor for NodeMapBuilder {
-    fn visit_with_parent<P: DynNode + 'static, C: DynNode + 'static>(
-        &mut self,
-        parent: &P,
-        child: &C,
-    ) {
-        self.0.insert(
-            child.node_id(),
-            NodeInfo {
-                parent: Some(parent.node_id()),
-                children: vec![],
-            },
-        );
-        if let Some(info) = self.0.get_mut(&parent.node_id()) {
-            info.children.push(child.node_id());
-        }
-    }
-}
 /// State about the tree's current keyboard focus and mouse capture.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Capture {
     /// The node currently capturing mouse events.
-    mouse_capture: Option<DynNodeId>,
+    mouse_capture: Option<ElementId>,
     /// The node currently with keyboard focus.
-    kb_focus: Option<DynNodeId>,
+    kb_focus: Option<ElementId>,
 
     /// Last mouse node
-    last_entered_node: Option<DynNodeId>,
+    last_entered_node: Option<ElementId>,
 }
 
-impl<T: IntoView> Tree<T> {
-    pub fn build<F>(size: Size<AvailableSpace>, manager: TreeManager, f: F) -> Self
+impl Tree {
+    pub fn build<F, W>(size: Size<AvailableSpace>, manager: TreeManager, f: F) -> Self
     where
-        F: FnOnce() -> T + 'static,
+        F: FnOnce() -> ElementBuilder<W> + 'static,
+        W: Widget + 'static,
     {
         let owner = Owner::new();
-        let view = Box::pin(manager.with(|| owner.with(move || f().into_view()).inner));
 
-        let node_info = NodeMapBuilder::build(view.as_ref().get_ref());
+        let mut alloc = SlotMap::with_key();
+        let mut node_parents = SecondaryMap::new();
+
+        let root_node = manager.with(|| owner.with(|| f().build(&mut alloc)));
+        Self::populate_parents_map(root_node, &alloc, &mut node_parents);
 
         let render_order = ZIndexOrdering::default();
         let layout_tree = LayoutTree::default();
@@ -106,45 +88,78 @@ impl<T: IntoView> Tree<T> {
         let mut tree = Self {
             owner,
             manager,
-            inner: view,
-            capture: Capture::default(),
 
+            root_node,
+            alloc,
+            node_parents,
+
+            capture: Capture::default(),
             size,
-            node_info,
             render_order,
             layout_tree,
         };
         tree.render_order = ZIndexOrdering::new(&tree);
-        tree.layout_tree = LayoutTree::new(&tree);
+        tree.compute_root_layout();
 
         tree
     }
+    fn populate_parents_map(
+        root_node: ElementId,
+        alloc: &SlotMap<ElementId, Element>,
+        node_parents: &mut SecondaryMap<ElementId, Option<ElementId>>,
+    ) {
+        let mut stack: Vec<(ElementId, Option<ElementId>)> = Vec::with_capacity(alloc.len());
+        stack.push((root_node, None)); // start with root, which has no parent
+
+        while let Some((node_id, parent_id)) = stack.pop() {
+            // record parent for this node
+            node_parents.insert(node_id, parent_id);
+
+            // push all children with current node as their parent
+            for &child_id in alloc[node_id].children().iter() {
+                stack.push((child_id, Some(node_id)));
+            }
+        }
+    }
 }
 
-impl<T: Node> Tree<T> {
-    pub fn root_node(&self) -> DynNodeId {
-        self.inner.node_id()
+impl Tree {
+    pub fn root_node(&self) -> ElementId {
+        self.root_node
     }
 
-    pub fn children(&self, node_id: DynNodeId) -> Vec<DynNodeId> {
-        self.node_info
-            .get(&node_id)
-            .expect("didn't call child_ids for a node in the tree")
-            .children
+    pub fn get(&self, node_id: ElementId) -> &Element {
+        self.alloc
+            .get(node_id)
+            .expect("called `Tree::get` for a node not in the tree")
+    }
+    pub fn get_mut(&mut self, node_id: ElementId) -> &Element {
+        self.alloc
+            .get_mut(node_id)
+            .expect("called `Tree::get_mut` for a node not in the tree")
+    }
+
+    pub fn children(&self, node_id: ElementId) -> &Vec<ElementId> {
+        self.alloc
+            .get(node_id)
+            .expect("called `Tree::children` for a node not in the tree")
+            .children()
+    }
+    pub fn parent(&self, node_id: ElementId) -> Option<ElementId> {
+        self.node_parents
+            .get(node_id)
+            .expect("called `Tree::parent` for a node not in the tree")
             .clone()
     }
-    pub fn parent(&self, node_id: DynNodeId) -> Option<DynNodeId> {
-        self.node_info.get(&node_id).map_or(None, |x| x.parent)
-    }
     pub fn compute_root_layout(&mut self) {
-        self.compute_layout(self.inner.node_id(), self.size);
+        self.compute_layout(self.root_node(), self.size);
         self.layout_tree = LayoutTree::new(&self);
     }
 
     #[inline(always)]
     fn compute_layout(
         &mut self,
-        node_id: DynNodeId,
+        node_id: ElementId,
         available_space: taffy::Size<taffy::AvailableSpace>,
     ) {
         taffy::compute_root_layout(self, node_id, available_space);
@@ -180,10 +195,10 @@ impl<T: Node> Tree<T> {
                 };
 
                 // If the mouse is currently captured, directly send the event to the captured node.
-                if let Some(mut node) = self.capture.mouse_capture {
+                if let Some(node) = self.capture.mouse_capture {
                     tracing::info!("Sending direct mouse event since mouse is captured!");
                     let mut ctx = EventContext::direct(event, node);
-                    unsafe { node.as_mut() }.mouse_event(&mut ctx);
+                    self.alloc.get_mut(node).unwrap().mouse_event(&mut ctx);
                     self.handle_event_dispatch_cleanup(ctx);
                     self.capture.last_entered_node = Some(node);
                     return Some(());
@@ -278,8 +293,8 @@ impl<T: Node> Tree<T> {
     // dispatch an event that doesnt bubble to each of the nodes from a target node to a parent.
     fn dispatch_event_chain(
         &mut self,
-        ancestor: DynNodeId,
-        mut target: DynNodeId,
+        ancestor: ElementId,
+        mut target: ElementId,
         kind: MouseEventKind,
         event: MouseEvent,
     ) {
@@ -297,7 +312,7 @@ impl<T: Node> Tree<T> {
     fn dispatch_generic_event<E>(
         &mut self,
         mut ctx: EventContext<E>,
-        mut handler: impl FnMut(&mut dyn DynNode, &mut EventContext<E>),
+        mut handler: impl FnMut(&mut dyn Node, &mut EventContext<E>),
     ) {
         let mut current_node = ctx.target_node();
         let mut ancestors = vec![];
@@ -310,18 +325,18 @@ impl<T: Node> Tree<T> {
         ctx.set_phase(EventPhase::Capturing);
         for node_id in ancestors.iter().rev() {
             ctx.set_current_node(*node_id);
-            let mut node_id = node_id.clone();
-            let node = unsafe { node_id.as_mut() };
+            let node = self.alloc.get_mut(*node_id).unwrap();
             handler(node, &mut ctx);
             if !ctx.is_propagating() {
                 return self.handle_event_dispatch_cleanup(ctx);
             }
         }
 
-        let mut target_node = ctx.target_node();
+        let target_node = ctx.target_node();
         ctx.set_current_node(target_node);
         ctx.set_phase(EventPhase::AtTarget);
-        let node = unsafe { target_node.as_mut() };
+
+        let node = self.alloc.get_mut(target_node).unwrap();
         handler(node, &mut ctx);
 
         if !ctx.is_propagating() {
@@ -332,8 +347,7 @@ impl<T: Node> Tree<T> {
             ctx.set_phase(EventPhase::Bubbling);
             for node_id in ancestors.iter() {
                 ctx.set_current_node(*node_id);
-                let mut node_id = node_id.clone();
-                let node = unsafe { node_id.as_mut() };
+                let node = self.alloc.get_mut(*node_id).unwrap();
                 handler(node, &mut ctx);
                 if !ctx.is_propagating() {
                     return self.handle_event_dispatch_cleanup(ctx);
@@ -381,7 +395,7 @@ impl<T: Node> Tree<T> {
         }
     }
 
-    fn get_node_depth(&self, target_node: DynNodeId) -> usize {
+    fn get_node_depth(&self, target_node: ElementId) -> usize {
         let mut current = Some(target_node);
         let mut depth = 0;
         while let Some(node) = current {
@@ -391,7 +405,7 @@ impl<T: Node> Tree<T> {
         depth
     }
 
-    pub fn has_ancestor(&self, node: DynNodeId, ancestor: DynNodeId) -> bool {
+    pub fn has_ancestor(&self, node: ElementId, ancestor: ElementId) -> bool {
         let mut current = node;
         while let Some(parent) = self.parent(current) {
             if parent == ancestor {
@@ -402,9 +416,12 @@ impl<T: Node> Tree<T> {
         return false;
     }
 
-    pub fn relayout_nodes(&mut self) {
+    pub fn relayout_nodes(&mut self) -> Option<()> {
         let nodes = self.manager.take_relayout_nodes();
-        for node in nodes {
+        if nodes.is_empty() {
+            return None;
+        }
+        for node in nodes.clone() {
             let mut current = Some(node);
             while let Some(current_node) = current {
                 self.cache_clear(current_node);
@@ -413,6 +430,24 @@ impl<T: Node> Tree<T> {
         }
         // TODO: Don't recompute the entire layout tree every time.
         self.compute_root_layout();
+
+        Some(())
+    }
+
+    pub fn render(&mut self, systems: &mut Systems) -> Mesh<Vertex> {
+        self.owner.clone().with(|| {
+            self.manager.clone().with(|| {
+                let mut mesh = Mesh::empty();
+                for node in self.render_order.render_order() {
+                    let layout = self.layout_tree.get_layout(*node).unwrap().abs_layout;
+                    self.alloc
+                        .get_mut(*node)
+                        .expect("tried to render a node not in the tree")
+                        .render(&mut mesh, systems, &layout);
+                }
+                mesh
+            })
+        })
     }
 }
 
@@ -422,17 +457,21 @@ static CURRENT_MANAGER: RwLock<Option<TreeManager>> = RwLock::new(None);
 pub struct TreeManager(Arc<Mutex<TreeManagerInner>>);
 
 struct TreeManagerInner {
-    redraw_now_fn: fn(),
-    redraw_duration_fn: fn(duration: Duration),
+    redraw_now_fn: Arc<dyn Fn() + Send + Sync>,
+    redraw_duration_fn: Arc<dyn Fn(Duration) + Send + Sync>,
 
-    relayout_nodes: Vec<DynNodeId>,
+    relayout_nodes: Vec<ElementId>,
 }
 
 impl TreeManager {
-    pub fn new(redraw_now_fn: fn(), redraw_duration_fn: fn(Duration)) -> Self {
+    pub fn new<N, D>(redraw_now_fn: N, redraw_duration_fn: D) -> Self
+    where
+        N: Fn() + Send + Sync + 'static,
+        D: Fn(Duration) + Send + Sync + 'static,
+    {
         Self(Arc::new(Mutex::new(TreeManagerInner {
-            redraw_now_fn,
-            redraw_duration_fn,
+            redraw_now_fn: Arc::new(redraw_now_fn),
+            redraw_duration_fn: Arc::new(redraw_duration_fn),
             relayout_nodes: vec![],
         })))
     }
@@ -466,9 +505,7 @@ impl TreeManager {
         // Store the previous value
         let prev = CURRENT_MANAGER.read().unwrap().clone();
         *CURRENT_MANAGER.write().unwrap() = Some(self.clone());
-        tracing::info!("set mgr");
         let val = f();
-        tracing::info!("resetting");
         *CURRENT_MANAGER.write().unwrap() = prev;
         val
     }
@@ -481,11 +518,11 @@ impl TreeManager {
 }
 
 impl TreeManager {
-    pub fn relayout(&self, node: DynNodeId) {
+    pub fn relayout(&self, elem_id: ElementId) {
         let nodes = &mut self.get_unwrap().relayout_nodes;
-        nodes.push(node);
+        nodes.push(elem_id);
     }
-    pub fn take_relayout_nodes(&self) -> Vec<DynNodeId> {
+    pub fn take_relayout_nodes(&self) -> Vec<ElementId> {
         let mut nodes = &mut self.get_unwrap().relayout_nodes;
         std::mem::replace(&mut nodes, vec![])
     }
@@ -497,3 +534,35 @@ impl TreeManager {
         (self.get_unwrap().redraw_duration_fn)(duration);
     }
 }
+
+// Non clone so that we always only have one root manager, animation handles themselves can be
+// cloned.
+struct AnimationManager {
+    handle: Arc<()>,
+}
+
+impl AnimationManager {
+    #[inline(always)]
+    fn new() -> Self {
+        Self {
+            handle: Arc::new(()),
+        }
+    }
+
+    #[inline(always)]
+    fn active_handles(&self) -> usize {
+        Arc::strong_count(&self.handle) - 1
+    }
+
+    #[inline(always)]
+    fn is_animating(&self) -> bool {
+        Arc::strong_count(&self.handle) > 0
+    }
+
+    fn new_handle(&self) -> AnimationHandle {
+        AnimationHandle(self.handle.clone())
+    }
+}
+
+#[derive(Clone)]
+struct AnimationHandle(Arc<()>);

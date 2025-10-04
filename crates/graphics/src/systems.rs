@@ -1,8 +1,8 @@
 use atlas::LayeredAtlas;
 use color::{PremulColor, Srgb};
 use parley::{
-    swash::scale::{image::Image, ScaleContext},
     FontContext, LayoutContext,
+    swash::scale::{ScaleContext, image::Image},
 };
 
 // Contains owned state for systems, with the renderer state is excluded.

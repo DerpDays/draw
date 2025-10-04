@@ -9,7 +9,6 @@ strip = true
 package = { edition = "2024", version = "0.1.0" }
 resolver = "2"
 members = [
-  "platform/wayland",
   "platform/wl",
 
   "crates/renderer",
@@ -83,6 +82,9 @@ accesskit = { version = "0.21.0" }
 rstar = { version = "0.12.2" }
 
 
+calloop = "0.14.3"
+calloop-wayland-source = "0.4.1"
+
 swash = { version = "0.2.5", features = ["scale"] }
 parley = { version = "0.5.0" }
 # fontique = { version = "0.5.0" }
@@ -91,3 +93,4 @@ parley = { version = "0.5.0" }
 
 [patch.crates-io]
 taffy = { path = "./crates/taffy_rounding_patch" }
+# calloop = { path = "./crates/calloop_schedule_sync" }

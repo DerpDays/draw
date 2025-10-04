@@ -1,16 +1,16 @@
 use euclid::default::Point2D;
 
-use gui::{prelude::*, tree::ZIndexProperties, widgets::Widget, UITree};
+use gui::{UITree, prelude::*, tree::ZIndexProperties, widgets::Widget};
 use input::{CursorIcon, Modifiers, MouseButton, MouseEventKind};
 use renderer::GrowableMeshBuffer;
 
 use crate::{
+    RedrawRequest,
     tools::ToolKind,
     ui::{
         options::{OptionsMessage, OptionsTree},
         toolbar::Toolbar,
     },
-    RedrawRequest,
 };
 
 pub mod options;

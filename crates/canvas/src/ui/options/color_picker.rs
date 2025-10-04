@@ -10,9 +10,9 @@ use gui::widgets::{BackgroundWidget, SliderWidget, TextInputWidget, TextWidget, 
 
 use input::{CursorIcon, MouseEventKind, SpecialKey};
 
+use crate::ui::Message;
 use crate::ui::options::OptionsMessage;
 use crate::ui::styles::colors;
-use crate::ui::Message;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ColorPickerMessage {

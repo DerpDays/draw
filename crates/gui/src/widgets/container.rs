@@ -1,10 +1,10 @@
-use graphics::{get_empty_mesh, Mesh, Systems, Vertex};
+use graphics::{Mesh, Systems, Vertex, get_empty_mesh};
 use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
+    Element,
     events::{BlurEvent, EventContext, EventHandler, FocusEvent},
     widgets::Widget,
-    Element,
 };
 
 #[derive(Clone)]

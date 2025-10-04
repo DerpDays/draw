@@ -3,24 +3,23 @@ use std::{marker::PhantomData, sync::Arc};
 use color::{AlphaColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D, Vector2D};
 use parley::{
-    swash::{
-        scale::{image::Content, Render, Scaler, Source, StrikeWith},
-        zeno::{Format, Vector},
-        FontRef,
-    },
     Alignment, AlignmentOptions, Cursor, FontFamily, FontStack, Glyph, GlyphRun, Layout,
     LineHeight, PositionedLayoutItem, StyleProperty,
+    swash::{
+        FontRef,
+        scale::{Render, Scaler, Source, StrikeWith, image::Content},
+        zeno::{Format, Vector},
+    },
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    make_positive_box,
+    ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind, make_positive_box,
     systems::{CacheKey, ColorBrush, GlyphCacheKey, TextData, TextureData},
-    ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind,
 };
 use atlas::{
-    formats::{Mask, Rgba8},
     AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture,
+    formats::{Mask, Rgba8},
 };
 
 mod options;

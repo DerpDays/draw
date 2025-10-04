@@ -1,7 +1,7 @@
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics::{
-    primitives::{self, TextOptions},
     Drawable, Mesh, Systems, Vertex, ViewportCoordinates,
+    primitives::{self, TextOptions},
 };
 use input::{
     Key, KeyboardEvent, KeyboardEventKind, Modifiers, MouseButton, MouseEvent, MouseEventKind,

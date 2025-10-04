@@ -1,7 +1,7 @@
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics::{Drawable, Mesh, Systems, Vertex};
 use input::{KeyboardEvent, MouseEvent, MouseEventKind};
-use taffy::{prelude::TaffyMaxContent, CacheTree, Layout, NodeId, Size, Style, TaffyTree};
+use taffy::{CacheTree, Layout, NodeId, Size, Style, TaffyTree, prelude::TaffyMaxContent};
 
 mod layout;
 mod zindex;
@@ -10,12 +10,12 @@ use layout::Linear;
 pub use zindex::ZIndexProperties;
 
 use crate::{
+    Element,
     events::{BlurEvent, EventContext, EventPhase, EventResult, FocusEvent, TreeEvent},
     tree::{
         layout::{HittableLayout, LayoutTree},
         zindex::ZIndexOrdering,
     },
-    Element,
 };
 
 pub struct UITree<T> {

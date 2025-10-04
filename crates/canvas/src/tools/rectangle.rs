@@ -1,8 +1,8 @@
 use color::AlphaColor;
 use euclid::Size2D;
 use graphics::{
-    primitives::{Rectangle, RectangleOptions},
     Drawable, Systems,
+    primitives::{Rectangle, RectangleOptions},
 };
 
 use crate::tools::{Tool, ToolMessage};

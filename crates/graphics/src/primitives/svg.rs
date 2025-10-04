@@ -14,7 +14,7 @@ use usvg::{Node, Paint, PaintOrder, Tree};
 use crate::{get_empty_mesh, ApplyCoordinates, Drawable, Mesh, Systems};
 use crate::{Vertex, VertexKind};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Options {
     pub fill_color: Option<AlphaColor<Srgb>>,
     pub stroke_color: Option<AlphaColor<Srgb>>,

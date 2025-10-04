@@ -1,15 +1,15 @@
 use euclid::{
-    default::{Point2D, Size2D},
     Box2D,
+    default::{Point2D, Size2D},
 };
-use graphics::{get_empty_mesh, Mesh, Systems, Vertex};
+use graphics::{Mesh, Systems, Vertex, get_empty_mesh};
 use input::{KeyboardEvent, MouseButton, MouseEvent, MouseEventKind};
 use taffy::Layout;
 
 use crate::{
+    Element,
     events::{BlurEvent, ChangeEvent, EventContext, EventHandler, EventPhase, FocusEvent, Redraw},
     widgets::{Widget, WidgetInteractionState},
-    Element,
 };
 
 #[derive(Clone)]

@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    tree::{DynNodeId, Node},
-    Tree,
-};
+use crate::{ElementId, Tree, tree::Node};
 
 /// Metadata about a gui tree node's z-index
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -15,6 +12,11 @@ pub struct ZIndexProperties {
     /// When this is set to true, the node is rendered last in its z-layer for its current z
     /// context.
     pub isolate_z: bool,
+}
+impl Default for ZIndexProperties {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
 }
 
 impl ZIndexProperties {
@@ -30,24 +32,17 @@ impl ZIndexProperties {
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct ZIndexOrdering {
-    map: HashMap<DynNodeId, usize>,
-    render_order: Vec<DynNodeId>,
+    map: HashMap<ElementId, usize>,
+    render_order: Vec<ElementId>,
 }
 
 enum NodeGrouping {
-    Node(DynNodeId),
-    IsolatedContext(Vec<DynNodeId>),
+    Node(ElementId),
+    IsolatedContext(Vec<ElementId>),
 }
 
 impl ZIndexOrdering {
-    fn node_display(node: DynNodeId) -> taffy::Display {
-        unsafe { node.as_ref() }.get_style().display
-    }
-    fn node_z_indexing(node: DynNodeId) -> ZIndexProperties {
-        unsafe { node.as_ref() }.get_zindex_properties()
-    }
-
-    pub fn new<T: Node>(tree: &Tree<T>) -> Self {
+    pub fn new(tree: &Tree) -> Self {
         let mut map = HashMap::new();
         let render_order = Self::sort_stacking_context(tree, tree.root_node());
         for (idx, node) in render_order.iter().enumerate() {
@@ -57,24 +52,24 @@ impl ZIndexOrdering {
     }
 
     #[inline]
-    pub fn get_node_render_idx(&self, node: DynNodeId) -> Option<usize> {
+    pub fn get_node_render_idx(&self, node: ElementId) -> Option<usize> {
         self.map.get(&node).map(|x| *x)
     }
     #[inline]
-    pub fn render_order(&self) -> &Vec<DynNodeId> {
+    pub fn render_order(&self) -> &Vec<ElementId> {
         &self.render_order
     }
 
-    fn sort_stacking_context<T: Node>(tree: &Tree<T>, root: DynNodeId) -> Vec<DynNodeId> {
+    fn sort_stacking_context(tree: &Tree, root: ElementId) -> Vec<ElementId> {
         let mut sorted = vec![];
-        let mut stack = tree.children(root);
+        let mut stack = tree.children(root).clone();
         stack.reverse();
 
         while let Some(node) = stack.pop() {
-            if Self::node_display(node) == taffy::Display::None {
+            if tree.get(node).get_style().display == taffy::Display::None {
                 continue;
             }
-            let z_indexing = Self::node_z_indexing(node);
+            let z_indexing = tree.get(node).get_zindex_properties();
             if z_indexing.isolate_z {
                 sorted.push((
                     NodeGrouping::IsolatedContext(Self::sort_stacking_context(tree, node)),

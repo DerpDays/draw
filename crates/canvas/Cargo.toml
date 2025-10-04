@@ -8,6 +8,7 @@ edition = { workspace = true }
 renderer = { workspace = true }
 graphics = { workspace = true }
 gui = { workspace = true }
+gui_reactive = { workspace = true }
 input = { workspace = true, features = ["serde"] }
 
 anyhow = { workspace = true }

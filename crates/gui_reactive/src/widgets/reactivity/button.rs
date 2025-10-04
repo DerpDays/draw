@@ -5,7 +5,13 @@ use crate::tree::{Element, Widget};
 
 pub struct Button;
 impl Widget for Button {
-    fn render(&mut self, _mesh: &mut Mesh<Vertex>, _sys: &mut Systems, _layout: &Layout) {
+    fn render(
+        &mut self,
+        _mesh: &mut Mesh<Vertex>,
+        _sys: &mut Systems,
+        _layout: &Layout,
+        _: &Style,
+    ) {
         println!("Render button:");
     }
     fn measure(
@@ -20,11 +26,19 @@ impl Widget for Button {
         "Button"
     }
 
-    fn focusable() -> bool {
+    fn focusable(&self) -> bool {
         true
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self as &dyn std::any::Any
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self as &mut dyn std::any::Any
     }
 }
 
-pub fn button() -> Element<Button, ()> {
-    Element::new_empty(Button)
-}
+// pub fn button() -> Element<Button, ()> {
+//     Element::new_empty(Button)
+// }

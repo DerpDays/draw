@@ -3,50 +3,50 @@ use taffy::{
     LayoutPartialTree, PrintTree, RoundTree, Style, TraversePartialTree, TraverseTree,
 };
 
-use crate::{
-    tree::{DynNodeId, Node},
-    Tree,
-};
+use crate::{ElementId, Tree, tree::Node};
 
-pub struct ChildIter<'a>(std::slice::Iter<'a, DynNodeId>);
-impl Iterator for ChildIter<'_> {
-    type Item = DynNodeId;
+pub struct ChildIter<'a>(std::slice::Iter<'a, ElementId>);
+impl<'a> Iterator for ChildIter<'a> {
+    type Item = ElementId;
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().cloned()
     }
 }
-
-impl<T: Node> TraversePartialTree<DynNodeId> for Tree<T> {
+impl TraversePartialTree<ElementId> for Tree {
     type ChildIter<'a> = ChildIter<'a>;
-    fn child_ids<'a>(&'a self, node_id: DynNodeId) -> Self::ChildIter<'a> {
+    fn child_ids<'a>(&'a self, node_id: ElementId) -> Self::ChildIter<'a> {
         ChildIter(
-            self.node_info
-                .get(&node_id)
-                .expect("didn't call child_ids for a node in the tree")
-                .children
-                .iter(),
+            self.alloc
+                .get(node_id)
+                .expect("called child_ids for a node not in the tree")
+                .children()
+                .into_iter(),
         )
     }
 
-    fn child_count(&self, node_id: DynNodeId) -> usize {
-        self.node_info.get(&node_id).map_or(0, |x| x.children.len())
+    fn child_count(&self, node_id: ElementId) -> usize {
+        self.alloc
+            .get(node_id)
+            .expect("called child_count for a node not in the tree")
+            .children()
+            .len()
     }
 
-    fn get_child_id(&self, node_id: DynNodeId, index: usize) -> DynNodeId {
-        let info = self
-            .node_info
-            .get(&node_id)
-            .expect("didn't call get_child_id for a node in the tree");
-        info.children
+    fn get_child_id(&self, node_id: ElementId, index: usize) -> ElementId {
+        let elem = self
+            .alloc
+            .get(node_id)
+            .expect("called get_child_id for a node not in the tree");
+        elem.children()
             .get(index)
             .expect("could not get child_id {index:?}")
             .clone()
     }
 }
 
-impl<T: Node> TraverseTree<DynNodeId> for Tree<T> {}
+impl TraverseTree<ElementId> for Tree {}
 
-impl<T: Node> LayoutPartialTree<DynNodeId> for Tree<T> {
+impl LayoutPartialTree<ElementId> for Tree {
     type CoreContainerStyle<'a>
         = Style
     where
@@ -54,12 +54,18 @@ impl<T: Node> LayoutPartialTree<DynNodeId> for Tree<T> {
 
     type CustomIdent = String;
 
-    fn get_core_container_style(&self, node_id: DynNodeId) -> Self::CoreContainerStyle<'_> {
-        unsafe { node_id.as_ref() }.get_style()
+    fn get_core_container_style(&self, node_id: ElementId) -> Self::CoreContainerStyle<'_> {
+        self.alloc
+            .get(node_id)
+            .expect("called get_core_container_style for a node not in the tree")
+            .get_style()
     }
 
-    fn set_unrounded_layout(&mut self, mut node_id: DynNodeId, layout: &Layout) {
-        unsafe { node_id.as_mut() }.set_unrounded_layout(*layout);
+    fn set_unrounded_layout(&mut self, node_id: ElementId, layout: &Layout) {
+        self.alloc
+            .get_mut(node_id)
+            .expect("called set_unrounded_layout for a node not in the tree")
+            .set_unrounded_layout(*layout);
     }
 
     fn resolve_calc_value(&self, _val: *const (), _basis: f32) -> f32 {
@@ -69,7 +75,7 @@ impl<T: Node> LayoutPartialTree<DynNodeId> for Tree<T> {
     #[inline(always)]
     fn compute_child_layout(
         &mut self,
-        node: DynNodeId,
+        node: ElementId,
         inputs: taffy::LayoutInput,
     ) -> taffy::LayoutOutput {
         // If RunMode is PerformHiddenLayout then this indicates that an ancestor node is `Display::None`
@@ -83,8 +89,13 @@ impl<T: Node> LayoutPartialTree<DynNodeId> for Tree<T> {
         //   - Else call the passed closure (below) to compute the result
         //
         // If there was no cache match and a new result needs to be computed then that result will be added to the cache
-        taffy::compute_cached_layout(self, node, inputs, |tree, mut node, inputs| {
-            let style = unsafe { node.as_ref() }.get_style();
+        taffy::compute_cached_layout(self, node, inputs, |tree, node, inputs| {
+            let style = tree
+                .alloc
+                .get(node)
+                .expect("tried to get the style for a node not in the tree")
+                .get_style();
+
             let display_mode = style.display;
             let has_children = tree.child_count(node) > 0;
 
@@ -95,14 +106,13 @@ impl<T: Node> LayoutPartialTree<DynNodeId> for Tree<T> {
                 (taffy::Display::Flex, true) => taffy::compute_flexbox_layout(tree, node, inputs),
                 (taffy::Display::Grid, true) => taffy::compute_grid_layout(tree, node, inputs),
                 (_, false) => {
-                    let style = unsafe { node.as_ref() }.get_style();
                     let style_clone = style.clone();
-                    let measure_function = move |known_dimensions, available_space| {
-                        unsafe { node.as_mut() }.measure(
-                            known_dimensions,
-                            available_space,
-                            &style_clone,
-                        )
+
+                    let measure_function = |known_dimensions, available_space| {
+                        tree.alloc
+                            .get_mut(node)
+                            .expect("tried to measure a node not in the tree")
+                            .measure(known_dimensions, available_space, &style_clone)
                     };
                     // INFO: we do not use the calc (hence why style can be send), hence we return
                     // zero for the calc fn.
@@ -118,41 +128,46 @@ impl<T: Node> LayoutPartialTree<DynNodeId> for Tree<T> {
 ///
 /// As long as the node_id provided is a valid node belonging to this tree (which has the
 /// inner tree pinned), this is safe.
-impl<T: Node> CacheTree<DynNodeId> for Tree<T> {
+impl CacheTree<ElementId> for Tree {
     fn cache_get(
         &self,
-        node_id: DynNodeId,
+        node_id: ElementId,
         known_dimensions: taffy::Size<Option<f32>>,
         available_space: taffy::Size<taffy::AvailableSpace>,
         run_mode: taffy::RunMode,
     ) -> Option<taffy::LayoutOutput> {
-        unsafe { node_id.as_ref() }
+        self.alloc
+            .get(node_id)
+            .expect("called cache_get for a node not in the tree")
             .layout_cache()
             .get(known_dimensions, available_space, run_mode)
     }
 
     fn cache_store(
         &mut self,
-        mut node_id: DynNodeId,
+        node_id: ElementId,
         known_dimensions: taffy::Size<Option<f32>>,
         available_space: taffy::Size<taffy::AvailableSpace>,
         run_mode: taffy::RunMode,
         layout_output: taffy::LayoutOutput,
     ) {
-        unsafe { node_id.as_mut() }.layout_cache_mut().store(
-            known_dimensions,
-            available_space,
-            run_mode,
-            layout_output,
-        );
+        self.alloc
+            .get_mut(node_id)
+            .expect("called cache_store for a node not in the tree")
+            .layout_cache_mut()
+            .store(known_dimensions, available_space, run_mode, layout_output);
     }
 
-    fn cache_clear(&mut self, mut node_id: DynNodeId) {
-        unsafe { node_id.as_mut() }.layout_cache_mut().clear();
+    fn cache_clear(&mut self, node_id: ElementId) {
+        self.alloc
+            .get_mut(node_id)
+            .expect("called cache_clear for a node not in the tree")
+            .layout_cache_mut()
+            .clear();
     }
 }
 
-impl<T: Node> LayoutBlockContainer<DynNodeId> for Tree<T> {
+impl LayoutBlockContainer<ElementId> for Tree {
     type BlockContainerStyle<'a>
         = Style
     where
@@ -163,17 +178,23 @@ impl<T: Node> LayoutBlockContainer<DynNodeId> for Tree<T> {
         Self: 'a;
 
     #[inline(always)]
-    fn get_block_container_style(&self, node_id: DynNodeId) -> Self::BlockContainerStyle<'_> {
-        unsafe { node_id.as_ref() }.get_style()
+    fn get_block_container_style(&self, node_id: ElementId) -> Self::BlockContainerStyle<'_> {
+        self.alloc
+            .get(node_id)
+            .expect("called get_block_container_style for a node not in the tree")
+            .get_style()
     }
 
     #[inline(always)]
-    fn get_block_child_style(&self, child_node_id: DynNodeId) -> Self::BlockItemStyle<'_> {
-        unsafe { child_node_id.as_ref() }.get_style()
+    fn get_block_child_style(&self, child_node_id: ElementId) -> Self::BlockItemStyle<'_> {
+        self.alloc
+            .get(child_node_id)
+            .expect("called get_block_child_style for a node not in the tree")
+            .get_style()
     }
 }
 
-impl<T: Node> LayoutFlexboxContainer<DynNodeId> for Tree<T> {
+impl LayoutFlexboxContainer<ElementId> for Tree {
     type FlexboxContainerStyle<'a>
         = Style
     where
@@ -184,16 +205,22 @@ impl<T: Node> LayoutFlexboxContainer<DynNodeId> for Tree<T> {
     where
         Self: 'a;
 
-    fn get_flexbox_container_style(&self, node_id: DynNodeId) -> Self::FlexboxContainerStyle<'_> {
-        unsafe { node_id.as_ref() }.get_style()
+    fn get_flexbox_container_style(&self, node_id: ElementId) -> Self::FlexboxContainerStyle<'_> {
+        self.alloc
+            .get(node_id)
+            .expect("called get_flexbox_container_style for a node not in the tree")
+            .get_style()
     }
 
-    fn get_flexbox_child_style(&self, child_node_id: DynNodeId) -> Self::FlexboxItemStyle<'_> {
-        unsafe { child_node_id.as_ref() }.get_style()
+    fn get_flexbox_child_style(&self, child_node_id: ElementId) -> Self::FlexboxItemStyle<'_> {
+        self.alloc
+            .get(child_node_id)
+            .expect("called get_flexbox_child_style for a node not in the tree")
+            .get_style()
     }
 }
 
-impl<T: Node> LayoutGridContainer<DynNodeId> for Tree<T> {
+impl LayoutGridContainer<ElementId> for Tree {
     type GridContainerStyle<'a>
         = Style
     where
@@ -204,31 +231,51 @@ impl<T: Node> LayoutGridContainer<DynNodeId> for Tree<T> {
     where
         Self: 'a;
 
-    fn get_grid_container_style(&self, node_id: DynNodeId) -> Self::GridContainerStyle<'_> {
-        unsafe { node_id.as_ref() }.get_style()
+    fn get_grid_container_style(&self, node_id: ElementId) -> Self::GridContainerStyle<'_> {
+        self.alloc
+            .get(node_id)
+            .expect("called get_grid_container_style for a node not in the tree")
+            .get_style()
     }
 
-    fn get_grid_child_style(&self, child_node_id: DynNodeId) -> Self::GridItemStyle<'_> {
-        unsafe { child_node_id.as_ref() }.get_style()
-    }
-}
-
-impl<T: Node> RoundTree<DynNodeId> for Tree<T> {
-    fn get_unrounded_layout(&self, node_id: DynNodeId) -> Layout {
-        unsafe { node_id.as_ref() }.get_unrounded_layout().clone()
-    }
-
-    fn set_final_layout(&mut self, mut node_id: DynNodeId, layout: &Layout) {
-        unsafe { node_id.as_mut() }.set_final_layout(layout.clone())
+    fn get_grid_child_style(&self, child_node_id: ElementId) -> Self::GridItemStyle<'_> {
+        self.alloc
+            .get(child_node_id)
+            .expect("called get_grid_child_style for a node not in the tree")
+            .get_style()
     }
 }
 
-impl<T: Node> PrintTree<DynNodeId> for Tree<T> {
-    fn get_debug_label(&self, node_id: DynNodeId) -> &'static str {
-        unsafe { node_id.as_ref() }.debug_label()
+impl RoundTree<ElementId> for Tree {
+    fn get_unrounded_layout(&self, node_id: ElementId) -> Layout {
+        self.alloc
+            .get(node_id)
+            .expect("called get_unrounded_layout for a node not in the tree")
+            .get_unrounded_layout()
+            .clone()
     }
 
-    fn get_final_layout(&self, node_id: DynNodeId) -> Layout {
-        unsafe { node_id.as_ref() }.get_final_layout().clone()
+    fn set_final_layout(&mut self, node_id: ElementId, layout: &Layout) {
+        self.alloc
+            .get_mut(node_id)
+            .expect("called set_final_layout for a node not in the tree")
+            .set_final_layout(*layout);
+    }
+}
+
+impl PrintTree<ElementId> for Tree {
+    fn get_debug_label(&self, node_id: ElementId) -> &'static str {
+        self.alloc
+            .get(node_id)
+            .expect("called get_debug_label for a node not in the tree")
+            .debug_label()
+    }
+
+    fn get_final_layout(&self, node_id: ElementId) -> Layout {
+        self.alloc
+            .get(node_id)
+            .expect("called get_final_layout for a node not in the tree")
+            .get_final_layout()
+            .clone()
     }
 }

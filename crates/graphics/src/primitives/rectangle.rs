@@ -6,8 +6,8 @@ use lyon::path::{Path, Winding};
 use lyon::tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers};
 use serde::{Deserialize, Serialize};
 
-use crate::{make_positive_box, BasicColor, BasicLinearGradient, Vertex};
 use crate::{ApplyCoordinates, Drawable, Mesh, Systems, VertexKind};
+use crate::{BasicColor, BasicLinearGradient, Vertex, make_positive_box};
 use crate::{BoxSizing, Rounding};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]

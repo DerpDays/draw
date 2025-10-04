@@ -1,7 +1,7 @@
 use color::AlphaColor;
 use euclid::default::Point2D;
-use graphics::primitives::{RectangleOptions, TextOptions};
 use graphics::Rounding;
+use graphics::primitives::{RectangleOptions, TextOptions};
 
 use gui::prelude::*;
 use gui::tree::{UITree, ZIndexProperties};
@@ -9,10 +9,10 @@ use gui::widgets::{BackgroundWidget, ContainerWidget, TextWidget, Widget};
 use input::{CursorIcon, MouseEventKind};
 
 use crate::tools::ToolKind;
+use crate::ui::Message;
 use crate::ui::options::color_picker::ColorPickerTree;
 use crate::ui::options::color_swatches::ColorSwatches;
 use crate::ui::styles::{colors, floating_grab};
-use crate::ui::Message;
 
 mod color_picker;
 mod color_swatches;

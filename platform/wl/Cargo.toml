@@ -15,6 +15,7 @@ euclid = { workspace = true }
 
 async-executor = { workspace = true }
 futures-lite = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
@@ -28,9 +29,11 @@ clap = { workspace = true }
 bincode = { workspace = true }
 
 
+calloop = { workspace = true, features = ["executor"] }
+calloop-wayland-source = { workspace = true }
 smithay-client-toolkit = { workspace = true, features = [
-  "calloop",
   "xkbcommon",
+  "calloop",
 ] }
 wayland-backend = { workspace = true, features = ["client_system"] }
 

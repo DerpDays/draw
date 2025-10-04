@@ -2,15 +2,15 @@ use std::time::{Duration, Instant};
 
 use euclid::default::{Point2D, Size2D};
 use graphics::{
-    primitives::{Rectangle, RectangleOptions},
     Drawable, Mesh, Systems, Vertex, ViewportCoordinates,
+    primitives::{Rectangle, RectangleOptions},
 };
 use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
-    events::{EventContext, EventHandler},
-    widgets::{parse_layout_change, LayoutChange, Widget},
     Element,
+    events::{EventContext, EventHandler},
+    widgets::{LayoutChange, Widget, parse_layout_change},
 };
 
 #[derive(Clone)]

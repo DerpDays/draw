@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use euclid::default::{Box2D, Point2D};
 
-use rstar::{PointDistance, RTree, RTreeObject, AABB};
+use rstar::{AABB, PointDistance, RTree, RTreeObject};
 use taffy::{Layout, NodeId};
 
 use crate::tree::UITree;

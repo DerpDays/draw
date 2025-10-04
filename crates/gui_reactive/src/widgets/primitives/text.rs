@@ -7,15 +7,21 @@ use reactive_graph::{
 use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
-    tree::{DynNode, Element, ElementWithChildren, Widget},
     TreeManager,
+    tree::{Element, ElementBuilder, Widget},
 };
 
 pub struct Text {
     pub text: Signal<String>,
 }
 impl Widget for Text {
-    fn render(&mut self, _mesh: &mut Mesh<Vertex>, _sys: &mut Systems, _layout: &Layout) {
+    fn render(
+        &mut self,
+        _mesh: &mut Mesh<Vertex>,
+        _sys: &mut Systems,
+        _layout: &Layout,
+        _: &Style,
+    ) {
         println!("Render Label: {}", self.text.get_untracked());
     }
     fn measure(
@@ -31,28 +37,34 @@ impl Widget for Text {
         "Text"
     }
 
-    fn focusable() -> bool {
+    fn focusable(&self) -> bool {
         false
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self as &dyn std::any::Any
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self as &mut dyn std::any::Any
+    }
 }
-impl ElementWithChildren for Text {}
 
-pub fn text(text: impl Into<Signal<String>>) -> Element<Text, ()> {
+pub fn text(text: impl Into<Signal<String>>) -> ElementBuilder<Text> {
     let text = text.into();
-    let elem = Element::new_empty(Text { text });
-    let node_id = elem.node_id();
-    let mgr = TreeManager::global();
+    ElementBuilder::new_with_callback(Text { text }, move |elem_id| {
+        let mgr = TreeManager::global();
 
-    Effect::watch_sync(
-        move || text.get(),
-        move |new, old, _| {
-            if Some(new) != old {
-                tracing::debug!("new text!!");
-                mgr.relayout(node_id);
-                mgr.now();
-            }
-        },
-        false,
-    );
-    elem
+        Effect::watch_sync(
+            move || text.get(),
+            move |new, old, _| {
+                if Some(new) != old {
+                    tracing::debug!("new text!!");
+                    mgr.relayout(elem_id);
+                    mgr.now();
+                }
+            },
+            false,
+        );
+    })
 }

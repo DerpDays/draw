@@ -1,14 +1,14 @@
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics::{
-    primitives::{Text, TextOptions},
     Drawable, Mesh, Systems, Vertex, ViewportCoordinates,
+    primitives::{Text, TextOptions},
 };
 use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
-    events::{EventContext, EventHandler},
-    widgets::{parse_layout_change, LayoutChange, Widget},
     Element,
+    events::{EventContext, EventHandler},
+    widgets::{LayoutChange, Widget, parse_layout_change},
 };
 
 #[derive(Clone)]

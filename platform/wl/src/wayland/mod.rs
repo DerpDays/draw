@@ -1,11 +1,17 @@
 use std::{
-    cell::Cell,
     collections::HashMap,
     i32,
-    rc::Rc,
+    pin::Pin,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
+use calloop::{
+    futures::{executor, Scheduler},
+    timer::TimeoutAction,
+    EventLoop, LoopHandle,
+};
+use calloop_wayland_source::WaylandSource;
 use color_eyre::eyre::{Context, OptionExt, Result};
 use euclid::default::Size2D;
 use smithay_client_toolkit::{
@@ -13,21 +19,14 @@ use smithay_client_toolkit::{
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
     delegate_registry, delegate_seat, delegate_shm,
     output::{OutputHandler, OutputInfo, OutputState},
-    reexports::{
-        calloop::{
-            timer::{TimeoutAction, Timer},
-            EventLoop, LoopHandle,
+    reexports::client::{
+        backend::ObjectId,
+        globals::registry_queue_init,
+        protocol::{
+            wl_output::{self, WlOutput},
+            wl_surface::WlSurface,
         },
-        calloop_wayland_source::WaylandSource,
-        client::{
-            backend::ObjectId,
-            globals::registry_queue_init,
-            protocol::{
-                wl_output::{self, WlOutput},
-                wl_surface::WlSurface,
-            },
-            Connection, EventQueue, QueueHandle,
-        },
+        Connection, EventQueue, QueueHandle,
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -46,7 +45,7 @@ mod pointer;
 pub(crate) mod protocols;
 mod seat;
 
-use canvas::RedrawRequest;
+use canvas::{reexports::any_spawner::CustomExecutor, RedrawRequest};
 
 use crate::wayland::{
     canvas_layer::LayerShellCanvasView,
@@ -98,6 +97,8 @@ pub struct ShareableState {
     wgpu: renderer::State,
     app_pipeline: canvas::pipeline::DrawPipeline,
     pub loop_handle: LoopHandle<'static, State>,
+    pub redraw_manager: RedrawManager,
+    scheduler: Scheduler<WlSurface>,
 }
 
 pub struct Data {
@@ -182,6 +183,81 @@ impl WaylandConnection {
         };
 
         let app_pipeline = canvas::pipeline::DrawPipeline::new(&wgpu.device, wgpu.texture_format);
+        let (surface_executor, scheduler) =
+            executor::<WlSurface>().expect("failed to init calloop futures executor");
+        event_loop
+            .handle()
+            .insert_source(surface_executor, |surface, _, state: &mut State| {
+                let mut redraw = false;
+                for output in &mut state.canvas_outputs {
+                    if *output.1.surface() == surface {
+                        if output.1.canvas.app_new.tree.relayout_nodes().is_some() {
+                            redraw |= true;
+                        };
+                    }
+                }
+                if redraw {
+                    do_redraw(state);
+                }
+            })
+            .expect("failed to insert futures executor into loop");
+
+        // let (tx, rx) =
+        //     calloop::channel::channel::<canvas::reexports::any_spawner::PinnedFuture<()>>();
+        // let (tx_local, rx_local) =
+        //     calloop::channel::channel::<canvas::reexports::any_spawner::PinnedLocalFuture<()>>();
+
+        // struct FuturesExecutor {
+        //     tx: calloop::channel::Sender<canvas::reexports::any_spawner::PinnedFuture<()>>,
+        //     tx_local:
+        //         calloop::channel::Sender<canvas::reexports::any_spawner::PinnedLocalFuture<()>>,
+        // }
+        // impl canvas::reexports::any_spawner::CustomExecutor for FuturesExecutor {
+        //     fn spawn(&self, fut: canvas::reexports::any_spawner::PinnedFuture<()>) {
+        //         self.tx
+        //             .send(fut)
+        //             .expect("failed to send future through channel");
+        //     }
+        //
+        //     fn spawn_local(&self, fut: canvas::reexports::any_spawner::PinnedLocalFuture<()>) {
+        //         self.tx_local
+        //             .send(fut)
+        //             .expect("failed to send future through channel");
+        //     }
+        //
+        //     fn poll_local(&self) {
+        //         tracing::warn!(
+        //             "tried to poll on the FuturesExecutor which does not support polling"
+        //         )
+        //     }
+        // }
+
+        // let (executor_fut, scheduler_fut) =
+        //     executor().expect("failed to init calloop futures executor");
+        // event_loop
+        //     .handle()
+        //     .insert_source(executor_fut, |_, _, _| {});
+        //
+        // struct FuturesExecutor(Scheduler<()>);
+        // unsafe impl Sync for FuturesExecutor {}
+        // impl CustomExecutor for FuturesExecutor {
+        //     fn spawn(&self, fut: canvas::reexports::any_spawner::PinnedFuture<()>) {
+        //         self.0.schedule(fut);
+        //     }
+        //
+        //     fn spawn_local(&self, fut: canvas::reexports::any_spawner::PinnedLocalFuture<()>) {
+        //         self.0.schedule(fut);
+        //     }
+        //
+        //     fn poll_local(&self) {}
+        // }
+        //
+        // canvas::reexports::any_spawner::Executor::init_custom_executor(FuturesExecutor(
+        //     scheduler_fut,
+        // ))
+        // .unwrap();
+        canvas::reexports::any_spawner::Executor::init_tokio()
+            .expect("failed to init tokio executor");
 
         let shareable = ShareableState {
             wayland,
@@ -189,6 +265,8 @@ impl WaylandConnection {
             wgpu,
             app_pipeline,
             loop_handle: event_loop.handle(),
+            redraw_manager: RedrawManager::new(event_loop.handle(), 60),
+            scheduler,
         };
 
         let state = State {
@@ -506,102 +584,111 @@ impl FractionalScaleHandler for State {
     }
 }
 
+// Commands that can be sent to the event loop
+enum RedrawCommand {
+    Redraw,
+    RedrawWithDuration(Duration),
+}
+
 #[derive(Clone)]
 pub struct RedrawManager {
-    loop_handle: LoopHandle<'static, State>,
-    time_per_frame: Option<std::time::Duration>,
-    animation_time_per_frame: std::time::Duration,
+    sender: calloop::channel::Sender<RedrawCommand>,
 
-    last_redraw: Rc<Cell<Instant>>,
-    pending_redraw: Rc<Cell<bool>>,
-    animation_end: Rc<Cell<Option<Instant>>>,
+    anim_frame_duration: Duration,
+    current_anim_end: Arc<Mutex<Option<Instant>>>,
 }
 
 impl RedrawManager {
-    pub fn new(
-        loop_handle: LoopHandle<'static, State>,
-        fps: Option<u64>,
-        animation_fps: u64,
-    ) -> Self {
-        Self {
-            loop_handle,
-            time_per_frame: fps.map(|x| std::time::Duration::from_millis(1000 / x)),
-            animation_time_per_frame: std::time::Duration::from_millis(1000 / animation_fps),
+    pub fn new(handle: LoopHandle<'static, State>, animation_fps: u64) -> RedrawManager {
+        let (sender, receiver) = calloop::channel::channel();
 
-            pending_redraw: Rc::new(Cell::new(false)),
-            last_redraw: Rc::new(Cell::new(Instant::now())),
-            animation_end: Rc::new(Cell::new(None)),
-        }
-    }
+        let manager = Self {
+            sender,
 
-    pub fn insert(&self, timer: Timer) {
-        let last_redraw = self.last_redraw.clone();
-        let pending_redraw = self.pending_redraw.clone();
-        let animation_end = self.animation_end.clone();
+            anim_frame_duration: Duration::from_millis(1000 / animation_fps),
+            current_anim_end: Arc::new(Mutex::new(None)),
+        };
 
-        let animation_frame_duration = self.animation_time_per_frame;
+        let animation_end = manager.current_anim_end.clone();
+        let animation_frame_duration = manager.anim_frame_duration;
 
-        self.loop_handle
-            .insert_source(timer, move |_, _, state| {
-                let now = Instant::now();
-                last_redraw.set(now);
+        let handle_clone = handle.clone();
 
-                for canvas in state.canvas_outputs.values() {
-                    canvas.layer_surface.wl_surface().frame(
-                        &state.shareable.wayland.queue_handle,
-                        canvas.layer_surface.wl_surface().clone(),
-                    );
-                    canvas.layer_surface.wl_surface().commit();
-                }
+        handle
+            .insert_source(
+                receiver,
+                move |event: calloop::channel::Event<RedrawCommand>, _, state| {
+                    match event {
+                        calloop::channel::Event::Msg(cmd) => match cmd {
+                            RedrawCommand::Redraw => {
+                                tracing::trace!("Redraw requested!");
 
-                let is_animating = match animation_end.get() {
-                    Some(end_time) => {
-                        match Instant::now().checked_duration_since(end_time) {
-                            Some(remaining) => remaining < animation_frame_duration,
-                            None => true, // end_time is in the future, so still animating
+                                do_redraw(state);
+                            }
+                            RedrawCommand::RedrawWithDuration(duration) => {
+                                tracing::trace!("Redraw requested with duration: {:?}", duration);
+                                let mut anim_end = animation_end.lock().unwrap();
+                                let now = Instant::now();
+                                *anim_end = Some(
+                                    anim_end
+                                        .map(|old| (now + duration).max(old))
+                                        .unwrap_or(now + duration),
+                                );
+                                do_redraw(state);
+                                // schedule repeated frames until animation_end passes
+                                let animation_end = animation_end.clone();
+                                handle_clone
+                                    .insert_source(
+                                        calloop::timer::Timer::from_duration(
+                                            animation_frame_duration,
+                                        ),
+                                        move |_, _, state| {
+                                            let now = Instant::now();
+                                            let end = *animation_end.lock().unwrap();
+                                            let is_animating = end.map_or(false, |e| now < e);
+                                            if is_animating {
+                                                do_redraw(state);
+                                                TimeoutAction::ToDuration(animation_frame_duration)
+                                            } else {
+                                                *animation_end.lock().unwrap() = None;
+                                                TimeoutAction::Drop
+                                            }
+                                        },
+                                    )
+                                    .unwrap();
+                            }
+                        },
+                        calloop::channel::Event::Closed => {
+                            panic!("redraw channel closed");
                         }
                     }
-                    None => false, // no animation end time set
-                };
+                },
+            )
+            .unwrap();
 
-                if is_animating {
-                    TimeoutAction::ToInstant(now + animation_frame_duration)
-                } else {
-                    animation_end.set(None);
-                    pending_redraw.set(false);
-                    TimeoutAction::Drop
-                }
-            })
-            .expect("Failed to insert timer into event loop");
+        manager
     }
 }
+
 impl RedrawRequest for RedrawManager {
     fn request_redraw(&self) {
-        tracing::trace!("Redraw requested!");
-        if !self.pending_redraw.get() {
-            self.pending_redraw.set(true);
-            let needed_time =
-                self.last_redraw.get() + self.time_per_frame.unwrap_or(Duration::ZERO);
-            if needed_time <= Instant::now() {
-                self.insert(Timer::immediate());
-            } else {
-                self.insert(Timer::from_deadline(needed_time));
-            }
-        } else {
-            tracing::trace!("redraw already in progress");
-        }
+        let _ = self.sender.send(RedrawCommand::Redraw);
     }
 
     fn request_redraw_duration(&self, duration: Duration) {
-        tracing::trace!("Redraw requested with duration: {duration:?}!");
-        self.pending_redraw.set(true);
-        if let Some(animation_end) = self.animation_end.get() {
-            self.animation_end
-                .set(Some((Instant::now() + duration).max(animation_end)));
-        } else {
-            self.animation_end.set(Some(Instant::now() + duration));
-        }
-        self.insert(Timer::immediate());
+        let _ = self
+            .sender
+            .send(RedrawCommand::RedrawWithDuration(duration));
+    }
+}
+
+fn do_redraw(state: &mut State) {
+    for canvas in state.canvas_outputs.values() {
+        canvas.layer_surface.wl_surface().frame(
+            &state.shareable.wayland.queue_handle,
+            canvas.layer_surface.wl_surface().clone(),
+        );
+        canvas.layer_surface.wl_surface().commit();
     }
 }
 

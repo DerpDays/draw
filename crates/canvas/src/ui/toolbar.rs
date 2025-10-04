@@ -1,18 +1,18 @@
 use color::AlphaColor;
 use euclid::default::Point2D;
-use graphics::{primitives::RectangleOptions, Rounding};
+use graphics::{Rounding, primitives::RectangleOptions};
 
 use gui::prelude::*;
 
+use gui::Element;
 use gui::tree::UITree;
 use gui::widgets::button::{ButtonOptions, FADE_DURATION};
 use gui::widgets::{BackgroundWidget, ButtonWidget, ContainerWidget, SvgWidget, Widget};
-use gui::Element;
 use input::{CursorIcon, MouseButton, MouseEventKind};
 
 use crate::tools::ToolKind;
-use crate::ui::styles::{colors, floating_grab};
 use crate::ui::Message;
+use crate::ui::styles::{colors, floating_grab};
 
 pub struct Toolbar {
     active_tool: ToolKind,

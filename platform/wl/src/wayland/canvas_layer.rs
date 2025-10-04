@@ -1,28 +1,28 @@
-use std::ptr::NonNull;
+use std::{ptr::NonNull, sync::Arc};
 
 use color_eyre::eyre::{Context, OptionExt, Result};
 use euclid::default::{Point2D, Size2D};
-use input::{sctk::KeyEventKind, CursorIcon, MouseEvent, MouseEventKind};
+use input::{CursorIcon, MouseEvent, MouseEventKind, sctk::KeyEventKind};
 use renderer::reexports::wgpu;
 use smithay_client_toolkit::reexports::client::{
-    protocol::{wl_output::WlOutput, wl_surface::WlSurface},
     Proxy,
+    protocol::{wl_output::WlOutput, wl_surface::WlSurface},
 };
 use smithay_client_toolkit::{
     compositor::Region,
     seat::pointer::{PointerEvent, ThemedPointer},
     shell::{
-        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerSurface},
         WaylandSurface,
+        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerSurface},
     },
 };
 use tracing::{info, trace};
 
-use crate::wayland::{
-    protocols::{FractionalScale, Viewport},
-    WaylandState,
-};
 use crate::wayland::{OverlayMode, RedrawManager, ShareableState};
+use crate::wayland::{
+    WaylandState,
+    protocols::{FractionalScale, Viewport},
+};
 
 // Layer shell view implementation
 pub struct LayerShellCanvasView {
@@ -108,7 +108,6 @@ impl LayerShellCanvasView {
         layer_surface.set_exclusive_zone(-1);
 
         layer_surface.commit();
-        let redraw_manager = RedrawManager::new(state.loop_handle.clone(), Some(240), 60);
 
         layer_surface.wl_surface().frame(
             &state.wayland.queue_handle,
@@ -124,7 +123,12 @@ impl LayerShellCanvasView {
 
             mode,
             physical_size,
-            canvas: canvas::view::View::new(&state.wgpu, physical_size.cast(), 1., redraw_manager),
+            canvas: canvas::view::View::new(
+                &state.wgpu,
+                physical_size.cast(),
+                1.,
+                state.redraw_manager.clone(),
+            ),
             previous_cursor_icon: None,
 
             scale_factor: None,
@@ -254,6 +258,17 @@ impl LayerShellCanvasView {
         let cursor_icon = self
             .canvas
             .mouse_event(MouseEvent { position, kind }, &state.wgpu);
+
+        let surface = self.surface().clone();
+        state
+            .scheduler
+            .schedule(async move {
+                tracing::warn!("ticking now!!!");
+                canvas::reexports::any_spawner::Executor::tick().await;
+                tracing::warn!("done ticking executor");
+                surface
+            })
+            .expect("failed to schedule executor tick");
 
         if let Some(cursor_icon) = cursor_icon {
             if self.previous_cursor_icon != Some(cursor_icon) {

@@ -3,6 +3,7 @@ use graphics::{
     systems::{SystemsOwned, TextState, TextureState},
     Drawable,
 };
+use gui_reactive::reexports::any_spawner::Executor;
 use tracing::info;
 
 use gui::prelude::{EventResult, Redraw};
@@ -23,7 +24,8 @@ use crate::ui::options::OptionsTree;
 
 pub struct View<T: RedrawRequest + Clone + 'static> {
     pub canvas: Canvas,
-    pub app: Application,
+    // pub app: Application,
+    pub app_new: crate::ui2::Application,
 
     pub systems: SystemsOwned,
     pub projection: Projection,
@@ -42,7 +44,7 @@ pub enum InteractionKind {
     Gui,
 }
 
-impl<T: RedrawRequest + Clone + 'static> View<T> {
+impl<T: RedrawRequest + Clone + Send + Sync + 'static> View<T> {
     pub fn new(
         renderer: &renderer::State,
         viewport: Size2D<f32>,
@@ -56,44 +58,51 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
 
         let canvas = Canvas::new(&mut systems.to_ref(&renderer.device, &renderer.queue));
 
-        let mut gui_buffer = GrowableMeshBuffer::new(&renderer.device, 1024, 2048);
-        let mut gui = UITree::new(viewport, scale_factor);
+        // let mut gui_buffer = GrowableMeshBuffer::new(&renderer.device, 1024, 2048);
+        // let mut gui = UITree::new(viewport, scale_factor);
+        //
+        // let root_node = gui.root_node();
+        //
+        // let toolbar = crate::ui::toolbar::Toolbar::build(
+        //     &mut gui,
+        //     Point2D::new(100., 100.),
+        //     ToolKind::default(),
+        // );
+        // _ = gui.add_child(gui.root_node(), toolbar.visibility_container());
+        //
+        // let options = OptionsTree::build(&mut gui, root_node);
 
-        let root_node = gui.root_node();
+        // _ = gui_buffer.replace_with_mesh(
+        //     &renderer.device,
+        //     &renderer.queue,
+        //     gui.render(&mut systems.to_ref(&renderer.device, &renderer.queue)),
+        // );
 
-        let toolbar = crate::ui::toolbar::Toolbar::build(
-            &mut gui,
-            Point2D::new(100., 100.),
-            ToolKind::default(),
-        );
-        _ = gui.add_child(gui.root_node(), toolbar.visibility_container());
+        // let app = Application {
+        //     gui,
+        //     gui_buffer,
+        //
+        //     drag_start: None,
+        //
+        //     selected_tool: ToolKind::default(),
+        //
+        //     toolbar,
+        //     options,
+        //
+        //     modifiers: Modifiers::empty(),
+        // };
 
-        let options = OptionsTree::build(&mut gui, root_node);
-
-        _ = gui_buffer.replace_with_mesh(
-            &renderer.device,
-            &renderer.queue,
-            gui.render(&mut systems.to_ref(&renderer.device, &renderer.queue)),
-        );
-
-        let app = Application {
-            gui,
-            gui_buffer,
-
-            drag_start: None,
-
-            selected_tool: ToolKind::default(),
-
-            toolbar,
-            options,
-
-            modifiers: Modifiers::empty(),
-        };
+        let gui_buffer = GrowableMeshBuffer::new(&renderer.device, 1024, 2048);
+        let mut app_new = crate::ui2::Application::new(gui_buffer, &redraw_manager);
+        // tracing::error!("ticking");
+        // Executor::tick().await;
+        app_new.render(&mut systems.to_ref(&renderer.device, &renderer.queue));
 
         Self {
             canvas,
 
-            app,
+            // app,
+            app_new,
             systems,
             projection,
 
@@ -107,37 +116,38 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
     }
 
     pub fn update_viewport(&mut self, viewport: Size2D<f32>, scale_factor: f64) {
-        self.app.gui.update_viewport(viewport, scale_factor);
+        // self.app.gui.update_viewport(viewport, scale_factor);
         self.projection.set_viewport(viewport);
         self.redraw_manager.request_redraw();
         info!("Updated the viewport size to: {viewport:?}!");
     }
 
     pub fn keyboard_event(&mut self, event: KeyboardEvent, renderer: &renderer::State) {
-        self.app.modifiers = event.modifiers;
-
-        // If we are currently focused on a tool, pass the event to the tool handler .
-        if let Some(tool) = &self.focused_tool {
-            let messages = tool.keyboard_event(
-                &mut self.systems.to_ref(&renderer.device, &renderer.queue),
-                &mut self.tools,
-                event,
-            );
-            self.handle_tool(*tool, messages, renderer);
-            return;
-        };
-        tracing::trace!("attempting to send keyboard event to gui");
-        // Otherwise pass the event to the gui event handler
-        if let Some(events) = self.app.gui.keyboard_event(event.clone()) {
-            self.handle_gui(events, renderer);
-        } else {
-            let messages = self.app.selected_tool.keyboard_event(
-                &mut self.systems.to_ref(&renderer.device, &renderer.queue),
-                &mut self.tools,
-                event,
-            );
-            self.handle_tool(self.app.selected_tool, messages, renderer);
-        }
+        self.app_new.modifiers = event.modifiers;
+        // self.app.modifiers = event.modifiers;
+        //
+        // // If we are currently focused on a tool, pass the event to the tool handler .
+        // if let Some(tool) = &self.focused_tool {
+        //     let messages = tool.keyboard_event(
+        //         &mut self.systems.to_ref(&renderer.device, &renderer.queue),
+        //         &mut self.tools,
+        //         event,
+        //     );
+        //     self.handle_tool(*tool, messages, renderer);
+        //     return;
+        // };
+        // tracing::trace!("attempting to send keyboard event to gui");
+        // // Otherwise pass the event to the gui event handler
+        // if let Some(events) = self.app.gui.keyboard_event(event.clone()) {
+        //     self.handle_gui(events, renderer);
+        // } else {
+        //     let messages = self.app.selected_tool.keyboard_event(
+        //         &mut self.systems.to_ref(&renderer.device, &renderer.queue),
+        //         &mut self.tools,
+        //         event,
+        //     );
+        //     self.handle_tool(self.app.selected_tool, messages, renderer);
+        // }
     }
 
     // TODO: support multiple pointers.
@@ -146,84 +156,86 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
         event: MouseEvent,
         renderer: &renderer::State,
     ) -> Option<CursorIcon> {
-        // If we are currently focused on a tool, handle the event for the tool.
-        if let Some(tool) = self.focused_tool {
-            self.last_interaction = InteractionKind::Tool(tool);
-            let messages = tool.mouse_event(
-                &mut self.systems.to_ref(&renderer.device, &renderer.queue),
-                &mut self.tools,
-                event,
-                self.app.modifiers,
-                &self.projection,
-            );
-            return self.handle_tool(tool, messages, renderer);
-        }
-
-        // Otherwise, pass the event to the gui, which returns none if it did not hit.
-        if let Some(result) = self.app.gui.mouse_event(event.clone()) {
-            if self.last_interaction != InteractionKind::Gui {
-                let messages = self.app.selected_tool.mouse_event(
-                    &mut self.systems.to_ref(&renderer.device, &renderer.queue),
-                    &mut self.tools,
-                    MouseEvent::leave(event.position),
-                    self.app.modifiers,
-                    &self.projection,
-                );
-                self.handle_tool(self.app.selected_tool, messages, renderer);
-            };
-
-            self.last_interaction = InteractionKind::Gui;
-            return self.handle_gui(result, renderer);
-        }
-        // Otherwise, since the event wasn't for the gui, pass it on to the selected tool,
-        // here we need to handle enter/exit events for the tools if the selected tool has changed.
-        let mut result = None;
-        match self.last_interaction {
-            InteractionKind::Tool(tool) if self.app.selected_tool != tool => {
-                let leave_messages = tool.mouse_event(
-                    &mut self.systems.to_ref(&renderer.device, &renderer.queue),
-                    &mut self.tools,
-                    MouseEvent::leave(event.position),
-                    self.app.modifiers,
-                    &self.projection,
-                );
-                self.handle_tool(tool, leave_messages, renderer);
-                let enter_messages = self.app.selected_tool.mouse_event(
-                    &mut self.systems.to_ref(&renderer.device, &renderer.queue),
-                    &mut self.tools,
-                    MouseEvent::enter(event.position),
-                    self.app.modifiers,
-                    &self.projection,
-                );
-                result = self
-                    .handle_tool(self.app.selected_tool, enter_messages, renderer)
-                    .or(Some(self.app.selected_tool.default_cursor()))
-            }
-            InteractionKind::Gui => {
-                let messages = self.app.selected_tool.mouse_event(
-                    &mut self.systems.to_ref(&renderer.device, &renderer.queue),
-                    &mut self.tools,
-                    MouseEvent::enter(event.position),
-                    self.app.modifiers,
-                    &self.projection,
-                );
-                result = self
-                    .handle_tool(self.app.selected_tool, messages, renderer)
-                    .or(Some(self.app.selected_tool.default_cursor()))
-            }
-            _ => {}
-        }
-        self.last_interaction = InteractionKind::Tool(self.app.selected_tool);
-
-        let messages = self.app.selected_tool.mouse_event(
-            &mut self.systems.to_ref(&renderer.device, &renderer.queue),
-            &mut self.tools,
-            event,
-            self.app.modifiers,
-            &self.projection,
-        );
-        self.handle_tool(self.app.selected_tool, messages, renderer)
-            .or(result)
+        self.app_new.tree.on_mouse(event);
+        Some(CursorIcon::Default)
+        // // If we are currently focused on a tool, handle the event for the tool.
+        // if let Some(tool) = self.focused_tool {
+        //     self.last_interaction = InteractionKind::Tool(tool);
+        //     let messages = tool.mouse_event(
+        //         &mut self.systems.to_ref(&renderer.device, &renderer.queue),
+        //         &mut self.tools,
+        //         event,
+        //         self.app.modifiers,
+        //         &self.projection,
+        //     );
+        //     return self.handle_tool(tool, messages, renderer);
+        // }
+        //
+        // // Otherwise, pass the event to the gui, which returns none if it did not hit.
+        // if let Some(result) = self.app.gui.mouse_event(event.clone()) {
+        //     if self.last_interaction != InteractionKind::Gui {
+        //         let messages = self.app.selected_tool.mouse_event(
+        //             &mut self.systems.to_ref(&renderer.device, &renderer.queue),
+        //             &mut self.tools,
+        //             MouseEvent::leave(event.position),
+        //             self.app.modifiers,
+        //             &self.projection,
+        //         );
+        //         self.handle_tool(self.app.selected_tool, messages, renderer);
+        //     };
+        //
+        //     self.last_interaction = InteractionKind::Gui;
+        //     return self.handle_gui(result, renderer);
+        // }
+        // // Otherwise, since the event wasn't for the gui, pass it on to the selected tool,
+        // // here we need to handle enter/exit events for the tools if the selected tool has changed.
+        // let mut result = None;
+        // match self.last_interaction {
+        //     InteractionKind::Tool(tool) if self.app.selected_tool != tool => {
+        //         let leave_messages = tool.mouse_event(
+        //             &mut self.systems.to_ref(&renderer.device, &renderer.queue),
+        //             &mut self.tools,
+        //             MouseEvent::leave(event.position),
+        //             self.app.modifiers,
+        //             &self.projection,
+        //         );
+        //         self.handle_tool(tool, leave_messages, renderer);
+        //         let enter_messages = self.app.selected_tool.mouse_event(
+        //             &mut self.systems.to_ref(&renderer.device, &renderer.queue),
+        //             &mut self.tools,
+        //             MouseEvent::enter(event.position),
+        //             self.app.modifiers,
+        //             &self.projection,
+        //         );
+        //         result = self
+        //             .handle_tool(self.app.selected_tool, enter_messages, renderer)
+        //             .or(Some(self.app.selected_tool.default_cursor()))
+        //     }
+        //     InteractionKind::Gui => {
+        //         let messages = self.app.selected_tool.mouse_event(
+        //             &mut self.systems.to_ref(&renderer.device, &renderer.queue),
+        //             &mut self.tools,
+        //             MouseEvent::enter(event.position),
+        //             self.app.modifiers,
+        //             &self.projection,
+        //         );
+        //         result = self
+        //             .handle_tool(self.app.selected_tool, messages, renderer)
+        //             .or(Some(self.app.selected_tool.default_cursor()))
+        //     }
+        //     _ => {}
+        // }
+        // self.last_interaction = InteractionKind::Tool(self.app.selected_tool);
+        //
+        // let messages = self.app.selected_tool.mouse_event(
+        //     &mut self.systems.to_ref(&renderer.device, &renderer.queue),
+        //     &mut self.tools,
+        //     event,
+        //     self.app.modifiers,
+        //     &self.projection,
+        // );
+        // self.handle_tool(self.app.selected_tool, messages, renderer)
+        //     .or(result)
     }
 
     pub fn handle_gui(
@@ -231,14 +243,14 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
         events: EventResult<Message>,
         renderer: &renderer::State,
     ) -> Option<CursorIcon> {
-        let mut cursor_icon = None;
-        for (node, messages) in events.messages() {
-            for message in messages {
-                cursor_icon =
-                    crate::ui::handle_message(&mut self.app, *node, message, &self.redraw_manager)
-                        .or(cursor_icon);
-            }
-        }
+        // let mut cursor_icon = None;
+        // for (node, messages) in events.messages() {
+        //     for message in messages {
+        //         cursor_icon =
+        //             crate::ui::handle_message(&mut self.app, *node, message, &self.redraw_manager)
+        //                 .or(cursor_icon);
+        //     }
+        // }
 
         // if events.is_requesting_relayout() {
         //     self.app
@@ -251,7 +263,8 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
                 Redraw::Duration(duration) => self.redraw_manager.request_redraw_duration(duration),
             }
         }
-        cursor_icon
+        // cursor_icon
+        None
     }
 
     pub fn handle_tool(
@@ -353,16 +366,25 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
             self.systems.texture.mark_bound();
             info!("Updated the texture bind!");
         }
-        if self.app.gui.is_dirty() {
-            tracing::info!("gui is dirty, redrawing!");
-            _ = self.app.gui_buffer.replace_with_mesh(
-                &state.device,
-                &state.queue,
-                self.app
-                    .gui
-                    .render(&mut self.systems.to_ref(&state.device, &state.queue)),
-            );
-        }
+        // if self.app.gui.is_dirty() {
+        //     tracing::info!("gui is dirty, redrawing!");
+        //     _ = self.app.gui_buffer.replace_with_mesh(
+        //         &state.device,
+        //         &state.queue,
+        //         self.app
+        //             .gui
+        //             .render(&mut self.systems.to_ref(&state.device, &state.queue)),
+        //     );
+        // }
+
+        _ = self.app_new.gui_buffer.replace_with_mesh(
+            &state.device,
+            &state.queue,
+            &self
+                .app_new
+                .tree
+                .render(&mut self.systems.to_ref(&state.device, &state.queue)),
+        );
         tracing::trace!("Render preparation time took: {:?}", start.elapsed());
 
         let start = std::time::Instant::now();
@@ -416,13 +438,22 @@ impl<T: RedrawRequest + Clone + 'static> View<T> {
                 render_pass.draw_indexed(0..self.canvas.scratch_buffer.num_indices, 0, 0..1);
             }
 
-            if self.app.gui_buffer.num_indices > 0 {
-                render_pass.set_vertex_buffer(0, self.app.gui_buffer.vertex.buf.slice(..));
+            // if self.app.gui_buffer.num_indices > 0 {
+            //     render_pass.set_vertex_buffer(0, self.app.gui_buffer.vertex.buf.slice(..));
+            //     render_pass.set_index_buffer(
+            //         self.app.gui_buffer.index.buf.slice(..),
+            //         wgpu::IndexFormat::Uint32,
+            //     );
+            //     render_pass.draw_indexed(0..self.app.gui_buffer.num_indices, 0, 0..1);
+            // }
+
+            if self.app_new.gui_buffer.num_indices > 0 {
+                render_pass.set_vertex_buffer(0, self.app_new.gui_buffer.vertex.buf.slice(..));
                 render_pass.set_index_buffer(
-                    self.app.gui_buffer.index.buf.slice(..),
+                    self.app_new.gui_buffer.index.buf.slice(..),
                     wgpu::IndexFormat::Uint32,
                 );
-                render_pass.draw_indexed(0..self.app.gui_buffer.num_indices, 0, 0..1);
+                render_pass.draw_indexed(0..self.app_new.gui_buffer.num_indices, 0, 0..1);
             }
         }
 

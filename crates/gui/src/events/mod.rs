@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use taffy::NodeId;
 
-use crate::tree::TreeCommand;
 use crate::Element;
+use crate::tree::TreeCommand;
 pub use input::KeyboardEvent;
 pub use input::MouseEvent;
 

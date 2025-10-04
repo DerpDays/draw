@@ -1,9 +1,9 @@
 use input::sctk::KeyEventKind;
 use smithay_client_toolkit::{
     reexports::client::{
+        Connection, Proxy, QueueHandle,
         backend::ObjectId,
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
-        Connection, Proxy, QueueHandle,
     },
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
 };

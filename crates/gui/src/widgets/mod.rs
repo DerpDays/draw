@@ -1,10 +1,10 @@
 use euclid::default::{Point2D, Vector2D};
-use graphics::{get_empty_mesh, Mesh, Systems};
+use graphics::{Mesh, Systems, get_empty_mesh};
 
-use crate::events::{BlurEvent, ChangeEvent, EventContext, FocusEvent};
-use crate::macros::widget::{delegate_widget, impl_as_variants};
 use crate::Element;
 use crate::Vertex;
+use crate::events::{BlurEvent, ChangeEvent, EventContext, FocusEvent};
+use crate::macros::widget::{delegate_widget, impl_as_variants};
 use input::{KeyboardEvent, MouseEvent};
 
 pub mod background;

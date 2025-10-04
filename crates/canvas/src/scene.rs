@@ -96,7 +96,8 @@ impl Scene {
 
     /// Get shapes in render (layer) order.
     pub fn tessellate(&mut self, systems: &mut Systems) -> Mesh<Vertex> {
-        let (vertex_count, index_count) = self.ordering
+        let (vertex_count, index_count) = self
+            .ordering
             .iter()
             .filter_map(|key| {
                 self.nodes.get_mut(key).map(|node| {
@@ -119,5 +120,4 @@ impl Scene {
 
         result
     }
-
 }

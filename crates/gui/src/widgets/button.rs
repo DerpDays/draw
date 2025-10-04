@@ -1,14 +1,14 @@
 use std::time::Duration;
 
-use graphics::{primitives::RectangleOptions, Mesh, Systems, Vertex};
+use graphics::{Mesh, Systems, Vertex, primitives::RectangleOptions};
 use input::{KeyboardEvent, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::{
+    Element,
     events::{BlurEvent, EventContext, EventHandler, EventPhase, FocusEvent, HandlesEvent, Redraw},
     widgets::{
-        background::TransitionBackgroundWidget, Widget, WidgetInteractionState, WidgetVisualState,
+        Widget, WidgetInteractionState, WidgetVisualState, background::TransitionBackgroundWidget,
     },
-    Element,
 };
 
 #[derive(Clone)]

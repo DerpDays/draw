@@ -1,13 +1,13 @@
 use color::{AlphaColor, Srgb};
-use graphics::{primitives::RectangleOptions, BasicColor, Rounding};
+use graphics::{BasicColor, Rounding, primitives::RectangleOptions};
 use gui::{
+    UITree,
     prelude::*,
     widgets::{BackgroundWidget, Widget},
-    UITree,
 };
 use input::{MouseButton, MouseEventKind};
 
-use crate::ui::{options::OptionsMessage, styles::colors, Message};
+use crate::ui::{Message, options::OptionsMessage, styles::colors};
 
 pub struct ColorSwatches<const N: usize> {
     pub container: NodeId,

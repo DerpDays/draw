@@ -1,12 +1,12 @@
 use euclid::default::Point2D;
-use graphics::{primitives, Drawable, Mesh, Systems, Vertex, ViewportCoordinates};
+use graphics::{Drawable, Mesh, Systems, Vertex, ViewportCoordinates, primitives};
 use input::{KeyboardEvent, MouseEvent, MouseEventKind};
 
 use crate::{
+    Element,
     events::{EventContext, EventHandler},
     macros::event_handlers::impl_event_handler,
     widgets::Widget,
-    Element,
 };
 
 #[derive(Clone)]

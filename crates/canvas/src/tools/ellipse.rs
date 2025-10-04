@@ -1,7 +1,7 @@
 use euclid::default::Vector2D;
 use graphics::{
-    primitives::{Ellipse, EllipseOptions},
     Drawable, Systems,
+    primitives::{Ellipse, EllipseOptions},
 };
 
 use crate::tools::{Tool, ToolMessage};

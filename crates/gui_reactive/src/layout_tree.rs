@@ -4,33 +4,30 @@ use euclid::default::{Box2D, Point2D};
 
 use taffy::{Layout, PrintTree};
 
-use crate::{
-    tree::{DynNodeId, Node},
-    Tree,
-};
+use crate::{ElementId, Tree};
 
 #[derive(Default, Debug)]
 pub struct Linear {
-    bounding_boxes: Vec<(DynNodeId, Box2D<f32>)>,
+    bounding_boxes: Vec<(ElementId, Box2D<f32>)>,
 }
 
 #[derive(Default, Debug)]
 pub struct LayoutTree {
-    map: HashMap<DynNodeId, LayoutNode>,
+    map: HashMap<ElementId, LayoutNode>,
     bounding: Linear,
 }
 
 impl LayoutTree {
-    pub fn get_layout(&self, node: DynNodeId) -> Option<LayoutNode> {
+    pub fn get_layout(&self, node: ElementId) -> Option<LayoutNode> {
         self.map.get(&node).cloned()
     }
 }
 
 impl LayoutTree {
-    pub fn new<T: Node>(tree: &Tree<T>) -> Self {
+    pub fn new(tree: &Tree) -> Self {
         let mut map = HashMap::new();
         let mut stack = vec![(tree.root_node(), taffy::Point::ZERO)];
-        let mut bounding_boxes: Vec<(DynNodeId, Box2D<f32>)> = Vec::with_capacity(1000);
+        let mut bounding_boxes: Vec<(ElementId, Box2D<f32>)> = Vec::with_capacity(1000);
         while let Some((node, parent_origin)) = stack.pop() {
             let mut layout = tree.get_final_layout(node);
             layout.location = layout.location + parent_origin;
@@ -59,7 +56,7 @@ impl LayoutTree {
             bounding: Linear { bounding_boxes },
         }
     }
-    pub fn hit(&self, point: Point2D<f32>) -> impl Iterator<Item = DynNodeId> {
+    pub fn hit(&self, point: Point2D<f32>) -> impl Iterator<Item = ElementId> {
         self.bounding
             .bounding_boxes
             .iter()
@@ -73,7 +70,7 @@ impl LayoutTree {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LayoutNode {
-    pub node: DynNodeId,
+    pub node: ElementId,
     pub abs_layout: Layout,
 }
 

@@ -4,8 +4,8 @@ use color::{PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D};
 use serde::{Deserialize, Serialize};
 
-use crate::{make_positive_box, Vertex, VertexKind};
 use crate::{ApplyCoordinates, Drawable, Mesh, Systems};
+use crate::{Vertex, VertexKind, make_positive_box};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Options {

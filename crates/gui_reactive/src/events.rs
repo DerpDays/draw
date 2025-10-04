@@ -3,7 +3,10 @@ use std::sync::Arc;
 use input::{KeyboardEvent, MouseEvent};
 use reactive_graph::owner::Owner;
 
-use crate::tree::{DynNodeId, Element, NodeForEach, Widget};
+use crate::{
+    ElementId,
+    tree::{Element, ElementBuilder, Node, Widget},
+};
 
 /// Represents the phase of event propagation.
 ///
@@ -48,17 +51,17 @@ pub struct EventContext<E> {
     bubbles: bool,
 
     /// The original node to which the event was dispatched.
-    target_node: DynNodeId,
+    target_node: ElementId,
     /// The node currently handling the event.
-    current_node: DynNodeId,
+    current_node: ElementId,
 
     /// Prevent the default behaviour of this widget.
     prevent_default: bool,
     /// If set, indicates that this node is requesting keyboard focus.
-    requesting_kb_focus_capture: Option<DynNodeId>,
+    requesting_kb_focus_capture: Option<ElementId>,
     requesting_kb_focus_release: bool,
     /// If set, indicates that this node is requesting mouse capture.
-    requesting_mouse_capture: Option<DynNodeId>,
+    requesting_mouse_capture: Option<ElementId>,
     /// If set, indicates that a node in the propagation path is requesting mouse release.
     requesting_mouse_release: bool,
 
@@ -67,7 +70,7 @@ pub struct EventContext<E> {
 }
 
 impl<E> EventContext<E> {
-    pub(crate) const fn non_bubbling(payload: E, target_node: DynNodeId) -> Self {
+    pub(crate) const fn non_bubbling(payload: E, target_node: ElementId) -> Self {
         Self {
             payload,
 
@@ -87,7 +90,7 @@ impl<E> EventContext<E> {
             propagating: true,
         }
     }
-    pub(crate) const fn bubbling(payload: E, target_node: DynNodeId) -> Self {
+    pub(crate) const fn bubbling(payload: E, target_node: ElementId) -> Self {
         Self {
             payload,
 
@@ -110,7 +113,7 @@ impl<E> EventContext<E> {
 
     /// Create an event contexts for a given payload and node,
     /// direct events have a [`EventPhase::Direct`], and do not bubble.
-    pub(crate) const fn direct(inner: E, node: DynNodeId) -> Self {
+    pub(crate) const fn direct(inner: E, node: ElementId) -> Self {
         Self {
             payload: inner,
 
@@ -133,7 +136,7 @@ impl<E> EventContext<E> {
     pub(crate) const fn set_phase(&mut self, phase: EventPhase) {
         self.event_phase = phase;
     }
-    pub(crate) const fn set_current_node(&mut self, node: DynNodeId) {
+    pub(crate) const fn set_current_node(&mut self, node: ElementId) {
         self.current_node = node;
     }
     pub(crate) const fn is_propagating(&self) -> bool {
@@ -168,7 +171,7 @@ impl<E> EventContext<E> {
     ///
     /// If a node prior in the event propagation chain has requested focus, then focus will be only
     /// requested for that prior node instead of the new node provided.
-    pub const fn request_kb_focus_capture(&mut self, node: DynNodeId) {
+    pub const fn request_kb_focus_capture(&mut self, node: ElementId) {
         if self.requesting_kb_focus_capture.is_none() {
             self.requesting_kb_focus_capture = Some(node);
         }
@@ -180,7 +183,7 @@ impl<E> EventContext<E> {
     ///
     /// If a node prior in the event propagation chain has requested mouse capture, then the
     /// capture will only be requested for that prior node instead of the new node provided.
-    pub fn request_mouse_capture(&mut self, node: DynNodeId) {
+    pub fn request_mouse_capture(&mut self, node: ElementId) {
         if self.requesting_mouse_capture.is_none() {
             self.requesting_mouse_capture = Some(node);
         }
@@ -207,12 +210,12 @@ impl<E> EventContext<E> {
     }
 
     /// The target node of this event
-    pub const fn target_node(&self) -> DynNodeId {
+    pub const fn target_node(&self) -> ElementId {
         self.target_node
     }
 
     /// The current node that is handling the event
-    pub const fn current_node(&self) -> DynNodeId {
+    pub const fn current_node(&self) -> ElementId {
         self.current_node
     }
 
@@ -221,7 +224,7 @@ impl<E> EventContext<E> {
         self.prevent_default
     }
     /// Whether a node is requesting keyboard focus.
-    pub const fn is_requesting_kb_focus_capture(&self) -> Option<DynNodeId> {
+    pub const fn is_requesting_kb_focus_capture(&self) -> Option<ElementId> {
         self.requesting_kb_focus_capture
     }
     /// Whether the event is requesting keyboard focus release.
@@ -232,7 +235,7 @@ impl<E> EventContext<E> {
         self.requesting_kb_focus_release
     }
     /// Whether a node is requesting mouse capture.
-    pub const fn is_requesting_mouse_capture(&self) -> Option<DynNodeId> {
+    pub const fn is_requesting_mouse_capture(&self) -> Option<ElementId> {
         self.requesting_mouse_capture
     }
     /// Whether the event is requesting mouse release.
@@ -249,8 +252,8 @@ pub struct EventHandler<E> {
 }
 
 pub struct EventHandlerInner<E> {
-    owner: Owner,
-    handler: Arc<dyn Fn(&mut EventContext<E>) + Send + Sync>,
+    // owner: Owner,
+    handler: Arc<dyn Fn(&dyn Node, &mut EventContext<E>) + Send + Sync>,
 }
 impl<E> EventHandler<E> {
     pub fn empty() -> Self {
@@ -258,26 +261,31 @@ impl<E> EventHandler<E> {
     }
     pub fn new<F>(f: F) -> Self
     where
-        F: Fn(&mut EventContext<E>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<E>) + Send + Sync + 'static,
     {
         Self {
             inner: Some(EventHandlerInner {
-                owner: Owner::new(),
+                // owner: Owner::new(),
                 handler: Arc::new(f),
             }),
         }
     }
-    pub(crate) fn handle(&self, ctx: &mut EventContext<E>) {
+    pub(crate) fn handle(&self, elem: &dyn Node, ctx: &mut EventContext<E>) {
         if let Some(inner) = &self.inner {
             tracing::span!(tracing::Level::TRACE, "event handle");
             tracing::trace!("in event handler");
-            inner.owner.with(|| (inner.handler)(ctx));
-            // (inner.handler)(ctx);
+            // inner.owner.with(|| (inner.handler)(elem, ctx));
+            (inner.handler)(elem, ctx);
         }
     }
 }
 
-impl<T: Widget, C: NodeForEach> Element<T, C> {
+// Custom events related to the application
+
+pub struct FocusEvent;
+pub struct BlurEvent;
+
+impl<W: Widget> ElementBuilder<W> {
     /// Assign a mouse event handler to this element.
     ///
     /// ```rust
@@ -285,7 +293,7 @@ impl<T: Widget, C: NodeForEach> Element<T, C> {
     /// ```
     pub fn on_mouse<F>(mut self, func: F) -> Self
     where
-        F: Fn(&mut EventContext<MouseEvent>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<MouseEvent>) + Send + Sync + 'static,
     {
         self.mouse_handler = EventHandler::new(func);
         self
@@ -298,26 +306,12 @@ impl<T: Widget, C: NodeForEach> Element<T, C> {
     /// ```
     pub fn on_keyboard<F>(mut self, func: F) -> Self
     where
-        F: Fn(&mut EventContext<KeyboardEvent>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<KeyboardEvent>) + Send + Sync + 'static,
     {
         self.keyboard_handler = EventHandler::new(func);
         self
     }
-}
 
-pub trait HandlesEvent<E>
-where
-    Self: Sized + Widget,
-{
-    fn handler_mut(&mut self) -> &mut EventHandler<E>;
-}
-
-// Custom events related to the application
-
-pub struct FocusEvent;
-pub struct BlurEvent;
-
-impl<T: HandlesEvent<FocusEvent>, C: NodeForEach> Element<T, C> {
     /// Assign a focus event handler to this element.
     ///
     /// ```rust
@@ -325,9 +319,22 @@ impl<T: HandlesEvent<FocusEvent>, C: NodeForEach> Element<T, C> {
     /// ```
     pub fn on_focus<F>(mut self, func: F) -> Self
     where
-        F: Fn(&mut EventContext<FocusEvent>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<FocusEvent>) + Send + Sync + 'static,
     {
-        *self.inner.handler_mut() = EventHandler::new(func);
+        self.focus_handler = EventHandler::new(func);
+        self
+    }
+
+    /// Assign a blur event handler to this element.
+    ///
+    /// ```rust
+    /// div().on_blur(|event: blurEvent| ..);
+    /// ```
+    pub fn on_blur<F>(mut self, func: F) -> Self
+    where
+        F: Fn(&dyn Node, &mut EventContext<BlurEvent>) + Send + Sync + 'static,
+    {
+        self.blur_handler = EventHandler::new(func);
         self
     }
 }

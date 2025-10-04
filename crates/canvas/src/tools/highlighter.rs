@@ -1,7 +1,7 @@
 use euclid::default::Size2D;
 use graphics::{
-    primitives::{Svg, SvgOptions},
     Systems,
+    primitives::{Svg, SvgOptions},
 };
 use input::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
