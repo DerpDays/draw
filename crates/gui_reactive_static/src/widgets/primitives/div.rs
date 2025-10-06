@@ -2,7 +2,14 @@ use color::AlphaColor;
 use euclid::default::{Point2D, Size2D};
 use graphics::{
     primitives::{Rectangle, RectangleOptions},
-    BasicColor, BoxSizing, Drawable, Mesh, Rounding, Systems, Vertex, ViewportCoordinates,
+    BasicColor,
+    BoxSizing,
+    Drawable,
+    Mesh,
+    Rounding,
+    Systems,
+    Vertex,
+    ViewportCoordinates,
 };
 use reactive_graph::{effect::Effect, prelude::Get, traits::GetUntracked, wrappers::read::Signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
@@ -79,7 +86,6 @@ impl Widget for Div {
                 Size2D::new(layout.size.width, layout.size.height),
             )
         }
-        tracing::info!("rendering div!!!! {:?}", bg.inner.size());
         mesh.append(bg.inner.render(systems));
     }
     fn measure(

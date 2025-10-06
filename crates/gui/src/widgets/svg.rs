@@ -1,12 +1,12 @@
-use euclid::default::Point2D;
-use graphics::{Drawable, Mesh, Systems, Vertex, ViewportCoordinates, primitives};
+use euclid::default::{Point2D, Size2D};
+use graphics::{primitives, Drawable, Mesh, Systems, Vertex, ViewportCoordinates};
 use input::{KeyboardEvent, MouseEvent, MouseEventKind};
 
 use crate::{
-    Element,
     events::{EventContext, EventHandler},
     macros::event_handlers::impl_event_handler,
     widgets::Widget,
+    Element,
 };
 
 #[derive(Clone)]
@@ -36,12 +36,8 @@ pub struct SvgOptions {
 
 impl<M: Clone> SvgWidget<M> {
     pub fn new(data: Vec<u8>, options: SvgOptions) -> Self {
-        let inner = graphics::primitives::Svg::new(
-            Point2D::zero(),
-            lyon::math::Size::zero(),
-            data,
-            options.normal,
-        );
+        let inner =
+            graphics::primitives::Svg::new(Point2D::zero(), Size2D::zero(), data, options.normal);
         Self {
             inner,
             options,
@@ -78,7 +74,7 @@ impl<M: Clone> Element for SvgWidget<M> {
                 // otherwise we need to completely update the svg, which means re-tessellating.
                 self.inner.update_rect(
                     Point2D::new(layout.location.x, layout.location.y),
-                    lyon::math::Size::new(layout.size.width, layout.size.height),
+                    Size2D::new(layout.size.width, layout.size.height),
                 );
             }
 

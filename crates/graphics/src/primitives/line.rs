@@ -1,13 +1,12 @@
 use std::marker::PhantomData;
 
 use color::{PremulColor, Srgb};
-use euclid::default::{Box2D, Vector2D};
-use lyon::algorithms::aabb::fast_bounding_box;
-use lyon::geom::LineSegment;
-use lyon::math::Point;
-use lyon::path::Path;
-use lyon::tessellation::{
-    BuffersBuilder, StrokeOptions, StrokeTessellator, StrokeVertex, VertexBuffers,
+use euclid::default::{Box2D, Point2D, Vector2D};
+use lyon::{
+    algorithms::aabb::fast_bounding_box,
+    geom::LineSegment,
+    path::Path,
+    tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, StrokeVertex, VertexBuffers},
 };
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -37,15 +36,15 @@ pub struct Line<C: ApplyCoordinates> {
     #[serde(skip)]
     render_cache: Option<Mesh<Vertex>>,
 
-    origin: Point,
-    destination: Point,
+    origin: Point2D<f32>,
+    destination: Point2D<f32>,
 
     options: Options,
     _marker: PhantomData<C>,
 }
 
 impl<C: ApplyCoordinates> Line<C> {
-    pub fn new(origin: Point, destination: Point, options: Options) -> Self {
+    pub fn new(origin: Point2D<f32>, destination: Point2D<f32>, options: Options) -> Self {
         Self {
             path: Self::build_path(&origin, &destination),
             render_cache: None,
@@ -57,7 +56,7 @@ impl<C: ApplyCoordinates> Line<C> {
             _marker: PhantomData,
         }
     }
-    fn build_path(origin: &Point, destination: &Point) -> Path {
+    fn build_path(origin: &Point2D<f32>, destination: &Point2D<f32>) -> Path {
         let mut builder = Path::builder();
         builder.add_line_segment(&LineSegment {
             from: *origin,
@@ -65,7 +64,7 @@ impl<C: ApplyCoordinates> Line<C> {
         });
         builder.build()
     }
-    pub fn set_destination(&mut self, position: lyon::math::Point) {
+    pub fn set_destination(&mut self, position: Point2D<f32>) {
         // rebuild path
         self.destination = position;
         self.path = Self::build_path(&self.origin, &self.destination);
@@ -73,7 +72,7 @@ impl<C: ApplyCoordinates> Line<C> {
         self.render_cache = None;
     }
 
-    pub fn set_destination_snap(&mut self, position: lyon::math::Point, snap_rad: f32) {
+    pub fn set_destination_snap(&mut self, position: Point2D<f32>, snap_rad: f32) {
         let delta = position - self.origin;
         let length = delta.length();
 

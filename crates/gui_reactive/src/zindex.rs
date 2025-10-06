@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use sycamore_reactive::MaybeDyn;
+
 use crate::{ElementId, Tree, tree::Node};
 
 /// Metadata about a gui tree node's z-index
@@ -12,6 +14,11 @@ pub struct ZIndexProperties {
     /// When this is set to true, the node is rendered last in its z-layer for its current z
     /// context.
     pub isolate_z: bool,
+}
+impl From<ZIndexProperties> for MaybeDyn<ZIndexProperties> {
+    fn from(value: ZIndexProperties) -> Self {
+        MaybeDyn::Static(value)
+    }
 }
 impl Default for ZIndexProperties {
     fn default() -> Self {

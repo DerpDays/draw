@@ -1,21 +1,28 @@
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics::{
-    Drawable, Mesh, Systems, Vertex, ViewportCoordinates,
+    Drawable,
+    Mesh,
+    Systems,
+    Vertex,
+    ViewportCoordinates,
     primitives::{self, TextOptions},
 };
 use input::{
-    Key, KeyboardEvent, KeyboardEventKind, Modifiers, MouseButton, MouseEvent, MouseEventKind,
+    Key,
+    KeyboardEvent,
+    KeyboardEventKind,
+    Modifiers,
+    MouseButton,
+    MouseEvent,
+    MouseEventKind,
     SpecialKey,
 };
 
 use crate::{
     events::{BlurEvent, ChangeEvent, FocusEvent},
     macros::event_handlers::impl_event_handler,
-    widgets::parse_layout_change,
-};
-use crate::{
     prelude::{Element, EventContext, EventHandler},
-    widgets::Widget,
+    widgets::{Widget, parse_layout_change},
 };
 
 use super::LayoutChange;

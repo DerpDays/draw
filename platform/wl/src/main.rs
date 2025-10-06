@@ -25,8 +25,7 @@ pub const APP_LOCK: &'static str = "draw.lock";
 
 pub const APP_LOG_ENV: &'static str = "DRAW_LOG";
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     color_eyre::install()?;
     let args = Arguments::parse();
     let _guard = logging::init_logging()?;
@@ -38,14 +37,14 @@ async fn main() -> Result<()> {
 
     // We create a lockfile which we use to check if there is an instance already running.
     if let Ok(_) = lock_file.try_lock() {
-        create_daemon(args, sock_path).await
+        create_daemon(args, sock_path)
     } else {
         handle_client(args, sock_path)
     }
 }
 
 // Parse command line options.
-async fn create_daemon<T: AsRef<Path>>(args: Arguments, sock_path: T) -> Result<()> {
+fn create_daemon<T: AsRef<Path>>(args: Arguments, sock_path: T) -> Result<()> {
     if let Some(cmd) = args.command {
         match cmd {
             Command::Msg { .. } | Command::Quit => {
@@ -56,13 +55,9 @@ async fn create_daemon<T: AsRef<Path>>(args: Arguments, sock_path: T) -> Result<
     }
     let outputs: Vec<String> = args.outputs;
 
-
     let mut conn = {
-        // let executor = LocalExecutor::new();
-        // futures_lite::future::block_on(executor.run(WaylandConnection::new()))
-        //     .wrap_err("failed to create wayland connection")?
-        
-        WaylandConnection::new().await
+        let executor = LocalExecutor::new();
+        futures_lite::future::block_on(executor.run(WaylandConnection::new()))
             .wrap_err("failed to create wayland connection")?
     };
 

@@ -8,11 +8,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     systems::{CacheKey, TextData, TextureData},
-    ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind,
+    ApplyCoordinates,
+    Drawable,
+    Mesh,
+    Systems,
+    Vertex,
+    VertexKind,
 };
 use atlas::{
     formats::{Mask, Rgba8},
-    AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture,
+    AllocatedTexture,
+    AtlasFormat,
+    LayeredAtlas,
+    UnallocatedTexture,
 };
 
 mod options;

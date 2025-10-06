@@ -1,7 +1,4 @@
-use lyon::{
-    geom::euclid::default::Transform3D,
-    math::{Point, Size, Vector},
-};
+use euclid::default::{Point2D, Size2D, Transform3D, Vector2D};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -9,11 +6,11 @@ pub struct Projection {
     needs_rebinding: bool,
     /// Matrix taking world coords → viewport coords
     world_to_viewport: Transform3D<f32>,
-    viewport: Size,
+    viewport: Size2D<f32>,
 }
 
 impl Projection {
-    pub fn new(viewport: Size) -> Self {
+    pub fn new(viewport: Size2D<f32>) -> Self {
         Self {
             needs_rebinding: true,
             world_to_viewport: Transform3D::identity(),
@@ -28,17 +25,17 @@ impl Projection {
         self.needs_rebinding = false;
     }
 
-    pub fn get_viewport(&self) -> Size {
+    pub fn get_viewport(&self) -> Size2D<f32> {
         self.viewport
     }
-    pub fn set_viewport(&mut self, new_size: Size) {
+    pub fn set_viewport(&mut self, new_size: Size2D<f32>) {
         self.viewport = new_size;
         self.world_to_viewport = Transform3D::identity();
         self.needs_rebinding = true;
     }
 
     /// Pan in world‐space by `delta` (in world units).
-    pub fn pan_by(&mut self, delta: Vector) {
+    pub fn pan_by(&mut self, delta: Vector2D<f32>) {
         let t = Transform3D::translation(delta.x, delta.y, 0.0);
         // world → viewport = (old_world_to_viewport) ∘ (translate_world)
         self.world_to_viewport = self.world_to_viewport.then(&t);
@@ -48,7 +45,7 @@ impl Projection {
     /// Zoom about a **viewport**‐space point `focus` by `factor`.
     /// `focus` is in viewport pixels.
     /// FIXME: doesn't properly zoom around focus
-    pub fn zoom_at(&mut self, focus: Point, factor: f32) {
+    pub fn zoom_at(&mut self, focus: Point2D<f32>, factor: f32) {
         // 1. move focus → origin in world coords
         let to_origin = Transform3D::translation(-focus.x, -focus.y, 0.0);
         // 2. scale
@@ -95,7 +92,7 @@ impl Projection {
     }
 
     /// Map a point in viewport‐pixel space back to **world** coords.
-    pub fn viewport_to_world(&self, p: Point) -> Point {
+    pub fn viewport_to_world(&self, p: Point2D<f32>) -> Point2D<f32> {
         // invert world→viewport, drop Z
         let inv = self.world_to_viewport.inverse().unwrap();
         // FIXME: returns None when zoomed out alot

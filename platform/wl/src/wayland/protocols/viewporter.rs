@@ -1,9 +1,17 @@
-use smithay_client_toolkit::globals::GlobalData;
-use smithay_client_toolkit::reexports::client::globals::{BindError, GlobalList};
-use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
-use smithay_client_toolkit::reexports::client::{Connection, Dispatch, Proxy, QueueHandle};
-use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
-use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
+use smithay_client_toolkit::{
+    globals::GlobalData,
+    reexports::{
+        client::{
+            Connection,
+            Dispatch,
+            Proxy,
+            QueueHandle,
+            globals::{BindError, GlobalList},
+            protocol::wl_surface::WlSurface,
+        },
+        protocols::wp::viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
+    },
+};
 
 #[derive(Debug)]
 #[allow(unused)]

@@ -1,18 +1,25 @@
 use color::AlphaColor;
 use euclid::default::Point2D;
-use graphics::Rounding;
-use graphics::primitives::{RectangleOptions, TextOptions};
+use graphics::{
+    Rounding,
+    primitives::{RectangleOptions, TextOptions},
+};
 
-use gui::prelude::*;
-use gui::tree::{UITree, ZIndexProperties};
-use gui::widgets::{BackgroundWidget, ContainerWidget, TextWidget, Widget};
+use gui::{
+    prelude::*,
+    tree::{UITree, ZIndexProperties},
+    widgets::{BackgroundWidget, ContainerWidget, TextWidget, Widget},
+};
 use input::{CursorIcon, MouseEventKind};
 
-use crate::tools::ToolKind;
-use crate::ui::Message;
-use crate::ui::options::color_picker::ColorPickerTree;
-use crate::ui::options::color_swatches::ColorSwatches;
-use crate::ui::styles::{colors, floating_grab};
+use crate::{
+    tools::ToolKind,
+    ui::{
+        Message,
+        options::{color_picker::ColorPickerTree, color_swatches::ColorSwatches},
+        styles::{colors, floating_grab},
+    },
+};
 
 mod color_picker;
 mod color_swatches;

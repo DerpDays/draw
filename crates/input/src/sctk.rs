@@ -14,8 +14,16 @@ pub enum KeyEventKind {
 }
 
 use crate::{
-    AxisScroll, AxisSource, CursorIcon, Key, KeyboardEvent, KeyboardEventKind, Modifiers,
-    MouseButton, MouseEventKind, SpecialKey,
+    AxisScroll,
+    AxisSource,
+    CursorIcon,
+    Key,
+    KeyboardEvent,
+    KeyboardEventKind,
+    Modifiers,
+    MouseButton,
+    MouseEventKind,
+    SpecialKey,
 };
 
 pub const fn pointer_event(kind: &PointerEventKind) -> MouseEventKind {

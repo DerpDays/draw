@@ -1,19 +1,67 @@
 use graphics::{Mesh, Systems, Vertex};
+use sycamore_reactive::{ReadSignal, Signal, create_memo, create_signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
-use crate::tree::{Element, Widget};
+use crate::tree::{Widget, builder::ElementBuilder};
 
-pub struct Button;
-impl Widget for Button {
-    fn render(
-        &mut self,
-        _mesh: &mut Mesh<Vertex>,
-        _sys: &mut Systems,
-        _layout: &Layout,
-        _: &Style,
-    ) {
-        println!("Render button:");
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ButtonVisualState {
+    /// Pressed is the state with the most visual priority, it represents that the widget
+    /// is currently being pressed by a left mouse click.
+    Pressed,
+    /// Active is a special state for widgets that can be toggled on/off at the user's discretion.
+    /// This is meant to represent when a widget is in a special state such as being the current
+    /// tool, menu currently selected, or otherwise.
+    Active,
+    /// Represents that the mouse is currently inside this widget (or mouse events are being shared
+    /// to it).
+    Hovered,
+    /// The normal state of the widget when it has neither mouse or keyboard focus.
+    Normal,
+    /// A special state for when the widget is marked as disabled.
+    Disabled,
+}
+
+pub struct Button {
+    state: ButtonSignals,
+}
+
+#[derive(Copy, Clone)]
+pub struct ButtonSignals {
+    enabled: ReadSignal<bool>,
+    active: ReadSignal<bool>,
+
+    pressed: Signal<bool>,
+    hovered: Signal<bool>,
+}
+
+impl ButtonSignals {
+    /// Create a read signal that reacts to changes in the visual state
+    pub fn to_visual(&self) -> ReadSignal<ButtonVisualState> {
+        let Self {
+            enabled,
+            active,
+            pressed,
+            hovered,
+        } = *self;
+        create_memo(move || {
+            if !enabled.get() {
+                return ButtonVisualState::Disabled;
+            } else if pressed.get() {
+                return ButtonVisualState::Pressed;
+            } else if active.get() {
+                return ButtonVisualState::Active;
+            } else if hovered.get() {
+                return ButtonVisualState::Hovered;
+            } else {
+                ButtonVisualState::Normal
+            }
+        })
     }
+}
+
+impl Widget for Button {
+    fn render(&mut self, _: &mut Mesh<Vertex>, _: &mut Systems, _: &Layout, _: &Style) {}
     fn measure(
         &mut self,
         known_dimensions: Size<Option<f32>>,
@@ -29,16 +77,27 @@ impl Widget for Button {
     fn focusable(&self) -> bool {
         true
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self as &dyn std::any::Any
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self as &mut dyn std::any::Any
-    }
 }
 
-// pub fn button() -> Element<Button, ()> {
-//     Element::new_empty(Button)
-// }
+pub fn button() -> (ElementBuilder<Button>, ButtonSignals) {
+    let state = ButtonSignals {
+        enabled: create_memo(|| true),
+        active: create_memo(|| false),
+        pressed: create_signal(false),
+        hovered: create_signal(false),
+    };
+    (ElementBuilder::new(Button { state }), state)
+}
+
+pub fn button_with(
+    enabled: ReadSignal<bool>,
+    active: ReadSignal<bool>,
+) -> (ElementBuilder<Button>, ButtonSignals) {
+    let state = ButtonSignals {
+        enabled,
+        active,
+        pressed: create_signal(false),
+        hovered: create_signal(false),
+    };
+    (ElementBuilder::new(Button { state }), state)
+}

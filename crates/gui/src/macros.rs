@@ -143,7 +143,8 @@ pub(crate) mod widget {
     }
 
     // Allow usage in the crate without re-exporting it
-    pub(crate) use {delegate_widget, impl_as_variants};
+    pub(crate) use delegate_widget;
+    pub(crate) use impl_as_variants;
 }
 
 pub(crate) mod event_handlers {
@@ -179,5 +180,6 @@ pub(crate) mod event_handlers {
         };
     }
 
-    pub(crate) use {handle_event_doc, impl_event_handler};
+    pub(crate) use handle_event_doc;
+    pub(crate) use impl_event_handler;
 }

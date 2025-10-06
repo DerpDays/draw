@@ -1,7 +1,12 @@
 use crate::tools::{Tool, ToolMessage};
 use color::{PremulColor, Srgb};
-use graphics::primitives::{Pen, PenOptions};
-use graphics::{CanvasCoordinates, Drawable, Primitive, Systems};
+use graphics::{
+    CanvasCoordinates,
+    Drawable,
+    Primitive,
+    Systems,
+    primitives::{Pen, PenOptions},
+};
 use input::{Key, Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
 #[derive(Clone, Debug)]

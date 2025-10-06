@@ -1,6 +1,10 @@
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics::{
-    Drawable, Mesh, Systems, Vertex, ViewportCoordinates,
+    Drawable,
+    Mesh,
+    Systems,
+    Vertex,
+    ViewportCoordinates,
     primitives::{Text, TextOptions},
 };
 use input::{KeyboardEvent, MouseEvent};

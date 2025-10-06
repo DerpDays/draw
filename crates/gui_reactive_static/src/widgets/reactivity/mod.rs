@@ -57,4 +57,3 @@ where
         Arc::new(Mutex::new(self))
     }
 }
-

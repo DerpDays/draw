@@ -1,12 +1,11 @@
 use std::marker::PhantomData;
 
 use color::{PremulColor, Srgb};
-use euclid::default::Box2D;
-use lyon::algorithms::aabb::fast_bounding_box;
-use lyon::math::Point;
-use lyon::path::{LineJoin, Path};
-use lyon::tessellation::{
-    BuffersBuilder, StrokeOptions, StrokeTessellator, StrokeVertex, VertexBuffers,
+use euclid::default::{Box2D, Point2D};
+use lyon::{
+    algorithms::aabb::fast_bounding_box,
+    path::{LineJoin, Path},
+    tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, StrokeVertex, VertexBuffers},
 };
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -38,14 +37,14 @@ pub struct Pen<C: ApplyCoordinates> {
     #[serde(skip)]
     render_cache: Option<Mesh<Vertex>>,
 
-    points: Vec<Point>,
+    points: Vec<Point2D<f32>>,
 
     options: Options,
     _marker: PhantomData<C>,
 }
 
 impl<C: ApplyCoordinates> Pen<C> {
-    pub fn new(start: Point, options: Options) -> Self {
+    pub fn new(start: Point2D<f32>, options: Options) -> Self {
         let points = vec![start];
         Self {
             path: Self::build_path(&points),
@@ -57,7 +56,7 @@ impl<C: ApplyCoordinates> Pen<C> {
             _marker: PhantomData,
         }
     }
-    fn build_path(points: &Vec<Point>) -> Path {
+    fn build_path(points: &Vec<Point2D<f32>>) -> Path {
         let mut builder = Path::builder();
         builder.begin(*points.first().unwrap());
         for point in points {
@@ -67,7 +66,7 @@ impl<C: ApplyCoordinates> Pen<C> {
         builder.build()
     }
 
-    pub fn handle_drag(&mut self, position: lyon::math::Point) {
+    pub fn handle_drag(&mut self, position: Point2D<f32>) {
         // rebuild path
         self.points.push(position);
         self.path = Self::build_path(&self.points);

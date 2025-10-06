@@ -1,18 +1,21 @@
 use std::marker::PhantomData;
 
 use color::{AlphaColor, Hsl, Rgba8, Srgb};
-use graphics::primitives::{RectangleOptions, TextOptions};
-use graphics::{BasicLinearGradient, Rounding};
+use graphics::{
+    BasicLinearGradient,
+    Rounding,
+    primitives::{RectangleOptions, TextOptions},
+};
 
-use gui::prelude::*;
-use gui::tree::UITree;
-use gui::widgets::{BackgroundWidget, SliderWidget, TextInputWidget, TextWidget, Widget};
+use gui::{
+    prelude::*,
+    tree::UITree,
+    widgets::{BackgroundWidget, SliderWidget, TextInputWidget, TextWidget, Widget},
+};
 
 use input::{CursorIcon, MouseEventKind, SpecialKey};
 
-use crate::ui::Message;
-use crate::ui::options::OptionsMessage;
-use crate::ui::styles::colors;
+use crate::ui::{Message, options::OptionsMessage, styles::colors};
 
 #[derive(Clone, Copy, Debug)]
 pub enum ColorPickerMessage {

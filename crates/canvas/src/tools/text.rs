@@ -1,11 +1,22 @@
 use color::{AlphaColor, Srgb};
 use euclid::default::{Box2D, Size2D};
-use graphics::primitives::{Text, TextOptions};
-use graphics::{CanvasCoordinates, Drawable, Primitive, Systems};
+use graphics::{
+    CanvasCoordinates,
+    Drawable,
+    Primitive,
+    Systems,
+    primitives::{Text, TextOptions},
+};
 
 use crate::tools::{Tool, ToolMessage};
 use input::{
-    Key, KeyboardEvent, KeyboardEventKind, Modifiers, MouseButton, MouseEvent, MouseEventKind,
+    Key,
+    KeyboardEvent,
+    KeyboardEventKind,
+    Modifiers,
+    MouseButton,
+    MouseEvent,
+    MouseEventKind,
     SpecialKey,
 };
 

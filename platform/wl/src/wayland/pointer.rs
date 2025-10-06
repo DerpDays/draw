@@ -1,7 +1,7 @@
-use smithay_client_toolkit::reexports::client::{
-    Connection, Proxy, QueueHandle, protocol::wl_pointer,
+use smithay_client_toolkit::{
+    reexports::client::{Connection, Proxy, QueueHandle, protocol::wl_pointer},
+    seat::pointer::{PointerEvent, PointerHandler},
 };
-use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerHandler};
 
 use crate::wayland::State;
 

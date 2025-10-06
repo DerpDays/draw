@@ -1,10 +1,14 @@
 use std::marker::PhantomData;
 
 use color::{PremulColor, Srgb};
-use euclid::default::Box2D;
-use lyon::math::{Angle, Point, Vector};
-use lyon::path::{Path, Winding};
-use lyon::tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers};
+use euclid::{
+    default::{Box2D, Point2D, Vector2D},
+    Angle,
+};
+use lyon::{
+    path::{Path, Winding},
+    tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers},
+};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -36,15 +40,15 @@ pub struct Ellipse<C: ApplyCoordinates> {
     #[serde(skip)]
     render_cache: Option<Mesh<Vertex>>,
 
-    origin: Point,
-    radius: Vector,
+    origin: Point2D<f32>,
+    radius: Vector2D<f32>,
 
     options: Options,
     _marker: PhantomData<C>,
 }
 
 impl<C: ApplyCoordinates> Ellipse<C> {
-    pub fn new(origin: Point, radius: Vector, options: Options) -> Self {
+    pub fn new(origin: Point2D<f32>, radius: Vector2D<f32>, options: Options) -> Self {
         Self {
             path: Self::build_path(&origin, radius),
             render_cache: None,
@@ -56,19 +60,19 @@ impl<C: ApplyCoordinates> Ellipse<C> {
             _marker: PhantomData,
         }
     }
-    fn build_path(origin: &Point, radius: Vector) -> Path {
+    fn build_path(origin: &Point2D<f32>, radius: Vector2D<f32>) -> Path {
         let mut builder = Path::builder();
         builder.add_ellipse(*origin, radius, Angle::zero(), Winding::Positive);
         builder.build()
     }
-    pub fn resize_to_point(&mut self, position: lyon::math::Point) {
+    pub fn resize_to_point(&mut self, position: Point2D<f32>) {
         // rebuild path
         self.radius = (position - self.origin).abs();
         self.path = Self::build_path(&self.origin, self.radius);
         // clear tessellation cache
         self.render_cache = None;
     }
-    pub fn resize_to_point_square(&mut self, position: lyon::math::Point) {
+    pub fn resize_to_point_square(&mut self, position: Point2D<f32>) {
         // rebuild path
         let radius = (position - self.origin).abs();
         self.radius = radius.max(radius.yx());
@@ -85,7 +89,7 @@ impl<C: ApplyCoordinates> Ellipse<C> {
         self.render_cache = None;
     }
 
-    pub fn radius(&self) -> Vector {
+    pub fn radius(&self) -> Vector2D<f32> {
         self.radius
     }
 }

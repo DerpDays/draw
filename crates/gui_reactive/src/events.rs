@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
 use input::{KeyboardEvent, MouseEvent};
-use reactive_graph::owner::Owner;
 
 use crate::{
     ElementId,
-    tree::{Element, ElementBuilder, Node, Widget},
+    tree::{Node, Widget, builder::ElementBuilder},
 };
 
 /// Represents the phase of event propagation.
@@ -253,7 +252,7 @@ pub struct EventHandler<E> {
 
 pub struct EventHandlerInner<E> {
     // owner: Owner,
-    handler: Arc<dyn Fn(&dyn Node, &mut EventContext<E>) + Send + Sync>,
+    handler: Arc<dyn Fn(&dyn Node, &mut EventContext<E>)>,
 }
 impl<E> EventHandler<E> {
     pub fn empty() -> Self {
@@ -261,11 +260,10 @@ impl<E> EventHandler<E> {
     }
     pub fn new<F>(f: F) -> Self
     where
-        F: Fn(&dyn Node, &mut EventContext<E>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<E>) + 'static,
     {
         Self {
             inner: Some(EventHandlerInner {
-                // owner: Owner::new(),
                 handler: Arc::new(f),
             }),
         }
@@ -274,7 +272,6 @@ impl<E> EventHandler<E> {
         if let Some(inner) = &self.inner {
             tracing::span!(tracing::Level::TRACE, "event handle");
             tracing::trace!("in event handler");
-            // inner.owner.with(|| (inner.handler)(elem, ctx));
             (inner.handler)(elem, ctx);
         }
     }
@@ -293,7 +290,7 @@ impl<W: Widget> ElementBuilder<W> {
     /// ```
     pub fn on_mouse<F>(mut self, func: F) -> Self
     where
-        F: Fn(&dyn Node, &mut EventContext<MouseEvent>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<MouseEvent>) + 'static,
     {
         self.mouse_handler = EventHandler::new(func);
         self
@@ -306,7 +303,7 @@ impl<W: Widget> ElementBuilder<W> {
     /// ```
     pub fn on_keyboard<F>(mut self, func: F) -> Self
     where
-        F: Fn(&dyn Node, &mut EventContext<KeyboardEvent>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<KeyboardEvent>) + 'static,
     {
         self.keyboard_handler = EventHandler::new(func);
         self
@@ -319,7 +316,7 @@ impl<W: Widget> ElementBuilder<W> {
     /// ```
     pub fn on_focus<F>(mut self, func: F) -> Self
     where
-        F: Fn(&dyn Node, &mut EventContext<FocusEvent>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<FocusEvent>) + 'static,
     {
         self.focus_handler = EventHandler::new(func);
         self
@@ -332,7 +329,7 @@ impl<W: Widget> ElementBuilder<W> {
     /// ```
     pub fn on_blur<F>(mut self, func: F) -> Self
     where
-        F: Fn(&dyn Node, &mut EventContext<BlurEvent>) + Send + Sync + 'static,
+        F: Fn(&dyn Node, &mut EventContext<BlurEvent>) + 'static,
     {
         self.blur_handler = EventHandler::new(func);
         self

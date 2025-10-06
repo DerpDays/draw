@@ -1,8 +1,5 @@
 use euclid::default::Point2D;
-use graphics::Drawable;
-use graphics::Primitive;
-use graphics::Systems;
-use graphics::Vertex;
+use graphics::{Drawable, Primitive, Systems, Vertex};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

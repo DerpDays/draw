@@ -5,9 +5,12 @@ use input::{KeyboardEvent, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::{
     Element,
-    events::{BlurEvent, EventContext, EventHandler, EventPhase, FocusEvent, HandlesEvent, Redraw},
+    events::{BlurEvent, EventContext, EventHandler, EventPhase, FocusEvent, Redraw},
     widgets::{
-        Widget, WidgetInteractionState, WidgetVisualState, background::TransitionBackgroundWidget,
+        Widget,
+        WidgetInteractionState,
+        WidgetVisualState,
+        background::TransitionBackgroundWidget,
     },
 };
 

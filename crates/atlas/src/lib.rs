@@ -4,9 +4,22 @@ use rustc_hash::FxHasher;
 use std::{collections::HashMap, hash::BuildHasherDefault, marker::PhantomData, sync::Arc};
 
 use wgpu::{
-    CommandBuffer, CommandEncoderDescriptor, Device, Extent3d, Limits, Origin3d,
-    TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureAspect, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    CommandBuffer,
+    CommandEncoderDescriptor,
+    Device,
+    Extent3d,
+    Limits,
+    Origin3d,
+    TexelCopyBufferLayout,
+    TexelCopyTextureInfo,
+    Texture,
+    TextureAspect,
+    TextureDescriptor,
+    TextureDimension,
+    TextureFormat,
+    TextureUsages,
+    TextureView,
+    TextureViewDescriptor,
 };
 
 use guillotiere::{AllocId, AtlasAllocator, Rectangle, Size};

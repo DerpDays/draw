@@ -1,11 +1,10 @@
-use smithay_client_toolkit::reexports::client::{
-    Connection, Proxy, QueueHandle, protocol::wl_seat::WlSeat,
+use smithay_client_toolkit::{
+    reexports::client::{Connection, Proxy, QueueHandle, protocol::wl_seat::WlSeat},
+    seat::{Capability, SeatHandler, SeatState, pointer::ThemeSpec},
 };
-use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState, pointer::ThemeSpec};
 use tracing::{instrument, trace, warn};
 
-use crate::wayland::State;
-use crate::wayland::keyboard::Keyboard;
+use crate::wayland::{State, keyboard::Keyboard};
 
 impl SeatHandler for State {
     fn seat_state(&mut self) -> &mut SeatState {

@@ -1,7 +1,8 @@
 use color::AlphaColor;
 use euclid::Size2D;
 use graphics::{
-    Drawable, Systems,
+    Drawable,
+    Systems,
     primitives::{Rectangle, RectangleOptions},
 };
 

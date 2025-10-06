@@ -1,13 +1,9 @@
-use std::marker::PhantomData;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 use taffy::NodeId;
 
-use crate::Element;
-use crate::tree::TreeCommand;
-pub use input::KeyboardEvent;
-pub use input::MouseEvent;
+use crate::{Element, tree::TreeCommand};
+pub use input::{KeyboardEvent, MouseEvent};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TreeEvent {

@@ -1,6 +1,7 @@
 use euclid::default::Vector2D;
 use graphics::{
-    Drawable, Systems,
+    Drawable,
+    Systems,
     primitives::{Ellipse, EllipseOptions},
 };
 

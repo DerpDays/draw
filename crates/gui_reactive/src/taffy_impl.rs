@@ -1,6 +1,15 @@
 use taffy::{
-    CacheTree, Layout, LayoutBlockContainer, LayoutFlexboxContainer, LayoutGridContainer,
-    LayoutPartialTree, PrintTree, RoundTree, Style, TraversePartialTree, TraverseTree,
+    CacheTree,
+    Layout,
+    LayoutBlockContainer,
+    LayoutFlexboxContainer,
+    LayoutGridContainer,
+    LayoutPartialTree,
+    PrintTree,
+    RoundTree,
+    Style,
+    TraversePartialTree,
+    TraverseTree,
 };
 
 use crate::{ElementId, Tree, tree::Node};

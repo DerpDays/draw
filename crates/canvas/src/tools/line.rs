@@ -2,8 +2,13 @@ use crate::tools::{Tool, ToolMessage};
 use color::{PremulColor, Srgb};
 use input::{Key, Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use graphics::primitives::{Line, LineOptions};
-use graphics::{CanvasCoordinates, Drawable, Primitive, Systems};
+use graphics::{
+    CanvasCoordinates,
+    Drawable,
+    Primitive,
+    Systems,
+    primitives::{Line, LineOptions},
+};
 
 const SNAP_RADIANS: f32 = std::f32::consts::FRAC_PI_8 / 2.;
 

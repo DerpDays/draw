@@ -4,15 +4,27 @@ use graphics::{Rounding, primitives::RectangleOptions};
 
 use gui::prelude::*;
 
-use gui::Element;
-use gui::tree::UITree;
-use gui::widgets::button::{ButtonOptions, FADE_DURATION};
-use gui::widgets::{BackgroundWidget, ButtonWidget, ContainerWidget, SvgWidget, Widget};
+use gui::{
+    Element,
+    tree::UITree,
+    widgets::{
+        BackgroundWidget,
+        ButtonWidget,
+        ContainerWidget,
+        SvgWidget,
+        Widget,
+        button::{ButtonOptions, FADE_DURATION},
+    },
+};
 use input::{CursorIcon, MouseButton, MouseEventKind};
 
-use crate::tools::ToolKind;
-use crate::ui::Message;
-use crate::ui::styles::{colors, floating_grab};
+use crate::{
+    tools::ToolKind,
+    ui::{
+        Message,
+        styles::{colors, floating_grab},
+    },
+};
 
 pub struct Toolbar {
     active_tool: ToolKind,

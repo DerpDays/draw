@@ -1,9 +1,20 @@
-use smithay_client_toolkit::globals::GlobalData;
-use smithay_client_toolkit::reexports::client::globals::{BindError, GlobalList};
-use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
-use smithay_client_toolkit::reexports::client::{Connection, Dispatch, Proxy, QueueHandle};
-use smithay_client_toolkit::reexports::protocols::wp::fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1;
-use smithay_client_toolkit::reexports::protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
+use smithay_client_toolkit::{
+    globals::GlobalData,
+    reexports::{
+        client::{
+            Connection,
+            Dispatch,
+            Proxy,
+            QueueHandle,
+            globals::{BindError, GlobalList},
+            protocol::wl_surface::WlSurface,
+        },
+        protocols::wp::fractional_scale::v1::client::{
+            wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+            wp_fractional_scale_v1::WpFractionalScaleV1,
+        },
+    },
+};
 
 #[derive(Debug)]
 #[allow(unused)]

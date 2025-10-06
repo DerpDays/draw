@@ -1,7 +1,8 @@
 use atlas::LayeredAtlas;
 use color::{PremulColor, Srgb};
 use parley::{
-    FontContext, LayoutContext,
+    FontContext,
+    LayoutContext,
     swash::scale::{ScaleContext, image::Image},
 };
 

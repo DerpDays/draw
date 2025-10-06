@@ -1,10 +1,12 @@
 use euclid::default::{Point2D, Vector2D};
 use graphics::{Mesh, Systems, get_empty_mesh};
 
-use crate::Element;
-use crate::Vertex;
-use crate::events::{BlurEvent, ChangeEvent, EventContext, FocusEvent};
-use crate::macros::widget::{delegate_widget, impl_as_variants};
+use crate::{
+    Element,
+    Vertex,
+    events::{BlurEvent, ChangeEvent, EventContext, FocusEvent},
+    macros::widget::{delegate_widget, impl_as_variants},
+};
 use input::{KeyboardEvent, MouseEvent};
 
 pub mod background;
@@ -15,8 +17,7 @@ pub mod svg;
 pub mod text;
 pub mod text_input;
 
-pub use background::BackgroundWidget;
-pub use background::TransitionBackgroundWidget;
+pub use background::{BackgroundWidget, TransitionBackgroundWidget};
 pub use button::ButtonWidget;
 pub use container::ContainerWidget;
 pub use slider::SliderWidget;

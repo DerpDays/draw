@@ -6,7 +6,7 @@ use atlas::{TextureMesh, TextureVertex};
 use bytemuck::{Pod, Zeroable};
 use color::{AlphaColor, HueDirection, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Vector2D};
-use lyon::{math::Point, path::builder::BorderRadii};
+use lyon::path::builder::BorderRadii;
 use serde::{Deserialize, Serialize};
 
 // pub mod line;
@@ -70,9 +70,9 @@ impl Mesh<Vertex> {
     pub fn new_color_quad(area: lyon::geom::Box2D<f32>, kind: VertexKind) -> Self {
         let vertices = vec![
             Vertex::with_color(area.min, kind),
-            Vertex::with_color(Point::new(area.max.x, area.min.y), kind),
+            Vertex::with_color(Point2D::new(area.max.x, area.min.y), kind),
             Vertex::with_color(area.max, kind),
-            Vertex::with_color(Point::new(area.min.x, area.max.y), kind),
+            Vertex::with_color(Point2D::new(area.min.x, area.max.y), kind),
         ];
         let indices = vec![0, 1, 2, 0, 2, 3];
 
@@ -194,7 +194,7 @@ impl Vertex {
             attributes: &Self::VERTEX_ATTRIBUTES,
         }
     }
-    pub const fn with_color(position: Point, kind: VertexKind) -> Self {
+    pub const fn with_color(position: Point2D<f32>, kind: VertexKind) -> Self {
         Self {
             position: [position.x, position.y],
             color: kind.color().components,
@@ -245,6 +245,16 @@ impl Rounding {
             top_right: self.top_right,
             bottom_left: self.bottom_left,
             bottom_right: self.bottom_right,
+        }
+    }
+
+    pub const fn lerp(&self, other: &Self, t: f32) -> Self {
+        let t = t.clamp(0., 1.);
+        Self {
+            top_left: (self.top_left + (other.top_left - self.top_left)) * t,
+            top_right: (self.top_right + (other.top_right - self.top_right)) * t,
+            bottom_left: (self.bottom_left + (other.bottom_left - self.bottom_left)) * t,
+            bottom_right: (self.bottom_right + (other.bottom_right - self.bottom_right)) * t,
         }
     }
 }

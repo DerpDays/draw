@@ -2,17 +2,23 @@ use std::marker::PhantomData;
 
 use color::{AlphaColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D, Transform2D, Vector2D};
-use lyon::path::{FillRule, LineCap, LineJoin};
-use lyon::tessellation::{
-    BuffersBuilder, FillOptions, FillTessellator, FillVertex, StrokeOptions, StrokeTessellator,
-    StrokeVertex, VertexBuffers,
+use lyon::{
+    path::{FillRule, LineCap, LineJoin},
+    tessellation::{
+        BuffersBuilder,
+        FillOptions,
+        FillTessellator,
+        FillVertex,
+        StrokeOptions,
+        StrokeTessellator,
+        StrokeVertex,
+        VertexBuffers,
+    },
 };
 use serde::{Deserialize, Serialize};
-use usvg::tiny_skia_path::PathSegment;
-use usvg::{Node, Paint, PaintOrder, Tree};
+use usvg::{Node, Paint, PaintOrder, Tree, tiny_skia_path::PathSegment};
 
-use crate::{get_empty_mesh, ApplyCoordinates, Drawable, Mesh, Systems};
-use crate::{Vertex, VertexKind};
+use crate::{ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind, get_empty_mesh};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Options {

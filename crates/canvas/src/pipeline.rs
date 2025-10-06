@@ -1,7 +1,17 @@
 use renderer::State;
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
-    Device, FilterMode, Sampler, SamplerDescriptor, TextureView, util::DeviceExt,
+    BindGroup,
+    BindGroupDescriptor,
+    BindGroupEntry,
+    BindGroupLayout,
+    BindingResource,
+    Buffer,
+    Device,
+    FilterMode,
+    Sampler,
+    SamplerDescriptor,
+    TextureView,
+    util::DeviceExt,
 };
 
 use crate::projection::Projection;

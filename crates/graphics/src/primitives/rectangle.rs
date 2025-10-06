@@ -2,13 +2,25 @@ use std::marker::PhantomData;
 
 use color::{AlphaColor, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D, Vector2D};
-use lyon::path::{Path, Winding};
-use lyon::tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers};
+use lyon::{
+    path::{Path, Winding},
+    tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers},
+};
 use serde::{Deserialize, Serialize};
 
-use crate::{ApplyCoordinates, Drawable, Mesh, Systems, VertexKind};
-use crate::{BasicColor, BasicLinearGradient, Vertex, make_positive_box};
-use crate::{BoxSizing, Rounding};
+use crate::{
+    make_positive_box,
+    ApplyCoordinates,
+    BasicColor,
+    BasicLinearGradient,
+    BoxSizing,
+    Drawable,
+    Mesh,
+    Rounding,
+    Systems,
+    Vertex,
+    VertexKind,
+};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Options {
@@ -30,6 +42,15 @@ impl Options {
         Self {
             color: color.into(),
             ..Self::DEFAULT
+        }
+    }
+    pub fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self {
+            color: self.color.lerp(other.color, t),
+            stroke_color: self.color.lerp(other.color, t),
+            stroke_width: (self.stroke_width + (other.stroke_width - self.stroke_width)) * t,
+            rounding: self.rounding.lerp(&other.rounding, t),
+            box_sizing: other.box_sizing,
         }
     }
 }
@@ -151,10 +172,10 @@ impl<C: ApplyCoordinates> Rectangle<C> {
     }
 
     // TODO: rename
-    pub fn resize_to_point(&mut self, position: lyon::math::Point) {
+    pub fn resize_to_point(&mut self, position: Point2D<f32>) {
         self.set_size(Size2D::from(position - self.origin));
     }
-    pub fn resize_to_point_square(&mut self, position: lyon::math::Point) {
+    pub fn resize_to_point_square(&mut self, position: Point2D<f32>) {
         let delta = position - self.origin;
         let length = delta.x.abs().min(delta.y.abs());
         let width = length * delta.x.signum();

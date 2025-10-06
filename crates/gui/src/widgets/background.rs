@@ -2,15 +2,19 @@ use std::time::{Duration, Instant};
 
 use euclid::default::{Point2D, Size2D};
 use graphics::{
-    Drawable, Mesh, Systems, Vertex, ViewportCoordinates,
     primitives::{Rectangle, RectangleOptions},
+    Drawable,
+    Mesh,
+    Systems,
+    Vertex,
+    ViewportCoordinates,
 };
 use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
-    Element,
     events::{EventContext, EventHandler},
-    widgets::{LayoutChange, Widget, parse_layout_change},
+    widgets::{parse_layout_change, LayoutChange, Widget},
+    Element,
 };
 
 #[derive(Clone)]
@@ -31,7 +35,7 @@ crate::macros::event_handlers::impl_event_handler! {
 // FIXME: handle BorderBox and ContentBox
 impl<M: Clone> BackgroundWidget<M> {
     pub fn new(options: RectangleOptions) -> Self {
-        let rect = Rectangle::new(Point2D::zero(), lyon::math::Size::zero(), options);
+        let rect = Rectangle::new(Point2D::zero(), Size2D::zero(), options);
         Self {
             rect,
             layout: taffy::Layout::new(),
@@ -113,7 +117,7 @@ crate::macros::event_handlers::impl_event_handler! {
 
 impl<M: Clone> TransitionBackgroundWidget<M> {
     pub fn new(options: RectangleOptions) -> Self {
-        let rect = Rectangle::new(Point2D::zero(), lyon::math::Size::zero(), options.clone());
+        let rect = Rectangle::new(Point2D::zero(), Size2D::zero(), options.clone());
         Self {
             rect,
             layout: taffy::Layout::new(),

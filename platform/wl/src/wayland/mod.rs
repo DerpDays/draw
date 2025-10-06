@@ -2,22 +2,31 @@ use std::{
     collections::HashMap,
     i32,
     pin::Pin,
+    rc::Rc,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
 use calloop::{
     futures::{executor, Scheduler},
+    ping::{make_ping, Ping},
     timer::TimeoutAction,
-    EventLoop, LoopHandle,
+    EventLoop,
+    LoopHandle,
 };
 use calloop_wayland_source::WaylandSource;
 use color_eyre::eyre::{Context, OptionExt, Result};
 use euclid::default::Size2D;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
-    delegate_registry, delegate_seat, delegate_shm,
+    delegate_compositor,
+    delegate_keyboard,
+    delegate_layer,
+    delegate_output,
+    delegate_pointer,
+    delegate_registry,
+    delegate_seat,
+    delegate_shm,
     output::{OutputHandler, OutputInfo, OutputState},
     reexports::client::{
         backend::ObjectId,
@@ -26,7 +35,9 @@ use smithay_client_toolkit::{
             wl_output::{self, WlOutput},
             wl_surface::WlSurface,
         },
-        Connection, EventQueue, QueueHandle,
+        Connection,
+        EventQueue,
+        QueueHandle,
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -45,7 +56,7 @@ mod pointer;
 pub(crate) mod protocols;
 mod seat;
 
-use canvas::{reexports::any_spawner::CustomExecutor, RedrawRequest};
+use canvas::{AnimationHandle, AnimationManager, RedrawRequest, RedrawRequestV2};
 
 use crate::wayland::{
     canvas_layer::LayerShellCanvasView,
@@ -98,7 +109,7 @@ pub struct ShareableState {
     app_pipeline: canvas::pipeline::DrawPipeline,
     pub loop_handle: LoopHandle<'static, State>,
     pub redraw_manager: RedrawManager,
-    scheduler: Scheduler<WlSurface>,
+    pub redraw_manager_v2: RedrawManagerV2,
 }
 
 pub struct Data {
@@ -183,81 +194,6 @@ impl WaylandConnection {
         };
 
         let app_pipeline = canvas::pipeline::DrawPipeline::new(&wgpu.device, wgpu.texture_format);
-        let (surface_executor, scheduler) =
-            executor::<WlSurface>().expect("failed to init calloop futures executor");
-        event_loop
-            .handle()
-            .insert_source(surface_executor, |surface, _, state: &mut State| {
-                let mut redraw = false;
-                for output in &mut state.canvas_outputs {
-                    if *output.1.surface() == surface {
-                        if output.1.canvas.app_new.tree.relayout_nodes().is_some() {
-                            redraw |= true;
-                        };
-                    }
-                }
-                if redraw {
-                    do_redraw(state);
-                }
-            })
-            .expect("failed to insert futures executor into loop");
-
-        // let (tx, rx) =
-        //     calloop::channel::channel::<canvas::reexports::any_spawner::PinnedFuture<()>>();
-        // let (tx_local, rx_local) =
-        //     calloop::channel::channel::<canvas::reexports::any_spawner::PinnedLocalFuture<()>>();
-
-        // struct FuturesExecutor {
-        //     tx: calloop::channel::Sender<canvas::reexports::any_spawner::PinnedFuture<()>>,
-        //     tx_local:
-        //         calloop::channel::Sender<canvas::reexports::any_spawner::PinnedLocalFuture<()>>,
-        // }
-        // impl canvas::reexports::any_spawner::CustomExecutor for FuturesExecutor {
-        //     fn spawn(&self, fut: canvas::reexports::any_spawner::PinnedFuture<()>) {
-        //         self.tx
-        //             .send(fut)
-        //             .expect("failed to send future through channel");
-        //     }
-        //
-        //     fn spawn_local(&self, fut: canvas::reexports::any_spawner::PinnedLocalFuture<()>) {
-        //         self.tx_local
-        //             .send(fut)
-        //             .expect("failed to send future through channel");
-        //     }
-        //
-        //     fn poll_local(&self) {
-        //         tracing::warn!(
-        //             "tried to poll on the FuturesExecutor which does not support polling"
-        //         )
-        //     }
-        // }
-
-        // let (executor_fut, scheduler_fut) =
-        //     executor().expect("failed to init calloop futures executor");
-        // event_loop
-        //     .handle()
-        //     .insert_source(executor_fut, |_, _, _| {});
-        //
-        // struct FuturesExecutor(Scheduler<()>);
-        // unsafe impl Sync for FuturesExecutor {}
-        // impl CustomExecutor for FuturesExecutor {
-        //     fn spawn(&self, fut: canvas::reexports::any_spawner::PinnedFuture<()>) {
-        //         self.0.schedule(fut);
-        //     }
-        //
-        //     fn spawn_local(&self, fut: canvas::reexports::any_spawner::PinnedLocalFuture<()>) {
-        //         self.0.schedule(fut);
-        //     }
-        //
-        //     fn poll_local(&self) {}
-        // }
-        //
-        // canvas::reexports::any_spawner::Executor::init_custom_executor(FuturesExecutor(
-        //     scheduler_fut,
-        // ))
-        // .unwrap();
-        canvas::reexports::any_spawner::Executor::init_tokio()
-            .expect("failed to init tokio executor");
 
         let shareable = ShareableState {
             wayland,
@@ -266,7 +202,7 @@ impl WaylandConnection {
             app_pipeline,
             loop_handle: event_loop.handle(),
             redraw_manager: RedrawManager::new(event_loop.handle(), 60),
-            scheduler,
+            redraw_manager_v2: RedrawManagerV2::new(event_loop.handle()),
         };
 
         let state = State {
@@ -679,6 +615,44 @@ impl RedrawRequest for RedrawManager {
         let _ = self
             .sender
             .send(RedrawCommand::RedrawWithDuration(duration));
+    }
+}
+
+#[derive(Clone)]
+pub struct RedrawManagerV2 {
+    animation_manager: Arc<AnimationManager>,
+    redraw_ping: Ping,
+}
+impl RedrawManagerV2 {
+    pub fn new(loop_handle: LoopHandle<'static, State>) -> Self {
+        let animation_manager = Rc::new(AnimationManager::new());
+        let (ping, source) = make_ping().expect("failed to create redraw ping source");
+
+        loop_handle
+            .insert_source(source, {
+                let ping = ping.clone();
+                move |_, _, state| {
+                    do_redraw(state);
+                    if animation_manager.clone().is_animating() {
+                        ping.clone().ping();
+                    }
+                }
+            })
+            .expect("failed to insert redraw ping source");
+        Self {
+            animation_manager: Arc::new(AnimationManager::new()),
+            redraw_ping: ping,
+        }
+    }
+}
+
+impl RedrawRequestV2 for RedrawManagerV2 {
+    fn request_redraw(&self) {
+        self.redraw_ping.ping();
+    }
+
+    fn new_animation_handle(&self) -> AnimationHandle {
+        self.animation_manager.new_handle()
     }
 }
 
