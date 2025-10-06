@@ -252,7 +252,7 @@ impl LayerShellCanvasView {
         // let position = Point2D::new(event.position.0 as f32, event.position.1 as f32);
         let position: Point2D<f32> =
             (Point2D::from(event.position) * self.scale_factor.unwrap_or(1.)).cast();
-        tracing::trace!("mouse pos: {position:?}");
+        tracing::warn!("mouse pos: {position:?}");
         let kind = input::sctk::pointer_event(&event.kind);
         if kind == MouseEventKind::Enter {
             self.previous_cursor_icon = None;

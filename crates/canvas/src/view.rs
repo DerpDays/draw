@@ -314,7 +314,7 @@ impl<T: RedrawRequestV2 + Clone + Send + Sync + 'static> View<T> {
                 .tree
                 .render(&mut self.systems.to_ref(&state.device, &state.queue)),
         );
-        tracing::trace!("Render preparation time took: {:?}", start.elapsed());
+        // tracing::trace!("Render preparation time took: {:?}", start.elapsed());
 
         let start = std::time::Instant::now();
         let frame = surface.get_current_texture().unwrap();

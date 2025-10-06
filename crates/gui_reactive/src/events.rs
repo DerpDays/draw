@@ -3,8 +3,8 @@ use std::sync::Arc;
 use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
+    tree::{builder::ElementBuilder, Node, Widget},
     ElementId,
-    tree::{Node, Widget, builder::ElementBuilder},
 };
 
 /// Represents the phase of event propagation.
@@ -270,8 +270,6 @@ impl<E> EventHandler<E> {
     }
     pub(crate) fn handle(&self, elem: &dyn Node, ctx: &mut EventContext<E>) {
         if let Some(inner) = &self.inner {
-            tracing::span!(tracing::Level::TRACE, "event handle");
-            tracing::trace!("in event handler");
             (inner.handler)(elem, ctx);
         }
     }

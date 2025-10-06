@@ -1,8 +1,12 @@
 use graphics::{Mesh, Systems, Vertex};
-use sycamore_reactive::{ReadSignal, Signal, create_memo, create_signal};
+use input::{MouseButton, MouseEvent, MouseEventKind};
+use sycamore_reactive::{batch, create_memo, create_signal, ReadSignal, Signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
-use crate::tree::{Widget, builder::ElementBuilder};
+use crate::{
+    prelude::EventContext,
+    tree::{builder::ElementBuilder, Widget},
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ButtonVisualState {
@@ -76,6 +80,29 @@ impl Widget for Button {
 
     fn focusable(&self) -> bool {
         true
+    }
+
+    fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>) {
+        if !ctx.in_capture_phase() {
+            tracing::info!("default mouse event!!");
+            match ctx.payload().kind {
+                MouseEventKind::Enter => batch(|| {
+                    self.state.pressed.set(false);
+                    self.state.hovered.set(true);
+                }),
+                MouseEventKind::Leave => batch(|| {
+                    self.state.pressed.set(false);
+                    self.state.hovered.set(false);
+                }),
+                MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
+                    self.state.pressed.set(true);
+                }
+                MouseEventKind::Release { button, .. } if button == MouseButton::Left => {
+                    self.state.pressed.set(false);
+                }
+                _ => {}
+            }
+        }
     }
 }
 

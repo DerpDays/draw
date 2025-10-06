@@ -117,7 +117,7 @@ fn tool_button(tool: ToolKind, active_tool: Signal<ToolKind>) -> impl ErasedBuil
                 ..Default::default()
             })
             .options(btn_style)
-            .transition_duration(Duration::from_secs(10))
+            .transition_duration(Duration::from_millis(5))
             .child(
                 svg(tool.svg_icon().to_vec())
                     .style(Style {

@@ -66,6 +66,15 @@ pub trait Widget {
     fn debug_label(&self) -> &'static str;
 
     fn focusable(&self) -> bool;
+
+    #[allow(unused_variables)]
+    fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>) {}
+    #[allow(unused_variables)]
+    fn default_keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>) {}
+    #[allow(unused_variables)]
+    fn default_focus_event(&mut self, ctx: &mut EventContext<FocusEvent>) {}
+    #[allow(unused_variables)]
+    fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>) {}
 }
 
 pub struct Element {
@@ -183,19 +192,31 @@ impl Node for Element {
     #[inline(always)]
     fn mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>) {
         self.mouse_handler.handle(self, ctx);
+        if !ctx.is_preventing_default() {
+            self.inner.default_mouse_event(ctx);
+        }
     }
     #[inline(always)]
     fn keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>) {
         self.keyboard_handler.handle(self, ctx);
+        if !ctx.is_preventing_default() {
+            self.inner.default_keyboard_event(ctx);
+        }
     }
 
     #[inline(always)]
     fn focus_event(&mut self, ctx: &mut EventContext<FocusEvent>) {
         self.focus_handler.handle(self, ctx);
+        if !ctx.is_preventing_default() {
+            self.inner.default_focus_event(ctx);
+        }
     }
     #[inline(always)]
     fn blur_event(&mut self, ctx: &mut EventContext<BlurEvent>) {
         self.blur_handler.handle(self, ctx);
+        if !ctx.is_preventing_default() {
+            self.inner.default_blur_event(ctx);
+        }
     }
 
     fn get_zindex_properties(&self) -> ZIndexProperties {

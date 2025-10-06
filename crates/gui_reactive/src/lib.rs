@@ -191,127 +191,119 @@ impl Tree {
     pub fn on_mouse(&mut self, event: MouseEvent) -> Option<()> {
         self.owner.clone().run_in(|| {
             self.manager.clone().with(|| {
-                sycamore_reactive::batch(|| {
-                    // If the mouse event is an actual enter/exit event, reset the tree to its default state.
-                    match event.kind {
-                        MouseEventKind::Leave | MouseEventKind::Enter => {
-                            tracing::info!("Got an enter or leave event, resetting capture.");
-                            self.capture.mouse_capture = None;
-                            if let Some(prev) = self.capture.last_entered_node.take() {
-                                // Send leave events to all nodes that were previously entered by going up the
-                                // tree from the last entered node.
-                                let mut current = Some(prev);
-                                while let Some(inner) = current {
-                                    let ctx = EventContext::non_bubbling(
-                                        MouseEvent::leave(event.position),
-                                        inner,
-                                    );
-                                    self.dispatch_generic_event(ctx, |node, ctx| {
-                                        node.mouse_event(ctx)
-                                    });
-                                    current = self.parent(inner);
-                                }
+                // If the mouse event is an actual enter/exit event, reset the tree to its default state.
+                match event.kind {
+                    MouseEventKind::Leave | MouseEventKind::Enter => {
+                        tracing::info!("Got an enter or leave event, resetting capture.");
+                        self.capture.mouse_capture = None;
+                        if let Some(prev) = self.capture.last_entered_node.take() {
+                            // Send leave events to all nodes that were previously entered by going up the
+                            // tree from the last entered node.
+                            let mut current = Some(prev);
+                            while let Some(inner) = current {
+                                let ctx = EventContext::non_bubbling(
+                                    MouseEvent::leave(event.position),
+                                    inner,
+                                );
+                                self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+                                current = self.parent(inner);
                             }
-                            return Some(());
                         }
-                        _ => {}
-                    };
-
-                    // If the mouse is currently captured, directly send the event to the captured node.
-                    if let Some(node) = self.capture.mouse_capture {
-                        tracing::info!("Sending direct mouse event since mouse is captured!");
-                        let mut ctx = EventContext::direct(event, node);
-                        self.alloc.get_mut(node).unwrap().mouse_event(&mut ctx);
-                        self.handle_event_dispatch_cleanup(ctx);
-                        self.capture.last_entered_node = Some(node);
                         return Some(());
                     }
+                    _ => {}
+                };
 
-                    tracing::info!("attempting to hit");
-                    let node = self.layout_tree.hit(event.position).next()?;
+                // If the mouse is currently captured, directly send the event to the captured node.
+                if let Some(node) = self.capture.mouse_capture {
+                    tracing::info!("Sending direct mouse event since mouse is captured!");
+                    let mut ctx = EventContext::direct(event, node);
+                    self.alloc.get_mut(node).unwrap().mouse_event(&mut ctx);
+                    self.handle_event_dispatch_cleanup(ctx);
+                    self.capture.last_entered_node = Some(node);
+                    return Some(());
+                }
 
-                    tracing::info!("got hit");
-                    // If we previously hit a node in our last mouse event, check if the new hit is the same,
-                    // if so we will not modify any events.
-                    if let Some(prev) = self.capture.last_entered_node {
-                        if prev != node {
-                            let transition = if self.has_ancestor(node, prev) {
-                                // if the previous node is an ancestor of the new hit, send an enter event to all
-                                // nodes from the ancestor onwards.
-                                Some((MouseEventKind::Enter, prev, node))
-                            } else if self.has_ancestor(prev, node) {
-                                // if the new hit is the ancestor of the previous node, send leave events to all
-                                // nodes inbetween.
-                                Some((MouseEventKind::Leave, node, prev))
-                            } else {
-                                // send leave events to the previous node until their ancestor matches an
-                                // ancestor of our current node, then send enter events to the new node
-                                None
-                            };
+                let node = self.layout_tree.hit(event.position).next()?;
 
-                            match transition {
-                                Some((kind, ancestor, target)) => {
-                                    tracing::info!("sending {kind:?} events");
-                                    self.dispatch_event_chain(ancestor, target, kind, event);
+                // If we previously hit a node in our last mouse event, check if the new hit is the same,
+                // if so we will not modify any events.
+                if let Some(prev) = self.capture.last_entered_node {
+                    if prev != node {
+                        let transition = if self.has_ancestor(node, prev) {
+                            // if the previous node is an ancestor of the new hit, send an enter event to all
+                            // nodes from the ancestor onwards.
+                            Some((MouseEventKind::Enter, prev, node))
+                        } else if self.has_ancestor(prev, node) {
+                            // if the new hit is the ancestor of the previous node, send leave events to all
+                            // nodes inbetween.
+                            Some((MouseEventKind::Leave, node, prev))
+                        } else {
+                            // send leave events to the previous node until their ancestor matches an
+                            // ancestor of our current node, then send enter events to the new node
+                            None
+                        };
+
+                        match transition {
+                            Some((kind, ancestor, target)) => {
+                                tracing::info!("sending {kind:?} events");
+                                self.dispatch_event_chain(ancestor, target, kind, event);
+                            }
+                            None => {
+                                // TODO: improve this
+                                let mut node1 = prev;
+                                let mut node2 = node;
+
+                                let mut depth1 = self.get_node_depth(node1);
+                                let mut depth2 = self.get_node_depth(node2);
+
+                                // move the deeper node up until both nodes are at the same level
+                                while depth1 > depth2 {
+                                    node1 = self.parent(node1).unwrap();
+                                    depth1 -= 1;
                                 }
-                                None => {
-                                    // TODO: improve this
-                                    let mut node1 = prev;
-                                    let mut node2 = node;
-
-                                    let mut depth1 = self.get_node_depth(node1);
-                                    let mut depth2 = self.get_node_depth(node2);
-
-                                    // move the deeper node up until both nodes are at the same level
-                                    while depth1 > depth2 {
-                                        node1 = self.parent(node1).unwrap();
-                                        depth1 -= 1;
-                                    }
-                                    while depth2 > depth1 {
-                                        node2 = self.parent(node2).unwrap();
-                                        depth2 -= 1;
-                                    }
-
-                                    // move both up until they meet
-                                    while node1 != node2 {
-                                        node1 = self.parent(node1).unwrap();
-                                        node2 = self.parent(node2).unwrap();
-                                    }
-
-                                    self.dispatch_event_chain(
-                                        node1,
-                                        prev,
-                                        MouseEventKind::Leave,
-                                        event,
-                                    );
-                                    self.dispatch_event_chain(
-                                        node1,
-                                        node,
-                                        MouseEventKind::Enter,
-                                        event,
-                                    );
+                                while depth2 > depth1 {
+                                    node2 = self.parent(node2).unwrap();
+                                    depth2 -= 1;
                                 }
+
+                                // move both up until they meet
+                                while node1 != node2 {
+                                    node1 = self.parent(node1).unwrap();
+                                    node2 = self.parent(node2).unwrap();
+                                }
+
+                                self.dispatch_event_chain(
+                                    node1,
+                                    prev,
+                                    MouseEventKind::Leave,
+                                    event,
+                                );
+                                self.dispatch_event_chain(
+                                    node1,
+                                    node,
+                                    MouseEventKind::Enter,
+                                    event,
+                                );
                             }
                         }
-                    } else {
-                        // if we are entering the UITree for the first time, send a mouse enter event to all
-                        // direct ancestors of the hit.
-                        let mut current = Some(node);
-                        while let Some(inner) = current {
-                            let ctx = EventContext::non_bubbling(
-                                MouseEvent::enter(event.position),
-                                inner,
-                            );
-                            self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
-                            current = self.parent(inner);
-                        }
                     }
+                } else {
+                    // if we are entering the UITree for the first time, send a mouse enter event to all
+                    // direct ancestors of the hit.
+                    let mut current = Some(node);
+                    while let Some(inner) = current {
+                        let ctx =
+                            EventContext::non_bubbling(MouseEvent::enter(event.position), inner);
+                        self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+                        current = self.parent(inner);
+                    }
+                }
 
-                    let ctx = EventContext::bubbling(event, node);
-                    self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
-                    self.capture.last_entered_node = Some(node);
-                    Some(())
-                })
+                let ctx = EventContext::bubbling(event, node);
+                self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+                self.capture.last_entered_node = Some(node);
+                Some(())
             })
         })
     }
@@ -594,8 +586,9 @@ impl TreeManager {
     // }
 
     pub fn new_animation_handle(&self) -> AnimationHandle {
+        let handle = (self.get_unwrap().new_handle_fn)();
         self.now();
-        (self.get_unwrap().new_handle_fn)()
+        handle
     }
 }
 

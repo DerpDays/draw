@@ -1,14 +1,12 @@
 use std::{
     collections::HashMap,
     i32,
-    pin::Pin,
     rc::Rc,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
 use calloop::{
-    futures::{executor, Scheduler},
     ping::{make_ping, Ping},
     timer::TimeoutAction,
     EventLoop,
@@ -392,6 +390,14 @@ impl CompositorHandler for State {
             if let Err(e) = view.render(&mut self.shareable) {
                 tracing::error!("error while rendering canvas view: {e:?}");
             }
+            if self
+                .shareable
+                .redraw_manager_v2
+                .animation_manager
+                .is_animating()
+            {
+                self.shareable.redraw_manager_v2.request_redraw();
+            }
         } else {
             warn!("`frame` called for surface not in canvas_outputs");
         }
@@ -625,22 +631,23 @@ pub struct RedrawManagerV2 {
 }
 impl RedrawManagerV2 {
     pub fn new(loop_handle: LoopHandle<'static, State>) -> Self {
-        let animation_manager = Rc::new(AnimationManager::new());
+        let animation_manager = Arc::new(AnimationManager::new());
         let (ping, source) = make_ping().expect("failed to create redraw ping source");
 
         loop_handle
             .insert_source(source, {
-                let ping = ping.clone();
+                // let ping = ping.clone();
+                // let animation_manager = animation_manager.clone();
                 move |_, _, state| {
                     do_redraw(state);
-                    if animation_manager.clone().is_animating() {
-                        ping.clone().ping();
-                    }
+                    // if animation_manager.is_animating() {
+                    //     ping.ping();
+                    // }
                 }
             })
             .expect("failed to insert redraw ping source");
         Self {
-            animation_manager: Arc::new(AnimationManager::new()),
+            animation_manager,
             redraw_ping: ping,
         }
     }

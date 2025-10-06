@@ -93,31 +93,29 @@ impl Widget for Div {
             return;
         };
         let current_options = maybe_get_untracked(&bg.options).into_rect_options(&style.box_sizing);
-        tracing::warn!("has duration: {:?}", bg.transition_duration);
 
-        // If options changed, maybe start a transition
         if current_options != bg.last_options {
-            tracing::warn!("has changed");
-            if bg.transition_duration.is_some() {
-                if let Some(state) = &mut bg.transition_state {
-                    bg.last_options = state.last_set;
-                    *state = TransitionState {
-                        start: state.start,
-                        from: state.last_set, // needs RectangleOptions -> DivOptions
-                        to: current_options,
-                        last_set: state.last_set,
-                        _animation_handle: TreeManager::global().new_animation_handle(),
-                    };
-                } else {
-                    bg.transition_state = Some(TransitionState {
-                        start: Instant::now(),
-                        from: bg.last_options, // needs RectangleOptions -> DivOptions
-                        to: current_options,
-                        last_set: bg.last_options,
-                        _animation_handle: TreeManager::global().new_animation_handle(),
-                    });
+            if let Some(state) = &mut bg.transition_state {
+                // only start a new transition if the target changed
+                if current_options != state.to {
+                    state.start = Instant::now();
+                    state.from = state.last_set;
+                    state.to = current_options;
                 }
+                // mgr.now();
+                // otherwise do nothing — let the existing transition continue
+            } else if bg.transition_duration.is_some() {
+                let mgr = TreeManager::global();
+                // start a new transition from last_options
+                bg.transition_state = Some(TransitionState {
+                    start: Instant::now(),
+                    from: bg.last_options,
+                    to: current_options,
+                    last_set: bg.last_options,
+                    _animation_handle: mgr.new_animation_handle(),
+                });
             } else {
+                // no transition: snap immediately
                 bg.last_options = current_options;
                 bg.inner.update_options(current_options);
             }
@@ -132,19 +130,17 @@ impl Widget for Div {
 
             let new_opts = if elapsed < duration {
                 let t = elapsed.div_duration_f32(duration);
-                tracing::error!("t is : {t:?}");
                 let lerped = state.from.lerp(&state.to, t);
                 state.last_set = lerped;
                 bg.transition_state = Some(state);
                 lerped
             } else {
-                bg.transition_state = None;
-                bg.last_options = current_options;
+                bg.last_options = state.to;
                 state.to
             };
 
             bg.inner.update_options(new_opts);
-        }
+        };
 
         if &bg.last_layout != layout {
             bg.last_layout = *layout;
