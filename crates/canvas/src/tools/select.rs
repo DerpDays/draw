@@ -4,7 +4,7 @@ use graphics::Systems;
 use crate::tools::{Tool, ToolMessage};
 use input::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct SelectTool {
     pub initial_point: Option<Point2D<f32>>,
 }

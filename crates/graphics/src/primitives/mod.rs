@@ -20,7 +20,7 @@ pub use svg::{Options as SvgOptions, Svg};
 pub use text::{Options as TextOptions, Text};
 pub use triangle::{Options as TriangleOptions, Triangle};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Primitive<C: ApplyCoordinates + Clone> {
     Ellipse(Ellipse<C>),
     Line(Line<C>),
@@ -58,7 +58,7 @@ impl<C: ApplyCoordinates + Clone> Drawable<Vertex> for Primitive<C> {
     delegate_primitive!(Ellipse, Line, Pen, Quad, Rectangle, Svg, Text, Triangle);
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
+#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Rounding {
     pub top_left: f32,
     pub top_right: f32,

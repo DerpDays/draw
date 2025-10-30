@@ -28,7 +28,7 @@ impl_event_handler! {
     KeyboardEvent => keyboard_handler,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct SvgOptions {
     pub normal: primitives::SvgOptions,
     pub hover: Option<primitives::SvgOptions>,

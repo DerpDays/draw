@@ -20,7 +20,7 @@ pub struct Svg {
     last_layout: taffy::Layout,
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct OptionsWrapper(SvgOptions);
 
 impl From<OptionsWrapper> for SvgOptions {

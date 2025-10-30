@@ -96,7 +96,7 @@ impl NodeVisitor for NodeMapBuilder {
     }
 }
 /// State about the tree's current keyboard focus and mouse capture.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Capture {
     /// The node currently capturing mouse events.
     mouse_capture: Option<DynNodeId>,

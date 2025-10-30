@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind, make_positive_box};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub p1: PremulColor<Srgb>,
     pub p2: PremulColor<Srgb>,
@@ -26,7 +26,7 @@ impl Default for Options {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Triangle<C: ApplyCoordinates> {
     #[serde(skip)]
     render_cache: Option<Mesh<Vertex>>,

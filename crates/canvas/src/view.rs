@@ -33,7 +33,7 @@ pub struct View<T: RedrawRequestV2 + Clone + 'static> {
     pub redraw_manager: T,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum InteractionKind {
     Tool(ToolKind),
     Gui,

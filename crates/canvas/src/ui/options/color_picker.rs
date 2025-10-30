@@ -17,7 +17,7 @@ use input::{CursorIcon, MouseEventKind, SpecialKey};
 
 use crate::ui::{Message, options::OptionsMessage, styles::colors};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum ColorPickerMessage {
     UpdateColor(AlphaColor<Srgb>),
     UpdateHue(f32),

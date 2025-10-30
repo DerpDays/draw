@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct FontWidth(pub f32);
 
 impl From<FontWidth> for parley::FontWidth {
@@ -14,7 +14,7 @@ impl From<parley::FontWidth> for FontWidth {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct FontWeight(pub f32);
 
 impl From<FontWeight> for parley::FontWeight {
@@ -28,7 +28,7 @@ impl From<parley::FontWeight> for FontWeight {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum FontStyle {
     Normal,
     Italic,
@@ -54,7 +54,7 @@ impl From<parley::FontStyle> for FontStyle {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum LineHeight {
     MetricsRelative(f32),
     FontSizeRelative(f32),
@@ -81,7 +81,7 @@ impl From<parley::LineHeight> for LineHeight {
 }
 
 #[repr(u8)]
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum OverflowWrap {
     Normal = 0,
     Anywhere = 1,
@@ -108,7 +108,7 @@ impl From<parley::OverflowWrap> for OverflowWrap {
 }
 
 #[repr(u8)]
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum WordBreakStrength {
     Normal = 0,
     BreakAll = 1,
@@ -134,7 +134,7 @@ impl From<parley::WordBreakStrength> for WordBreakStrength {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum WhiteSpaceCollapse {
     Collapse,
     Preserve,
@@ -157,7 +157,7 @@ impl From<parley::WhiteSpaceCollapse> for WhiteSpaceCollapse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum FontFamily {
     Named(String),
     Generic(GenericFamily),
@@ -181,7 +181,7 @@ impl<'a> From<parley::FontFamily<'a>> for FontFamily {
 }
 
 #[repr(u8)]
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum GenericFamily {
     Serif = 0,
     SansSerif = 1,

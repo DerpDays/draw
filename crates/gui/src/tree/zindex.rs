@@ -5,7 +5,7 @@ use taffy::NodeId;
 use crate::tree::UITree;
 
 /// Metadata about a gui tree node's z-index
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ZIndexProperties {
     /// The z-index set for this node
     pub z_index: usize,
@@ -27,7 +27,7 @@ impl ZIndexProperties {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct ZIndexOrdering {
     map: HashMap<NodeId, usize>,
     render_order: Vec<NodeId>,

@@ -1,0 +1,18 @@
+[package]
+name = "graphics_v2"
+version = { workspace = true }
+edition = { workspace = true }
+
+
+[dependencies]
+parley = { workspace = true, optional = true }
+serde = { workspace = true, optional = true, features = ["rc"] }
+
+log = { workspace = true }
+
+euclid = { workspace = true }
+color = { workspace = true }
+
+[features]
+parley = ["dep:parley"]
+serde = ["dep:serde"]

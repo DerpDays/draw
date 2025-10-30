@@ -33,7 +33,7 @@ pub struct TextureAtlasKeys {
 }
 // FIXME: use cache
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub color: PremulColor<Srgb>,
 
@@ -63,7 +63,7 @@ impl Default for Options {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Text<C: ApplyCoordinates> {
     #[serde(skip)]
     render_cache: Option<Mesh<Vertex>>,

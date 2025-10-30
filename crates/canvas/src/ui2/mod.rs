@@ -142,7 +142,7 @@ pub fn drag_fn(
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct DragState {
     /// Where to base the movement from.
     origin: Point2D<f32>,

@@ -6,8 +6,8 @@ edition = { workspace = true }
 
 [dependencies]
 bitflags = { workspace = true }
-serde = { workspace = true, optional = true }
 euclid = { workspace = true }
+serde = { workspace = true, optional = true }
 
 smithay-client-toolkit = { workspace = true, optional = true, default-features = false }
 

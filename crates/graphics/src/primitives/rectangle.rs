@@ -22,7 +22,7 @@ use crate::{
     VertexKind,
 };
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub color: BasicColor,
     pub stroke_color: BasicColor,
@@ -61,7 +61,7 @@ impl Default for Options {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Rectangle<C: ApplyCoordinates> {
     fill_path: Path,
     stroke_path: Path,

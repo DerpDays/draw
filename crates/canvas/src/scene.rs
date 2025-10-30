@@ -9,7 +9,7 @@ type C = CanvasCoordinates;
 
 /// A trait that describes a scene containing shapes, with serialization support.
 /// The scene is responsible for shape management, layer ordering, and converting to/from a serializable state.
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct Scene {
     nodes: HashMap<u32, Primitive<C>>,
     ordering: Vec<u32>,

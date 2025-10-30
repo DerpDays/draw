@@ -37,7 +37,7 @@ pub struct Systems<'a> {
     pub queue: &'a wgpu::Queue,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ColorBrush {
     pub color: PremulColor<Srgb>,
 }
@@ -60,13 +60,13 @@ pub struct TextureState {
     pub color_atlas: LayeredAtlas<atlas::formats::Rgba8, CacheKey, TextureData>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum CacheKey {
     Text(GlyphCacheKey),
     Image(String),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct GlyphCacheKey {
     /// Index of the font within [`TextState`]'s [`FontContext`]
     pub font_index: u32,
@@ -76,13 +76,13 @@ pub struct GlyphCacheKey {
     pub font_size_bits: u32,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum TextureData {
     Text(TextData),
     None,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct TextData {
     pub width: u32,
     pub height: u32,

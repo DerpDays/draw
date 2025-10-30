@@ -1,5 +1,5 @@
 [package]
-name = "gui_reactive"
+name = "gui_reactive_static"
 version = { workspace = true }
 edition = { workspace = true }
 default-run = "main"
@@ -18,8 +18,8 @@ bench = false
 
 
 [dependencies]
-input = { workspace = true }
 graphics = { workspace = true }
+input = { workspace = true }
 
 color = { workspace = true }
 lyon = { workspace = true }

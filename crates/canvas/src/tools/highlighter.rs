@@ -7,7 +7,7 @@ use input::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::tools::{Tool, ToolMessage};
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct HighlighterTool {}
 impl HighlighterTool {
     pub fn new() -> Self {

@@ -171,7 +171,7 @@ impl HittableLayout for LayoutTree<Spatial> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct LayoutNode {
     pub node: NodeId,
     pub abs_layout: Layout,

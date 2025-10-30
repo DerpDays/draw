@@ -2,7 +2,7 @@ use crate::tools::{Tool, ToolMessage};
 use graphics::Systems;
 use input::{Modifiers, MouseEvent};
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct ArrowTool {}
 impl ArrowTool {
     pub fn new() -> Self {

@@ -8,7 +8,7 @@ use crate::{
     tree::{builder::ElementBuilder, Widget},
 };
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ButtonVisualState {
     /// Pressed is the state with the most visual priority, it represents that the widget
     /// is currently being pressed by a left mouse click.
@@ -82,9 +82,14 @@ impl Widget for Button {
         true
     }
 
-    fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>) {
+    fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>, _: &Layout) {
         if !ctx.in_capture_phase() {
             tracing::info!("default mouse event!!");
+            if !self.state.enabled.get_untracked() {
+                self.state.pressed.set(false);
+                self.state.hovered.set(false);
+                return;
+            }
             match ctx.payload().kind {
                 MouseEventKind::Enter => batch(|| {
                     self.state.pressed.set(false);

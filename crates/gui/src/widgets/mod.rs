@@ -70,7 +70,7 @@ impl<M: Clone> Element for Widget<M> {
     );
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct WidgetInteractionState {
     active: bool,
 
@@ -79,7 +79,7 @@ pub struct WidgetInteractionState {
 
     enabled: bool,
 }
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub enum WidgetVisualState {
     /// Pressed is the state with the most visual priority, it represents that the widget
     /// is currently being pressed by a left mouse click.

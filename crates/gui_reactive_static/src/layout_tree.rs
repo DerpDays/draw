@@ -9,12 +9,12 @@ use crate::{
     Tree,
 };
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct Linear {
     bounding_boxes: Vec<(DynNodeId, Box2D<f32>)>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct LayoutTree {
     map: HashMap<DynNodeId, LayoutNode>,
     bounding: Linear,
@@ -71,7 +71,7 @@ impl LayoutTree {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct LayoutNode {
     pub node: DynNodeId,
     pub abs_layout: Layout,

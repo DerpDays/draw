@@ -1,7 +1,7 @@
 use euclid::default::{Point2D, Size2D, Transform3D, Vector2D};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Projection {
     needs_rebinding: bool,
     /// Matrix taking world coords → viewport coords

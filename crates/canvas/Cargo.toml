@@ -5,11 +5,11 @@ edition = { workspace = true }
 
 
 [dependencies]
-renderer = { workspace = true }
 graphics = { workspace = true }
 gui = { workspace = true }
 gui_reactive = { workspace = true }
 input = { workspace = true, features = ["serde"] }
+renderer = { workspace = true }
 
 anyhow = { workspace = true }
 bytemuck = { workspace = true }

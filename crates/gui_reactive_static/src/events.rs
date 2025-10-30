@@ -10,7 +10,7 @@ use crate::tree::{DynNode, DynNodeId, Element, NodeForEach, Widget};
 /// Event propagation starts at the [`EventPhase::Capturing`] phase, when it reaches the target node it is changed
 /// to [`EventPhase::AtTarget`], after which it is changed to [`EventPhase::Bubbling] after
 /// starting to propagate back up the node tree.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum EventPhase {
     /// The event is in the capturing phase, traveling down from the root node to the target node.
     Capturing,

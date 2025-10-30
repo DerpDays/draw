@@ -116,7 +116,7 @@ pub struct Data {
 }
 
 /// Indicates the mode that the overlay is currently in.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 // FIXME: deal with unused
 #[allow(unused)]
 pub enum OverlayMode {

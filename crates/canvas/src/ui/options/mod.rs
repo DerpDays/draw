@@ -25,7 +25,7 @@ mod color_picker;
 mod color_swatches;
 mod rectangle;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum OptionsMessage {
     ColorPicker(color_picker::ColorPickerMessage),
     SelectSwatch(usize),

@@ -17,7 +17,7 @@ pub use primitives::Primitive;
 pub use systems::Systems;
 
 // TODO: docs
-#[derive(Deserialize, Serialize, Default, Clone, Debug)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Mesh<V: Clone + Pod + Zeroable> {
     pub vertices: Vec<V>,
     pub indices: Vec<u32>,
@@ -105,7 +105,7 @@ where
     fn bounding_box(&self) -> Box2D<f32>;
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum VertexKind {
     // Canvas space coordinates
     Color(PremulColor<Srgb>),
@@ -117,9 +117,9 @@ pub enum VertexKind {
     ColorTextureViewport,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct CanvasCoordinates;
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct ViewportCoordinates;
 
 #[const_trait]
@@ -176,7 +176,7 @@ impl VertexKind {
 
 /// A generic vertex type for rendering.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Deserialize, Serialize, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, Deserialize, Pod, Serialize, Zeroable)]
 pub struct Vertex {
     pub position: [f32; 2],
     pub color: [f32; 4],
@@ -217,7 +217,7 @@ impl Vertex {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Default, Deserialize, Serialize)]
 pub struct Rounding {
     pub top_left: f32,
     pub top_right: f32,
@@ -259,7 +259,7 @@ impl Rounding {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Deserialize, Serialize)]
 pub enum BoxSizing {
     #[default]
     /// Box size includes the border
@@ -268,27 +268,27 @@ pub enum BoxSizing {
     ContentBox,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct BaseGradient {
     pub stops: Vec<GradientStop<PremulColor<Srgb>>>,
 
     spread: SpreadMethod,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct GradientStop<T: Copy> {
     pub percent: f32,
     pub color: T,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Deserialize, Serialize)]
 pub enum SpreadMethod {
     Pad,
     Reflect,
     Repeat,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct RadialGradient {
     pub(crate) base: BaseGradient,
 
@@ -300,7 +300,7 @@ pub struct RadialGradient {
     pub(crate) radius: Vector2D<f32>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct BasicLinearGradient {
     pub(crate) start_color: AlphaColor<Srgb>,
     pub(crate) end_color: AlphaColor<Srgb>,
@@ -397,7 +397,7 @@ impl BasicLinearGradient {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum BasicColor {
     Solid(AlphaColor<Srgb>),
     LinearGradient(BasicLinearGradient),
@@ -449,7 +449,7 @@ impl From<BasicLinearGradient> for BasicColor {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub enum ComplexColor {
     RadialGradient(RadialGradient),
 }

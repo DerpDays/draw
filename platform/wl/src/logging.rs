@@ -2,7 +2,7 @@ use thiserror::Error;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum LoggingInitError {
     #[error("failed to get the log directory, please set $XDG_RUNTIME_DIR or $HOME")]
     UnableToGetLogDir(#[from] crate::dirs::DirectoryError),

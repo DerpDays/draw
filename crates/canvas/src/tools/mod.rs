@@ -19,7 +19,7 @@ mod select;
 mod text;
 mod zoom;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, strum::EnumIter)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default, strum::EnumIter)]
 pub enum ToolKind {
     Grab,
     Select,

@@ -6,7 +6,7 @@ use euclid::default::Point2D;
 
 // TODO: completions with clap-complete
 
-#[derive(Parser, Debug)]
+#[derive(Debug, Parser)]
 #[command(version, about = "A highly configurable annotation tool.", long_about = None)]
 pub struct Arguments {
     /// Sets a custom config location
@@ -25,7 +25,7 @@ pub struct Arguments {
     pub outputs: Vec<String>,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Clone, Debug, Decode, Encode)]
 pub struct IpcCommand {
     outputs: Vec<String>,
     command: Command,
@@ -39,7 +39,7 @@ impl IpcCommand {
     }
 }
 
-#[derive(Subcommand, Encode, Decode, Clone, Debug)]
+#[derive(Clone, Debug, Decode, Encode, Subcommand)]
 #[command(rename_all = "snake_case")]
 #[command(disable_help_subcommand = true)]
 pub enum Command {
@@ -49,7 +49,7 @@ pub enum Command {
     Msg(Message),
 }
 
-#[derive(Subcommand, Encode, Decode, Clone, Debug)]
+#[derive(Clone, Debug, Decode, Encode, Subcommand)]
 #[command(rename_all = "snake_case")]
 #[command(disable_help_subcommand = true)]
 pub enum Message {
@@ -78,7 +78,7 @@ pub enum Message {
 }
 
 // TODO: add all of these draw commands
-#[derive(Subcommand, Encode, Decode, Clone, Debug)]
+#[derive(Clone, Debug, Decode, Encode, Subcommand)]
 pub enum DrawCommand {
     Pen(PenArgs),
     Line,
@@ -90,14 +90,14 @@ pub enum DrawCommand {
     Eraser(PositionArg),
 }
 
-#[derive(Args, Encode, Decode, Clone, Debug)]
+#[derive(Args, Clone, Debug, Decode, Encode)]
 pub struct PenArgs {
     /// All of the points that the highlighter will visit, in the format x.x,y.y
     #[arg(required = true, last=true, value_parser= clap::value_parser!(PositionArg), num_args = 2..)]
     points: Vec<PositionArg>,
 }
 
-#[derive(Args, Encode, Decode, Clone, Copy, Debug)]
+#[derive(Args, Clone, Copy, Debug, Decode, Encode)]
 pub struct PositionArg {
     x: f32,
     y: f32,

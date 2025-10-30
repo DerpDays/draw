@@ -12,7 +12,7 @@ use tracing::warn;
 
 use crate::{ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub color: PremulColor<Srgb>,
     pub width: f32,
@@ -31,7 +31,7 @@ impl Default for Options {
 // TODO: make small circle when only a single point, useful for writing characters with dots e.g. i
 // and also for drawing small details
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Pen<C: ApplyCoordinates> {
     path: Path,
     #[serde(skip)]

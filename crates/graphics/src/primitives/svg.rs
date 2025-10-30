@@ -20,7 +20,7 @@ use usvg::{Node, Paint, PaintOrder, Tree, tiny_skia_path::PathSegment};
 
 use crate::{ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind, get_empty_mesh};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub fill_color: Option<AlphaColor<Srgb>>,
     pub stroke_color: Option<AlphaColor<Srgb>>,
@@ -37,7 +37,7 @@ impl Default for Options {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Svg<C: ApplyCoordinates> {
     #[serde(skip)]
     render_cache: Option<Mesh<Vertex>>,

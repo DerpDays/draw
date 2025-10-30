@@ -13,7 +13,7 @@ use tracing::warn;
 
 use crate::{ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub color: PremulColor<Srgb>,
     pub width: f32,
@@ -30,7 +30,7 @@ impl Default for Options {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Line<C: ApplyCoordinates> {
     path: Path,
     #[serde(skip)]

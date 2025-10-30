@@ -46,7 +46,7 @@ impl<'a> UnallocatedTexture<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct AllocatedTexture<T: AtlasFormat, D> {
     tiles: Vec<AllocatedTile>,
     tile_size: u32,
@@ -119,7 +119,7 @@ pub struct UnallocatedTile<T: AtlasFormat> {
 
     _marker: PhantomData<T>,
 }
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 struct AllocatedTile {
     column: u32,
     row: u32,
@@ -142,7 +142,7 @@ impl AllocatedTile {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct AtlasLocation {
     pub layer: u32,
 
@@ -523,9 +523,9 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
 }
 
 pub mod formats {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Copy, Clone, Debug)]
     pub struct Rgba8;
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Copy, Clone, Debug)]
     pub struct Mask;
 }
 pub trait AtlasFormat {
@@ -549,7 +549,7 @@ pub struct TextureVertex {
     pub texture_coords: [f32; 2],
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TextureMesh {
     pub vertices: Vec<TextureVertex>,
     pub indices: Vec<u32>,

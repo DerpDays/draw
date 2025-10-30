@@ -30,7 +30,7 @@ struct BackgroundDiv {
     last_layout: taffy::Layout,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct DivOptions {
     pub bg_color: Option<BasicColor>,
     pub stroke_color: Option<BasicColor>,

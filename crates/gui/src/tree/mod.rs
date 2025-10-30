@@ -37,7 +37,7 @@ pub struct UITree<T> {
 }
 
 /// State about the tree's current keyboard focus and mouse capture.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Capture {
     /// The node currently capturing mouse events.
     mouse_capture: Option<NodeId>,
@@ -56,7 +56,7 @@ impl Capture {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct TreeNode<T> {
     /// The actual context represented by this node.
     pub inner: T,
@@ -65,7 +65,7 @@ pub struct TreeNode<T> {
 }
 
 // TODO: follow this
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub enum Focusable {
     /// Indicates that the given node is not focusable.
     #[default]

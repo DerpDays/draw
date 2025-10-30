@@ -13,20 +13,25 @@ members = [
 
   "crates/renderer",
   "crates/graphics",
+  "crates/graphics_v2",
   "crates/atlas",
   "crates/canvas",
   "crates/input",
   "crates/gui",
   "crates/gui_reactive",
+  "crates/gui_reactive_static",
   "platform/wl",
+  "crates/wgpu_renderer",
 ]
 default-members = ["platform/wl"]
 
 [workspace.dependencies]
 renderer = { path = "./crates/renderer" }
 atlas = { path = "./crates/atlas" }
-graphics = { path = "./crates/graphics" }
 canvas = { path = "./crates/canvas" }
+
+graphics = { path = "./crates/graphics" }
+graphics_v2 = { path = "./crates/graphics_v2" }
 input = { path = "./crates/input", default-features = false }
 gui = { path = "./crates/gui" }
 gui_reactive = { path = "./crates/gui_reactive" }
@@ -43,21 +48,14 @@ futures-lite = "2.6.1"
 bytemuck = "1.23.1"
 bitflags = "2.9.1"
 color = { version = "0.3.1", features = ["serde", "bytemuck"] }
-
-
-# wayland deps
-ashpd = "0.12.0"
 smithay-client-toolkit = { version = "0.20.0", default-features = false }
 wayland-backend = { version = "0.3.10", default-features = false }
-
-dirs = "6.0.0"
-futures-util = "0.3.31"
 lyon = { version = "1.0.1", features = ["serialization"] }
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.141"
 strum = { version = "0.27.2", features = ["derive"] }
 tokio = { version = "1.47.0", features = ["full"] }
 tracing = "0.1.41"
+log = "0.4.28"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 wgpu = { version = "26.0.1", default-features = false, features = [

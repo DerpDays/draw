@@ -5,8 +5,8 @@ edition = { workspace = true }
 
 
 [dependencies]
-input = { workspace = true }
 graphics = { workspace = true }
+input = { workspace = true }
 
 color = { workspace = true }
 lyon = { workspace = true }

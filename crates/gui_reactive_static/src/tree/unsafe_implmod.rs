@@ -12,7 +12,7 @@ use taffy::{
     compute_root_layout, prelude::*, round_layout, CacheTree,
 };
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[allow(dead_code)]
 enum NodeKind {
     Flexbox,

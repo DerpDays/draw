@@ -9,11 +9,11 @@ pub mod sctk;
 
 /// A unique identifier for a pointer.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct PointerId(u64);
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum InputMethod {
     Keyboard,
     Mouse,
@@ -23,7 +23,7 @@ pub enum InputMethod {
 
 bitflags! {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
     pub struct Modifiers: u32 {
         const SHIFT = 1 << 0;
         const CTRL = 1 << 1;
@@ -40,14 +40,14 @@ bitflags! {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct KeyboardEvent {
     pub modifiers: Modifiers,
     pub kind: KeyboardEventKind,
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum KeyboardEventKind {
     Press(Key),
     Release(Key),
@@ -55,7 +55,7 @@ pub enum KeyboardEventKind {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Key {
     SpecialKey(SpecialKey),
     Character(String),
@@ -63,7 +63,7 @@ pub enum Key {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum SpecialKey {
     LShift,
     LCtrl,
@@ -112,7 +112,7 @@ pub enum SpecialKey {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum MouseButton {
     Left,
     Right,
@@ -131,7 +131,7 @@ pub enum MouseButton {
 // Basically copy smithay-client-toolkit's types here, since for other platforms to not have to
 // depend on it,
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct MouseEvent {
     pub position: Point2D<f32>,
     pub kind: MouseEventKind,
@@ -149,7 +149,7 @@ impl MouseEvent {
     }
 }
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum MouseEventKind {
     Enter,
     Leave,
@@ -173,7 +173,7 @@ pub enum MouseEventKind {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct AxisScroll {
     /// The scroll measured in pixels.
     pub absolute: f64,
@@ -207,7 +207,7 @@ pub struct AxisScroll {
 /// wheel but the scroll event is not caused by a rotation but a
 /// (usually sideways) tilt of the wheel.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum AxisSource {
     Wheel,
     Finger,
@@ -216,7 +216,7 @@ pub enum AxisSource {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, PartialEq, Default)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub enum CursorIcon {
     /// The platform-dependent default cursor. Often rendered as arrow.
     #[default]

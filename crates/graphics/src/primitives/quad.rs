@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind, make_positive_box};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub p1: PremulColor<Srgb>,
     pub p2: PremulColor<Srgb>,
@@ -49,7 +49,7 @@ impl Default for Options {
 /// |  /
 /// | /
 /// 3 -- 4
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct QuadPoints {
     pub p1: Point2D<f32>,
     pub p2: Point2D<f32>,
@@ -81,7 +81,7 @@ impl QuadPoints {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Quad<C: ApplyCoordinates> {
     #[serde(skip)]
     render_cache: Option<Mesh<Vertex>>,

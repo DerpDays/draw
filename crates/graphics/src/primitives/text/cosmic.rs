@@ -26,7 +26,7 @@ use atlas::{
 mod options;
 pub use options::{Alignment, FontFamily, FontStretch, FontStyle, FontWeight};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub color: PremulColor<Srgb>,
 
@@ -67,7 +67,7 @@ impl Default for Options {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Text<C: ApplyCoordinates> {
     #[serde(skip)]
     render_cache: Option<Mesh<Vertex>>,

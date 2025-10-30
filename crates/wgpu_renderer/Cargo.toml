@@ -1,0 +1,23 @@
+[package]
+name = "wgpu_renderer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gui_reactive = { workspace = true, optional = true }
+graphics_v2 = { workspace = true }
+atlas = { workspace = true }
+
+bytemuck = { workspace = true }
+log = { workspace = true }
+
+parley = { workspace = true }
+swash = { workspace = true }
+serde = { workspace = true, optional = true, features = ["rc"] }
+
+euclid = { workspace = true }
+color = { workspace = true }
+wgpu = { workspace = true }
+slotmap = "1.0.7"
+# shame = { git = "https://github.com/RayMarch/shame.git", version = "2.0.0-beta.0" }
+# shame_wgpu = { git = "https://github.com/RayMarch/shame.git", version = "2.0.0-beta.0" }

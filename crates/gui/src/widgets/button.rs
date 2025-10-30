@@ -1,17 +1,17 @@
 use std::time::Duration;
 
-use graphics::{Mesh, Systems, Vertex, primitives::RectangleOptions};
+use graphics::{primitives::RectangleOptions, Mesh, Systems, Vertex};
 use input::{KeyboardEvent, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::{
-    Element,
     events::{BlurEvent, EventContext, EventHandler, EventPhase, FocusEvent, Redraw},
     widgets::{
+        background::TransitionBackgroundWidget,
         Widget,
         WidgetInteractionState,
         WidgetVisualState,
-        background::TransitionBackgroundWidget,
     },
+    Element,
 };
 
 #[derive(Clone)]
@@ -36,7 +36,7 @@ pub struct ButtonWidget<M: Clone> {
 
 pub const FADE_DURATION: Duration = Duration::from_millis(150);
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ButtonOptions {
     pub pressed: RectangleOptions,
     pub active: RectangleOptions,

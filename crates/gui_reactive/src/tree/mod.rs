@@ -68,13 +68,13 @@ pub trait Widget {
     fn focusable(&self) -> bool;
 
     #[allow(unused_variables)]
-    fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>) {}
+    fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>, layout: &Layout) {}
     #[allow(unused_variables)]
-    fn default_keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>) {}
+    fn default_keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>, layout: &Layout) {}
     #[allow(unused_variables)]
-    fn default_focus_event(&mut self, ctx: &mut EventContext<FocusEvent>) {}
+    fn default_focus_event(&mut self, ctx: &mut EventContext<FocusEvent>, layout: &Layout) {}
     #[allow(unused_variables)]
-    fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>) {}
+    fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>, layout: &Layout) {}
 }
 
 pub struct Element {
@@ -113,7 +113,7 @@ impl std::fmt::Debug for Element {
     }
 }
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct StyleWrapper(taffy::Style);
 // SAFETY: We do not use calc anywhere so it is safe for Style to be send.
 unsafe impl Send for StyleWrapper {}
@@ -193,14 +193,14 @@ impl Node for Element {
     fn mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>) {
         self.mouse_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
-            self.inner.default_mouse_event(ctx);
+            self.inner.default_mouse_event(ctx, &self.layout);
         }
     }
     #[inline(always)]
     fn keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>) {
         self.keyboard_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
-            self.inner.default_keyboard_event(ctx);
+            self.inner.default_keyboard_event(ctx, &self.layout);
         }
     }
 
@@ -208,14 +208,14 @@ impl Node for Element {
     fn focus_event(&mut self, ctx: &mut EventContext<FocusEvent>) {
         self.focus_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
-            self.inner.default_focus_event(ctx);
+            self.inner.default_focus_event(ctx, &self.layout);
         }
     }
     #[inline(always)]
     fn blur_event(&mut self, ctx: &mut EventContext<BlurEvent>) {
         self.blur_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
-            self.inner.default_blur_event(ctx);
+            self.inner.default_blur_event(ctx, &self.layout);
         }
     }
 

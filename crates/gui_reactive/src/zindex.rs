@@ -5,7 +5,7 @@ use sycamore_reactive::MaybeDyn;
 use crate::{ElementId, Tree, tree::Node};
 
 /// Metadata about a gui tree node's z-index
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ZIndexProperties {
     /// The z-index set for this node
     pub z_index: usize,
@@ -37,7 +37,7 @@ impl ZIndexProperties {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct ZIndexOrdering {
     map: HashMap<ElementId, usize>,
     render_order: Vec<ElementId>,

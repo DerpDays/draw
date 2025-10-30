@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum DirectoryError {
     #[error("failed to get the log directory, please set $XDG_RUNTIME_DIR or $HOME")]
     UnableToGetLogDir,

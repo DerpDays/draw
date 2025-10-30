@@ -26,7 +26,7 @@ use crate::{
     TreeManager,
 };
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct DynNodeId(NonNull<dyn DynNode + Send + Sync>);
 unsafe impl Send for DynNodeId {}
 unsafe impl Sync for DynNodeId {}
@@ -134,7 +134,7 @@ pub struct Element<T, C: NodeForEach> {
     pub(crate) blur_handler: EventHandler<BlurEvent>,
 }
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Clone, PartialEq, Default)]
 pub struct StyleWrapper(taffy::Style);
 // SAFETY: We do not use calc anywhere so it is safe for Style to be send.
 unsafe impl Send for StyleWrapper {}

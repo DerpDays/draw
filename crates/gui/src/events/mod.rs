@@ -5,7 +5,7 @@ use taffy::NodeId;
 use crate::{Element, tree::TreeCommand};
 pub use input::{KeyboardEvent, MouseEvent};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum TreeEvent {
     MouseEvent(MouseEvent),
     KeyboardEvent(KeyboardEvent),
@@ -15,15 +15,15 @@ pub enum TreeEvent {
     ChangeEventString(ChangeEvent<String>),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct ChangeEvent<T> {
     pub new: T,
     pub old: T,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct FocusEvent;
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct BlurEvent;
 
 #[derive(Clone, Default)]
@@ -150,7 +150,7 @@ impl<E, S: Element> EventHandler<E, S> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Redraw {
     Now,
     Duration(Duration),
@@ -179,7 +179,7 @@ impl Redraw {
 /// Event propagation starts at the [`EventPhase::Capturing`] phase, when it reaches the target node it is changed
 /// to [`EventPhase::AtTarget`], after which it is changed to [`EventPhase::Bubbling] after
 /// starting to propagate back up the node tree.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum EventPhase {
     /// The event is in the capturing phase, traveling down from the root node to the target node.
     Capturing,

@@ -2,7 +2,7 @@ use crate::tools::{Tool, ToolMessage};
 use graphics::Systems;
 use input::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct ZoomTool {}
 impl ZoomTool {
     pub fn new() -> Self {

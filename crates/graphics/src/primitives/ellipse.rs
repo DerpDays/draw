@@ -14,7 +14,7 @@ use tracing::warn;
 
 use crate::{ApplyCoordinates, Drawable, Mesh, Systems, Vertex, VertexKind};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Options {
     pub color: PremulColor<Srgb>,
     pub stroke_color: PremulColor<Srgb>,
@@ -33,7 +33,7 @@ impl Default for Options {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Ellipse<C: ApplyCoordinates> {
     path: Path,
 

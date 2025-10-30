@@ -17,7 +17,7 @@ pub mod options;
 pub mod styles;
 pub mod toolbar;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Message {
     CursorIcon(input::CursorIcon),
     MoveTop(NodeId),
@@ -44,7 +44,7 @@ pub struct Application {
     pub modifiers: Modifiers,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct DragState {
     /// Where to base the movement from.
     origin: Point2D<f32>,

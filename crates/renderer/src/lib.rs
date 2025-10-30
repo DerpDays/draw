@@ -7,7 +7,7 @@ pub mod reexports {
     pub use wgpu;
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum InitError {
     #[error("failed to get a wgpu adapter")]
     NoAdapter(#[from] wgpu::RequestAdapterError),

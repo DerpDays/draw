@@ -6,12 +6,12 @@ use taffy::{Layout, PrintTree};
 
 use crate::{ElementId, Tree};
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct Linear {
     bounding_boxes: Vec<(ElementId, Box2D<f32>)>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct LayoutTree {
     map: HashMap<ElementId, LayoutNode>,
     bounding: Linear,
@@ -68,7 +68,7 @@ impl LayoutTree {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct LayoutNode {
     pub node: ElementId,
     pub abs_layout: Layout,

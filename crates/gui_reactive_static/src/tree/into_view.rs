@@ -24,7 +24,7 @@ where
 // use crate::widgets::{Build, Element};
 //
 // /// A wrapper for any kind of view.
-// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 // pub struct View<T>
 // where
 //     T: Sized,
