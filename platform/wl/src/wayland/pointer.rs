@@ -30,7 +30,7 @@ impl PointerHandler for State {
                 self.pointers.values_mut().find(|x| x.0 == pointer.id())
             {
                 if let Some(view) = view {
-                    view.pointer_event(&mut self.shareable, &themed_pointer, event);
+                    view.pointer_event(&mut self.shareable, themed_pointer, event);
                 } else {
                     tracing::warn!("pointer event sent to surface not in canvas_outputs");
                 }

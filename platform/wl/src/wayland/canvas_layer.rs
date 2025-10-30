@@ -1,4 +1,4 @@
-use std::{ptr::NonNull, sync::Arc};
+use std::ptr::NonNull;
 
 use color_eyre::eyre::{Context, OptionExt, Result};
 use euclid::default::{Point2D, Size2D};
@@ -21,7 +21,6 @@ use tracing::{info, trace};
 use crate::wayland::{
     protocols::{FractionalScale, Viewport},
     OverlayMode,
-    RedrawManager,
     RedrawManagerV2,
     ShareableState,
     WaylandState,
@@ -80,7 +79,7 @@ impl LayerShellCanvasView {
             .try_cast::<u32>()
             .ok_or_eyre("output size must be positive")?;
 
-        layer_surface.set_size(physical_size.width as u32, physical_size.height as u32);
+        layer_surface.set_size(physical_size.width, physical_size.height);
         // initial commit before we attach wgpu to the surface.
 
         // INFO: WGPU stuff
@@ -262,26 +261,22 @@ impl LayerShellCanvasView {
             .canvas
             .mouse_event(MouseEvent { position, kind }, &state.wgpu);
 
-        if let Some(cursor_icon) = cursor_icon {
-            if self.previous_cursor_icon != Some(cursor_icon) {
+        if let Some(cursor_icon) = cursor_icon
+            && self.previous_cursor_icon != Some(cursor_icon) {
                 self.previous_cursor_icon = Some(cursor_icon);
                 _ = themed_pointer.set_cursor(
                     &state.wayland.connection,
                     input::sctk::cursor_icon(cursor_icon),
                 );
-            }
-        };
+            };
     }
 
     pub fn keyboard_event(&mut self, state: &mut ShareableState, kind: &KeyEventKind) {
-        match kind {
-            KeyEventKind::Press((event, _modifiers)) => {
-                tracing::warn!("char: {:?}", event.keysym.key_char());
-            }
-            _ => {}
+        if let KeyEventKind::Press((event, _modifiers)) = kind {
+            tracing::warn!("char: {:?}", event.keysym.key_char());
         }
 
-        let event = input::sctk::keyboard_event(&kind);
+        let event = input::sctk::keyboard_event(kind);
         self.canvas.keyboard_event(event, &state.wgpu);
     }
     pub fn set_scale_factor(&mut self, state: &mut ShareableState, scale_factor: f64) {

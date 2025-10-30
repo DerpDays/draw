@@ -50,7 +50,7 @@ impl ViewporterState {
         Viewport {
             viewport: self
                 .viewporter
-                .get_viewport(surface, &queue_handle, GlobalData),
+                .get_viewport(surface, queue_handle, GlobalData),
         }
     }
 }

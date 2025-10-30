@@ -108,7 +108,7 @@ impl std::str::FromStr for PositionArg {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<_> = s.split(',').collect();
         if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
-            return Err(format!("expected point format: x.x,y.y"));
+            return Err("expected point format: x.x,y.y".to_string());
         }
         Ok(PositionArg {
             x: parts[0].parse::<f32>().map_err(|e| e.to_string())?,

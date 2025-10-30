@@ -54,7 +54,7 @@ impl FractionalScaleState {
         FractionalScale {
             fractional_scale: self.manager.get_fractional_scale(
                 surface,
-                &queue_handle,
+                queue_handle,
                 surface.clone(),
             ),
         }

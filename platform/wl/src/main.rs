@@ -19,11 +19,11 @@ mod cli;
 mod config;
 mod logging;
 
-pub const APP_NAME: &'static str = "draw";
-pub const APP_SOCKET: &'static str = "draw.sock";
-pub const APP_LOCK: &'static str = "draw.lock";
+pub const APP_NAME: &str = "draw";
+pub const APP_SOCKET: &str = "draw.sock";
+pub const APP_LOCK: &str = "draw.lock";
 
-pub const APP_LOG_ENV: &'static str = "DRAW_LOG";
+pub const APP_LOG_ENV: &str = "DRAW_LOG";
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -36,7 +36,7 @@ fn main() -> Result<()> {
     let lock_file = File::create(lock_path).wrap_err("failed to create daemon lock file")?;
 
     // We create a lockfile which we use to check if there is an instance already running.
-    if let Ok(_) = lock_file.try_lock() {
+    if let Ok(_lock) = lock_file.try_lock() {
         create_daemon(args, sock_path)
     } else {
         handle_client(args, sock_path)
@@ -99,7 +99,7 @@ fn create_daemon<T: AsRef<Path>>(args: Arguments, sock_path: T) -> Result<()> {
             conn.state.add_canvas_output(output);
         }
     } else {
-        for (output, info) in conn.wayland().get_displays() {
+        for (_output, info) in conn.wayland().get_displays() {
             if let Some(name) = &info.name
                 && outputs.contains(name)
             {
@@ -128,7 +128,7 @@ fn setup_client(
         );
         match res {
             Ok(command) => {
-                let (outputs, cmd) = command.into_tuple();
+                let (_outputs, cmd) = command.into_tuple();
                 tracing::info!("got a new that sent Command::{cmd:?}");
                 match cmd {
                     Command::Quit => todo!(),
@@ -143,7 +143,7 @@ fn setup_client(
                                 state.add_canvas_output(output);
                             }
                         }
-                        Message::SaveCanvas { path } => todo!(),
+                        Message::SaveCanvas { path: _ } => todo!(),
                         Message::ClearCanvas => todo!(),
                         Message::ToggleInteractivity => todo!(),
                         Message::SetInteractive => {

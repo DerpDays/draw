@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     i32,
-    rc::Rc,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -338,7 +337,7 @@ impl WaylandState {
         output: &WlOutput,
     ) -> Result<(OutputInfo, Size2D<i32>)> {
         let info = output_state
-            .info(&output)
+            .info(output)
             .ok_or_eyre(format!("failed to get output info for output: {output:?}"))?;
 
         let current_mode = info
@@ -450,7 +449,7 @@ impl OutputHandler for State {
 
 impl LayerShellHandler for State {
     #[instrument(name = "WaylandState::closed", skip_all)]
-    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
+    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
         // todo handle cleanup of surface assets.
         warn!("layer has been closed");
         // FIXME: use viewmanager::from_surface
@@ -514,8 +513,7 @@ impl FractionalScaleHandler for State {
         if let Some(view) = Self::from_surface(&mut self.canvas_outputs, surface) {
             view.set_scale_factor(
                 &mut self.shareable,
-                <u32 as TryInto<f64>>::try_into(scale)
-                    .expect("fractional scale factor doesn't fit in f64")
+                <u32 as Into<f64>>::into(scale)
                     / 120.,
             );
         }
@@ -587,7 +585,7 @@ impl RedrawManager {
                                         move |_, _, state| {
                                             let now = Instant::now();
                                             let end = *animation_end.lock().unwrap();
-                                            let is_animating = end.map_or(false, |e| now < e);
+                                            let is_animating = end.is_some_and(|e| now < e);
                                             if is_animating {
                                                 do_redraw(state);
                                                 TimeoutAction::ToDuration(animation_frame_duration)
