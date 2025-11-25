@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, rc::Rc, sync::OnceLock};
+use std::{cell::OnceCell, rc::Rc};
 
 use euclid::default::Point2D;
 use graphics::Systems;
@@ -16,7 +16,7 @@ use gui_reactive::{
 use input::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
 use renderer::GrowableMeshBuffer;
 
-use crate::{tools::ToolKind, RedrawRequest, RedrawRequestV2};
+use crate::{tools::ToolKind, RedrawRequestV2};
 
 mod options;
 mod styles;
@@ -45,10 +45,6 @@ impl Application {
                 let redraw_manager = redraw_manager.clone();
                 move || redraw_manager.new_animation_handle()
             },
-            // {
-            //     let redraw_manager = redraw_manager.clone();
-            //     move |duration| redraw_manager.request_redraw_duration(duration)
-            // },
         );
 
         let selected_tool_slot: Rc<OnceCell<Signal<ToolKind>>> = Rc::new(OnceCell::new());
@@ -75,9 +71,8 @@ impl Application {
 
     pub fn render(&mut self, systems: &mut Systems) {
         let rendered = self.tree.render(systems);
-        _ = self
-            .gui_buffer
-            .replace_with_mesh(&systems.device, &systems.queue, &rendered);
+        self.gui_buffer
+            .replace_with_mesh(systems.device, systems.queue, &rendered);
     }
 
     pub fn selected_tool(&self) -> ToolKind {
@@ -114,7 +109,10 @@ pub fn drag_fn(
                 MouseEventKind::Enter | MouseEventKind::Leave => {
                     state.set(None);
                 }
-                MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
+                MouseEventKind::Press {
+                    button: MouseButton::Left,
+                    ..
+                } => {
                     let layout = elem.get_final_layout();
                     state.set(Some(DragState {
                         origin: Point2D::new(layout.location.x, layout.location.y),
@@ -132,7 +130,6 @@ pub fn drag_fn(
                             (drag.origin + (ctx.payload().position - drag.start)).round();
                         tracing::info!("updating position!!! {new_origin:#?}");
                         style.set(floating_grab(100., new_origin));
-                    } else {
                     }
                 }
                 _ => {}

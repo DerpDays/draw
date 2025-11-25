@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "sctk")]
 pub mod sctk;
+#[cfg(feature = "winit")]
+pub mod winit;
 
 /// A unique identifier for a pointer.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

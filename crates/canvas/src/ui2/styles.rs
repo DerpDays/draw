@@ -1,5 +1,5 @@
 use euclid::default::Point2D;
-use gui::prelude::*;
+use gui_reactive::prelude::*;
 
 pub mod colors {
     use color::{AlphaColor, Srgb};

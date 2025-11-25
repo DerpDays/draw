@@ -100,7 +100,7 @@ impl GrowableBuffer {
 
     fn grow(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, new_size: usize) {
         assert!(new_size >= self.capacity, "New buffer must be larger!");
-        tracing::debug!(
+        log::debug!(
             "Growing ({}) buffer to size: {new_size}",
             self.label.unwrap_or("unlabelled")
         );

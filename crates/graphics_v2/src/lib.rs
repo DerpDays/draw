@@ -1,5 +1,3 @@
-#![feature(const_trait_impl)]
-
 use color::{AlphaColor, HueDirection, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Vector2D};
 
@@ -219,8 +217,15 @@ pub struct Rounding {
     pub bottom_right: f32,
 }
 impl Rounding {
+    pub const ZERO: Self = Self {
+        top_left: 0.,
+        top_right: 0.,
+        bottom_left: 0.,
+        bottom_right: 0.,
+    };
+
     pub const fn is_zero(&self) -> bool {
-        self.top_right == 0.
+        self.top_left == 0.
             && self.top_right == 0.
             && self.bottom_left == 0.
             && self.bottom_right == 0.
@@ -231,6 +236,25 @@ impl Rounding {
             top_right: value,
             bottom_left: value,
             bottom_right: value,
+        }
+    }
+    pub const fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self {
+            top_left: self.top_left + ((other.top_left - self.top_left) * t),
+            top_right: self.top_right + ((other.top_right - self.top_right) * t),
+            bottom_left: self.bottom_left + ((other.bottom_left - self.bottom_left) * t),
+            bottom_right: self.bottom_right + ((other.bottom_right - self.bottom_right) * t),
+        }
+    }
+}
+#[cfg(feature = "lyon")]
+impl Rounding {
+    pub fn to_lyon(self) -> lyon::path::builder::BorderRadii {
+        lyon::path::builder::BorderRadii {
+            top_left: self.top_left,
+            top_right: self.top_right,
+            bottom_left: self.bottom_left,
+            bottom_right: self.bottom_right,
         }
     }
 }

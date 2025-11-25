@@ -2,7 +2,6 @@ use color::{PremulColor, Srgb};
 use euclid::default::Point2D;
 use graphics::{CanvasCoordinates, Mesh, Primitive, Systems, Vertex};
 
-use gui::reexports::taffy::NodeId;
 use input::{CursorIcon, KeyboardEvent, Modifiers, MouseEvent};
 
 use crate::projection::Projection;

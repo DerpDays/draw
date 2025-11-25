@@ -13,14 +13,17 @@ members = [
 
   "crates/renderer",
   "crates/graphics",
-  "crates/graphics_v2",
+
   "crates/atlas",
   "crates/canvas",
   "crates/input",
   "crates/gui",
+  "crates/gui_v2",
   "crates/gui_reactive",
-  "crates/gui_reactive_static",
+  # "crates/gui_reactive_static",
   "platform/wl",
+
+  "crates/graphics_v2",
   "crates/wgpu_renderer",
 ]
 default-members = ["platform/wl"]
@@ -31,7 +34,11 @@ atlas = { path = "./crates/atlas" }
 canvas = { path = "./crates/canvas" }
 
 graphics = { path = "./crates/graphics" }
-graphics_v2 = { path = "./crates/graphics_v2" }
+
+graphics_v2 = { path = "./crates/graphics_v2", features = ["parley"] }
+wgpu_renderer = { path = "./crates/wgpu_renderer" }
+gui_v2 = { path = "./crates/gui_v2" }
+
 input = { path = "./crates/input", default-features = false }
 gui = { path = "./crates/gui" }
 gui_reactive = { path = "./crates/gui_reactive" }

@@ -1,3 +1,15 @@
+use crate::primitives::text::{
+    FontFamily,
+    FontStyle,
+    FontWeight,
+    FontWidth,
+    GenericFamily,
+    LineHeight,
+    OverflowWrap,
+    WhiteSpaceCollapse,
+    WordBreakStrength,
+};
+
 impl From<FontWidth> for parley::FontWidth {
     fn from(value: FontWidth) -> parley::FontWidth {
         Self::from_ratio(value.0)
@@ -128,22 +140,6 @@ impl<'a> From<parley::FontFamily<'a>> for FontFamily {
             parley::FontFamily::Generic(v) => FontFamily::Generic(v.into()),
         }
     }
-}
-
-pub enum GenericFamily {
-    Serif = 0,
-    SansSerif = 1,
-    Monospace = 2,
-    Cursive = 3,
-    Fantasy = 4,
-    SystemUi = 5,
-    UiSerif = 6,
-    UiSansSerif = 7,
-    UiMonospace = 8,
-    UiRounded = 9,
-    Emoji = 10,
-    Math = 11,
-    FangSong = 12,
 }
 
 impl From<GenericFamily> for parley::GenericFamily {

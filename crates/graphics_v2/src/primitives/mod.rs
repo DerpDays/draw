@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
+use color::{AlphaColor, Srgb};
 use euclid::default::{Point2D, Size2D, Vector2D};
 
 use crate::{BasicColor, LineCap, Rounding};
 pub mod text;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Primitive {
     Ellipse(Ellipse),
@@ -68,6 +69,8 @@ pub struct Pen {
     pub width: BasicColor,
 }
 
+/// A non-regular 4 point quadrilateral
+///
 /// p0 --- p1
 /// |      |
 /// p2 --- p3
@@ -87,6 +90,11 @@ pub struct Quad {
     pub stroke_width: f32,
 }
 
+/// A basic rectangle.
+///
+/// Size is includes the stroke width (like border-box), meaning that the stroke is included in the given size of the
+/// rectangle. If the stroke width is greater than the size, only the visible part of the stroke
+/// will be rendered.
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rectangle {
@@ -133,7 +141,7 @@ pub struct Text {
     pub size: Size2D<f32>,
 
     pub text: Arc<str>,
-    pub color: Option<BasicColor>,
+    pub color: Option<AlphaColor<Srgb>>,
 
     pub font_family: text::FontFamily,
     pub font_size: f32,

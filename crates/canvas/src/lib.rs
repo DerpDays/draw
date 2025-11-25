@@ -7,7 +7,7 @@ pub mod scene;
 pub mod tools;
 pub mod view;
 
-pub mod ui;
+// pub mod ui;
 pub mod ui2;
 
 pub use gui_reactive::{AnimationHandle, AnimationManager};

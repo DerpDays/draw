@@ -1,102 +1,67 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
-use euclid::default::Box2D;
-use graphics_v2::{
-    BasicColor,
-    Primitive,
-    make_positive_box,
-    primitives::{Ellipse, Rectangle},
+use graphics_v2::Primitive;
+
+use crate::{
+    arena::Key,
+    primitives::Render,
+    vertex::Vertex,
+    GraphicsContext,
+    PrimitiveCache,
+    VertexArenaMarker,
 };
-use gui_reactive::ElementId;
-
-use crate::{GraphicsContext, Mesh, VertexArenaMarker, arena::Key, vertex::Vertex};
 
 struct CacheEntry {
     previous_elem: graphics_v2::Primitive,
+    cache: Option<PrimitiveCache>,
     vertex_alloc: Key<VertexArenaMarker>,
     indices: Vec<u32>,
 }
 
-struct GuiCache {
-    hashmap: HashMap<ElementId, CacheEntry>,
+#[derive(Default)]
+pub struct GuiCache<T: Hash + Eq> {
+    hashmap: HashMap<T, CacheEntry>,
 }
-impl GuiCache {
-    pub fn update_elem(ctx: &mut GraphicsContext<Vertex>, elem: ElementId, primitive: Primitive) {
-        ctx.vertex_buf.update(device, queue, key, data)
-    }
-}
-
-pub trait Render {
-    fn to_mesh(&self, ctx: &mut GraphicsContext<Vertex>) -> Mesh<Vertex> {}
-}
-impl Render for Primitive {
-    fn to_mesh(&self, ctx: &mut GraphicsContext<Vertex>) -> Mesh<Vertex> {
-        match self {
-            Primitive::Ellipse(ellipse) => render_ellipse(ellipse),
-            Primitive::Line(line) => todo!(),
-            Primitive::CubicBezier(cubic_bezier) => todo!(),
-            Primitive::Pen(pen) => todo!(),
-            Primitive::Quad(quad) => todo!(),
-            Primitive::Rectangle(rectangle) => render_rectangle(rectangle),
-            Primitive::Svg(svg) => todo!(),
-            Primitive::Text(text) => todo!(),
-            Primitive::Triangle(triangle) => todo!(),
-        }
-    }
-}
-
-fn render_ellipse(ellipse: &Ellipse) -> Mesh<Vertex> {
-    let mut buffers = VertexBuffers::<Vertex, u32>::new();
-    let mut builder = BuffersBuilder::new(&mut buffers, |vertex: FillVertex<'_>| {
-        Vertex::with_color(
-            vertex.position(),
-            C::apply(VertexKind::Color(self.options.color)),
-        )
-    });
-
-    let options = FillOptions::tolerance(0.1);
-    let mut tessellator = FillTessellator::new();
-
-    let tessellation_result = tessellator.tessellate_path(&self.path, &options, &mut builder);
-    if let Err(err) = tessellation_result {
-        warn!(
-            "Error while tessellating ellipse with options {:?}: {}",
-            ellipse, err
-        );
-    }
-
-    Mesh {
-        vertices: buffers.vertices,
-        indices: buffers.indices,
-    }
-}
-
-fn render_rectangle(rect: &Rectangle) -> Mesh<Vertex> {
-    let area = make_positive_box(Box2D::from_origin_and_size(rect.origin, rect.size));
-    // does not require tesselation, making it cheap to generate
-    if rect.rounding.is_zero() {
-        let mesh = if rect.stroke_width != 0 {
-            let vertices = Vec::with_capacity(8);
-            let indices = Vec::with_capacity(8);
-            Mesh { vertices, indices }
-        } else {
-            Mesh {
-                vertices: Vec::with_capacity(8),
-                indices: Vec::with_capacity(8),
-            }
+impl<T: Hash + Eq> GuiCache<T> {
+    pub fn insert(&mut self, ctx: &mut GraphicsContext<Vertex>, elem_id: T, primitive: Primitive) {
+        let mut cache = None;
+        let mesh = primitive.to_mesh(ctx, &mut cache);
+        let entry = CacheEntry {
+            previous_elem: primitive,
+            cache,
+            vertex_alloc: ctx.insert(bytemuck::cast_slice(mesh.vertices.as_slice())),
+            indices: mesh.indices,
         };
-        match rect.color {
-            BasicColor::Solid(alpha_color) => {
-                mesh.vertices
-                    .push(Vertex::new_solid_rect(area.min, area.max, rect.color));
+        self.hashmap.insert(elem_id, entry);
+    }
+    pub fn update(&mut self, ctx: &mut GraphicsContext<Vertex>, elem_id: T, primitive: Primitive) {
+        if let Some(entry) = self.hashmap.get_mut(&elem_id) {
+            if entry.previous_elem != primitive {
+                let mesh = primitive.to_mesh(ctx, &mut entry.cache);
+                // SAFETY: we replace entry.vertex_alloc straight after
+                let key = std::mem::replace(&mut entry.vertex_alloc, unsafe { Key::empty_key() });
+                entry.vertex_alloc = ctx.vertex_arena.update(
+                    &ctx.device,
+                    &ctx.queue,
+                    key,
+                    bytemuck::cast_slice(mesh.vertices.as_slice()),
+                );
+                entry.indices = mesh.indices;
             }
-            BasicColor::LinearGradient(basic_linear_gradient) => todo!(),
+        } else {
+            self.insert(ctx, elem_id, primitive);
         }
-        mesh.indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
-        mesh.vertices
-            .push(Vertex::new_solid_rect(area.min, area.max, rect.color));
-        mesh
-    } else {
-        Mesh { vertices, indices }
+    }
+    pub fn render_order(&self, elem_ids: &[T]) -> Vec<u32> {
+        elem_ids
+            .iter()
+            .flat_map(|id| {
+                let entry = self.hashmap.get(id).expect("failed to get cache entry for element in render order, did you initialise the graphics context?");
+                entry
+                    .indices
+                    .iter()
+                    .map(|x| *x + (entry.vertex_alloc.byte_index() / size_of::<Vertex>()) as u32)
+            })
+            .collect::<Vec<_>>()
     }
 }

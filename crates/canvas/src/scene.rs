@@ -51,10 +51,10 @@ impl Scene {
     pub fn get_node_mut(&mut self, id: u32) -> Option<&mut Primitive<C>> {
         self.nodes.get_mut(&id)
     }
-    pub fn get_node_at_position<'a>(
-        &'a mut self,
+    pub fn get_node_at_position(
+        &mut self,
         point: Point2D<f32>,
-    ) -> Option<&'a mut Primitive<C>> {
+    ) -> Option<&mut Primitive<C>> {
         for id in self.ordering.iter().rev() {
             if let Some(node) = self.nodes.get(id)
                 && node.bounding_box().contains(point)

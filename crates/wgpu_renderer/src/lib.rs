@@ -1,11 +1,15 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
-use atlas::LayeredAtlas;
+use atlas::{
+    formats::{Mask, Rgba8},
+    AllocatedTexture,
+    LayeredAtlas,
+};
 use color::{PremulColor, Srgb};
 use parley::{
+    swash::scale::{image::Image, ScaleContext},
     FontContext,
     LayoutContext,
-    swash::scale::{ScaleContext, image::Image},
 };
 use wgpu::BufferUsages;
 
@@ -17,15 +21,46 @@ use crate::{
 // pub mod pipeline;
 pub mod arena;
 pub mod buffer;
-#[cfg(feature = "gui_reactive")]
+pub mod primitives;
+mod vertex;
+pub use vertex::{Vertex, VertexKind};
+
+#[cfg(feature = "gui")]
 pub mod gui_cache;
 
-pub mod vertex;
+#[derive(Clone)]
+pub struct PrimitiveCache {
+    pub mask_textures: Vec<Arc<AllocatedTexture<Mask, TextureData>>>,
+    pub color_textures: Vec<Arc<AllocatedTexture<Rgba8, TextureData>>>,
+}
 
-#[derive(Clone, Debug)]
 pub struct Mesh<V> {
     vertices: Vec<V>,
     indices: Vec<u32>,
+}
+
+impl<V: Clone> Mesh<V> {
+    pub const fn empty() -> Mesh<V> {
+        Self {
+            vertices: Vec::new(),
+            indices: Vec::new(),
+        }
+    }
+
+    pub fn append(&mut self, vertices: &[V], mut indices: Vec<u32>) {
+        indices.iter_mut().for_each(|x| {
+            *x += self.vertices.len() as u32;
+        });
+        self.vertices.extend_from_slice(vertices);
+        self.indices.extend_from_slice(&indices);
+    }
+    pub fn append_mesh(&mut self, mut mesh: Mesh<V>) {
+        mesh.indices.iter_mut().for_each(|x| {
+            *x += self.vertices.len() as u32;
+        });
+        self.vertices.extend_from_slice(&mesh.vertices);
+        self.indices.extend_from_slice(&mesh.indices);
+    }
 }
 
 slotmap::new_key_type! {
@@ -35,19 +70,25 @@ slotmap::new_key_type! {
 pub struct VertexArenaMarker;
 
 pub struct GraphicsContext<V> {
-    vertex_buf: Arena<VertexArenaMarker>,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+
+    vertex_arena: Arena<VertexArenaMarker>,
     index_buf: GrowableBuffer,
 
-    texture_state: TextureState,
+    pub texture_state: TextureState,
     text_state: TextState,
 
     vertex_type: PhantomData<V>,
 }
 
 impl<V> GraphicsContext<V> {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
-            vertex_buf: Arena::new(device, BufferUsages::VERTEX),
+            device: device.clone(),
+            queue: queue.clone(),
+
+            vertex_arena: Arena::new(device, BufferUsages::VERTEX),
             index_buf: GrowableBuffer::new(device, BufferUsages::INDEX, None),
 
             texture_state: TextureState::new(device),
@@ -58,11 +99,15 @@ impl<V> GraphicsContext<V> {
     }
     pub fn with_capacity(
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         vertex_capacity: usize,
         index_capacity: usize,
     ) -> Self {
         Self {
-            vertex_buf: Arena::with_capacity(device, BufferUsages::VERTEX, vertex_capacity),
+            device: device.clone(),
+            queue: queue.clone(),
+
+            vertex_arena: Arena::with_capacity(device, BufferUsages::VERTEX, vertex_capacity),
             index_buf: GrowableBuffer::with_capacity(
                 device,
                 BufferUsages::INDEX,
@@ -79,41 +124,33 @@ impl<V> GraphicsContext<V> {
 }
 
 impl<V> GraphicsContext<V> {
-    pub fn insert(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        data: &[u8],
-    ) -> Key<VertexArenaMarker> {
-        self.vertex_buf.insert(device, queue, data)
+    pub fn insert(&mut self, data: &[u8]) -> Key<VertexArenaMarker> {
+        debug_assert!(
+            data.len().is_multiple_of(size_of::<V>()),
+            "inserted data does not align to the given vertex size"
+        );
+        self.vertex_arena.insert(&self.device, &self.queue, data)
     }
 
-    pub fn update(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        key: Key<VertexArenaMarker>,
-        data: &[u8],
-    ) -> Key<VertexArenaMarker> {
-        self.vertex_buf.update(device, queue, key, data)
+    pub fn update(&mut self, key: Key<VertexArenaMarker>, data: &[u8]) -> Key<VertexArenaMarker> {
+        debug_assert!(
+            data.len().is_multiple_of(size_of::<V>()),
+            "inserted data does not align to the given vertex size"
+        );
+        self.vertex_arena
+            .update(&self.device, &self.queue, key, data)
     }
-
-    // this is wrong for now
-    #[deprecated]
-    pub fn populate_index(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        order: &[&Key<VertexArenaMarker>],
-    ) {
-        let indices = order
-            .iter()
-            .flat_map(|k| {
-                ((k.index() as u32)..(k.index() + k.len()) as u32).step_by(std::mem::size_of::<V>())
-            })
-            .collect::<Vec<_>>();
+}
+impl<V> GraphicsContext<V> {
+    pub fn vertex_buf(&self) -> &wgpu::Buffer {
+        self.vertex_arena.inner_buffer()
+    }
+    pub fn indices_buf(&self) -> &wgpu::Buffer {
+        &self.index_buf.buf
+    }
+    pub fn replace_indices(&mut self, indices: &[u32]) {
         self.index_buf
-            .replace(device, queue, bytemuck::cast_slice(&indices));
+            .replace(&self.device, &self.queue, bytemuck::cast_slice(indices));
     }
 }
 
@@ -195,13 +232,13 @@ impl Default for TextState {
 impl TextureState {
     pub fn new(device: &wgpu::Device) -> Self {
         let mask_atlas = LayeredAtlas::new(
-            &device,
+            device,
             atlas::DEFAULT_ATLAS_SIZE,
             atlas::DEFAULT_TILE_SIZE,
             device.limits(),
         );
         let color_atlas = LayeredAtlas::new(
-            &device,
+            device,
             atlas::DEFAULT_ATLAS_SIZE,
             atlas::DEFAULT_TILE_SIZE,
             device.limits(),

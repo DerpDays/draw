@@ -6,7 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 graphics = { workspace = true }
-gui = { workspace = true }
+# gui = { workspace = true }
 gui_reactive = { workspace = true }
 input = { workspace = true, features = ["serde"] }
 renderer = { workspace = true }

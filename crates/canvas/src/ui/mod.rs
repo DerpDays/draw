@@ -1,16 +1,16 @@
 use euclid::default::Point2D;
 
-use gui::{UITree, prelude::*, tree::ZIndexProperties, widgets::Widget};
+use gui::{prelude::*, tree::ZIndexProperties, widgets::Widget, UITree};
 use input::{CursorIcon, Modifiers, MouseButton, MouseEventKind};
 use renderer::GrowableMeshBuffer;
 
 use crate::{
-    RedrawRequest,
     tools::ToolKind,
     ui::{
         options::{OptionsMessage, OptionsTree},
         toolbar::Toolbar,
     },
+    RedrawRequest,
 };
 
 pub mod options;
@@ -148,7 +148,10 @@ pub fn grab_fn<T>(_: &mut T, ctx: &mut EventContext<MouseEvent, Message>) {
                 MouseEventKind::Motion { .. } => {
                     ctx.push_messages(vec![Message::HandleGrabMove(ctx.payload().position)])
                 }
-                MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
+                MouseEventKind::Press {
+                    button: MouseButton::Left,
+                    ..
+                } => {
                     ctx.push_messages(vec![
                         Message::MoveTop(ctx.current_node()),
                         Message::CursorIcon(CursorIcon::Grabbing),
@@ -156,7 +159,10 @@ pub fn grab_fn<T>(_: &mut T, ctx: &mut EventContext<MouseEvent, Message>) {
                     ]);
                     ctx.request_mouse_capture(ctx.current_node());
                 }
-                MouseEventKind::Release { button, .. } if button == MouseButton::Left => {
+                MouseEventKind::Release {
+                    button: MouseButton::Left,
+                    ..
+                } => {
                     ctx.push_messages(vec![
                         Message::CursorIcon(CursorIcon::Grab),
                         Message::EndGrab,
@@ -166,11 +172,14 @@ pub fn grab_fn<T>(_: &mut T, ctx: &mut EventContext<MouseEvent, Message>) {
                 _ => {}
             }
         }
-        EventPhase::Capturing => match ctx.payload().kind {
-            MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
+        EventPhase::Capturing => {
+            if let MouseEventKind::Press {
+                button: MouseButton::Left,
+                ..
+            } = ctx.payload().kind
+            {
                 ctx.push_messages(vec![Message::MoveTop(ctx.current_node())])
             }
-            _ => {}
-        },
+        }
     };
 }

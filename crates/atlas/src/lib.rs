@@ -173,7 +173,7 @@ pub struct LayeredAtlas<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> {
 impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
     pub fn new(device: &Device, size: Size, tile_size: u32, limits: Limits) -> Self {
         let max_size = Size::splat(limits.max_texture_dimension_2d as i32);
-        let max_layers = limits.max_texture_array_layers as u32;
+        let max_layers = limits.max_texture_array_layers;
 
         let size = size.min(max_size);
 
@@ -186,7 +186,7 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         });
 
         assert!(
-            T::format().is_multi_planar_format() == false,
+            !T::format().is_multi_planar_format(),
             "Can only create atlas for non-planar texture formats"
         );
 
@@ -241,7 +241,7 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         for layer in 0..layers {
             encoder.copy_texture_to_texture(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &src,
+                    texture: src,
                     mip_level: 0,
                     origin: wgpu::Origin3d {
                         x: 0,
@@ -251,7 +251,7 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
                     aspect: wgpu::TextureAspect::All,
                 },
                 wgpu::TexelCopyTextureInfo {
-                    texture: &dst,
+                    texture: dst,
                     mip_level: 0,
                     origin: wgpu::Origin3d {
                         x: 0,
@@ -271,10 +271,10 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
     }
 
     pub fn is_allocated(&mut self, key: K) -> Option<Arc<AllocatedTexture<T, D>>> {
-        self.allocations.get(&Some(key)).map(|x| x.clone())
+        self.allocations.get(&Some(key)).cloned()
     }
 
-    #[must_use]
+    #[must_use = "must store allocated texture smart pointer to keep the allocation active"]
     /// Allocates a texture onto one of the atlases, this returns an allocated texture reference.
     /// The allocated texture will be marked for deallocation when all references to it are dropped.
     ///
@@ -288,11 +288,10 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         cache_key: Option<K>,
         data: D,
     ) -> Result<Arc<AllocatedTexture<T, D>>> {
-        if let Some(cache_key) = &cache_key {
-            if let Some(allocation) = self.is_allocated(cache_key.clone()) {
+        if let Some(cache_key) = &cache_key
+            && let Some(allocation) = self.is_allocated(cache_key.clone()) {
                 return Ok(allocation);
             };
-        }
 
         let (width, height) = (texture.width, texture.height);
 
@@ -426,11 +425,10 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         cache_key: Option<K>,
         data: D,
     ) -> Result<Arc<AllocatedTexture<T, D>>> {
-        if let Some(cache_key) = &cache_key {
-            if let Some(allocation) = self.is_allocated(cache_key.clone()) {
+        if let Some(cache_key) = &cache_key
+            && let Some(allocation) = self.is_allocated(cache_key.clone()) {
                 return Ok(allocation);
             };
-        }
 
         let tile = self.allocate_tile(
             device,
@@ -460,8 +458,8 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
 
     pub fn tile_texture(&self, texture: UnallocatedTexture) -> Vec<UnallocatedTile<T>> {
         let mut tiles: Vec<UnallocatedTile<T>> = Vec::new();
-        let rows = (texture.height + self.tile_size - 1) / self.tile_size;
-        let cols = (texture.width + self.tile_size - 1) / self.tile_size;
+        let rows = texture.height.div_ceil(self.tile_size);
+        let cols = texture.width.div_ceil(self.tile_size);
         tiles.reserve_exact((rows * cols) as usize);
 
         let stride = T::format().components() as u32;
@@ -506,10 +504,10 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         let (alive, dropped): (HashMap<_, _, _>, HashMap<_, _, _>) = self
             .allocations
             .drain()
-            .partition(|(_, texture)| Arc::strong_count(&texture) > 1);
+            .partition(|(_, texture)| Arc::strong_count(texture) > 1);
         self.allocations = alive;
 
-        for (_key, texture) in &dropped {
+        for texture in dropped.values() {
             for tile in &texture.tiles {
                 if let Some(atlas) = self.layers.get_mut(tile.location.layer as usize) {
                     atlas.deallocate(tile.location.id)
