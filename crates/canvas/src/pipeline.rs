@@ -1,5 +1,6 @@
 use renderer::State;
 use wgpu::{
+    util::DeviceExt,
     BindGroup,
     BindGroupDescriptor,
     BindGroupEntry,
@@ -11,7 +12,6 @@ use wgpu::{
     Sampler,
     SamplerDescriptor,
     TextureView,
-    util::DeviceExt,
 };
 
 use crate::projection::Projection;
@@ -75,7 +75,7 @@ impl DrawPipeline {
                     format: texture_format,
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent {
-                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            src_factor: wgpu::BlendFactor::One,
                             dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
                             operation: wgpu::BlendOperation::Add,
                         },

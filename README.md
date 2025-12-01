@@ -1,21 +1,45 @@
+# About
 Draw is an annotation tool primarily for wayland linux (with more platforms coming).
 
 It allows you to draw and annotate ontop of your desktop easily through configurable keybinds (such as hold to draw, toggle, etc).
 
-Similar to annotation tools from remote desktop solutions (but aiming to be more feature-full) and dedicated software such as epicpen.
+Similar to annotation tools from remote desktop solutions (but aiming to be more feature-full) and dedicated software such as gromit-mpx and epicpen.
 Aims to make it easier to reach for than excalidraw, mermaid or similar tools for explaining things.
 
-To run the wayland application in its current form:
+
+# Building
+First clone the repository
 ```bash
-# Clone the repository
 git clone https://github.com/DerpDays/draw.git
-# Install rustup (skip if you already have rustup installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-# Install the nightly toolchain (skip if you already have a recent nightly toolchain installed).
-rustup toolchain install nightly
-# Run the wayland program.
-cargo +nightly run -p wl
 ```
+## Install rust (skip if you already have rustup installed)
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+## Wayland
+To run the wayland implementation:
+```bash
+cargo run -p wl
+```
+
+
+# Structure
+- crates/
+    - canvas/
+      The actual implementation of the drawing application.
+    - gui/ 
+      A reactive GUI framework utilising WebGPU for rendering - plans to make this more renderer independent
+    - input/
+      A windowing agnostic input types library with conversions for popular libraries
+    - atlas/
+      An easy to use 2D texture atlas that supports growing to multiple layers
+    - graphics/
+      A simple library exporting primitives used in rendering.
+    - wgpu_renderer/
+      A simple renderer in WGPU for exposed graphics types, managing the vertex buffers, index buffers, and texture state.
+- platform/
+    - wl/
+      Implements all windowing and handles the IPC interface and shortcuts for wayland.
 
 
 Currently supports in some or full capacity:

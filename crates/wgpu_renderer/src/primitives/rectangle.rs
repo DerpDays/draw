@@ -42,7 +42,7 @@ fn basic_quad(area: Box2D<f32>, color: &BasicColor, vertices: &mut Vec<Vertex>) 
         BasicColor::Solid(color) => Vertex::new_solid_rect(
             area.min.to_array(),
             area.max.to_array(),
-            color.premultiply(),
+            color.convert().premultiply(),
         ),
         BasicColor::LinearGradient(gradient) => {
             Vertex::new_gradient_rect(area.min.to_array(), area.max.to_array(), gradient)
@@ -94,10 +94,11 @@ fn as_vertex_fn(color: BasicColor) -> impl Fn(FillVertex<'_>) -> Vertex {
         Vertex::new_color(
             vertex.position().to_array(),
             match color {
-                BasicColor::Solid(color) => color.premultiply(),
-                BasicColor::LinearGradient(gradient) => {
-                    gradient.get_point(vertex.position()).premultiply()
-                }
+                BasicColor::Solid(color) => color.convert().premultiply(),
+                BasicColor::LinearGradient(gradient) => gradient
+                    .get_point(vertex.position())
+                    .convert()
+                    .premultiply(),
             },
         )
     }

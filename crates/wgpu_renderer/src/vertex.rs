@@ -1,6 +1,6 @@
 use atlas::TextureVertex;
 use bytemuck::{Pod, Zeroable};
-use color::{PremulColor, Srgb};
+use color::{LinearSrgb, PremulColor};
 use euclid::default::Point2D;
 use graphics_v2::BasicLinearGradient;
 
@@ -37,7 +37,7 @@ pub enum VertexKind {
 
 impl Vertex {
     #[inline(always)]
-    pub const fn new_color(position: [f32; 2], color: PremulColor<Srgb>) -> Self {
+    pub const fn new_color(position: [f32; 2], color: PremulColor<LinearSrgb>) -> Self {
         Self {
             position,
             color: color.components,
@@ -49,7 +49,7 @@ impl Vertex {
     #[inline(always)]
     pub const fn new_mask_texture(
         position: [f32; 2],
-        color: PremulColor<Srgb>,
+        color: PremulColor<LinearSrgb>,
         texture: u32,
         tex_coords: [f32; 2],
     ) -> Self {
@@ -78,37 +78,13 @@ impl Vertex {
     pub const fn new_solid_rect(
         min: [f32; 2],
         max: [f32; 2],
-        color: PremulColor<Srgb>,
+        color: PremulColor<LinearSrgb>,
     ) -> [Self; 4] {
         [
-            Self {
-                position: [max[0], min[1]],
-                color: color.components,
-                kind: VertexKind::Color as u32,
-                texture: 0,
-                tex_coords: [0., 0.],
-            },
-            Self {
-                position: min,
-                color: color.components,
-                kind: VertexKind::Color as u32,
-                texture: 0,
-                tex_coords: [0., 0.],
-            },
-            Self {
-                position: [min[0], max[1]],
-                color: color.components,
-                kind: VertexKind::Color as u32,
-                texture: 0,
-                tex_coords: [0., 0.],
-            },
-            Self {
-                position: max,
-                color: color.components,
-                kind: VertexKind::Color as u32,
-                texture: 0,
-                tex_coords: [0., 0.],
-            },
+            Self::new_color([max[0], min[1]], color),
+            Self::new_color(min, color),
+            Self::new_color([min[0], max[1]], color),
+            Self::new_color(max, color),
         ]
     }
 
@@ -121,53 +97,23 @@ impl Vertex {
         color: &BasicLinearGradient,
     ) -> [Self; 4] {
         [
-            Self {
-                position: [max[0], min[1]],
-                color: color
-                    .get_point(Point2D::new(max[0], min[1]))
-                    .premultiply()
-                    .components,
-                kind: VertexKind::Color as u32,
-                texture: 0,
-                tex_coords: [0., 0.],
-            },
-            Self {
-                position: min,
-                color: color
-                    .get_point(Point2D::new(min[0], min[1]))
-                    .premultiply()
-                    .components,
-                kind: VertexKind::Color as u32,
-                texture: 0,
-                tex_coords: [0., 0.],
-            },
-            Self {
-                position: [min[0], max[1]],
-                color: color
-                    .get_point(Point2D::new(min[0], max[1]))
-                    .premultiply()
-                    .components,
-                kind: VertexKind::Color as u32,
-                texture: 0,
-                tex_coords: [0., 0.],
-            },
-            Self {
-                position: max,
-                color: color
-                    .get_point(Point2D::new(max[0], max[1]))
-                    .premultiply()
-                    .components,
-                kind: VertexKind::Color as u32,
-                texture: 0,
-                tex_coords: [0., 0.],
-            },
+            Self::new_color(
+                [max[0], min[1]],
+                color.get_point_premul_cs(Point2D::new(max[0], min[1])),
+            ),
+            Self::new_color(min, color.get_point_premul_cs(Point2D::new(min[0], min[1]))),
+            Self::new_color(
+                [min[0], max[1]],
+                color.get_point_premul_cs(Point2D::new(min[0], min[1])),
+            ),
+            Self::new_color(max, color.get_point_premul_cs(Point2D::new(max[0], max[1]))),
         ]
     }
 
     #[inline(always)]
     pub const fn from_texture_vertex(
         vertex: TextureVertex,
-        color: PremulColor<Srgb>,
+        color: PremulColor<LinearSrgb>,
         kind: VertexKind,
     ) -> Self {
         Self {

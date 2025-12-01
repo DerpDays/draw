@@ -5,7 +5,7 @@ use atlas::{
     AllocatedTexture,
     LayeredAtlas,
 };
-use color::{PremulColor, Srgb};
+use color::{LinearSrgb, PremulColor, Srgb};
 use parley::{
     swash::scale::{image::Image, ScaleContext},
     FontContext,
@@ -156,7 +156,7 @@ impl<V> GraphicsContext<V> {
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ColorBrush {
-    pub color: PremulColor<Srgb>,
+    pub color: PremulColor<LinearSrgb>,
 }
 
 impl Default for ColorBrush {

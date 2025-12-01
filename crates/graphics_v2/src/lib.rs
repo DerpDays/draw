@@ -1,4 +1,4 @@
-use color::{AlphaColor, HueDirection, PremulColor, Srgb};
+use color::{AlphaColor, ColorSpace, HueDirection, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Vector2D};
 
 // pub mod line;
@@ -8,7 +8,7 @@ pub use primitives::Primitive;
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BaseGradient {
-    pub stops: Vec<GradientStop<PremulColor<Srgb>>>,
+    pub stops: Vec<GradientStop<AlphaColor<Srgb>>>,
 
     spread: SpreadMethod,
 }
@@ -126,6 +126,10 @@ impl BasicLinearGradient {
 
         self.start_color
             .lerp(self.end_color, t, HueDirection::Shorter)
+    }
+
+    pub fn get_point_premul_cs<CS: ColorSpace>(&self, point: Point2D<f32>) -> PremulColor<CS> {
+        self.get_point(point).convert().premultiply()
     }
 
     pub fn lerp(&self, other: Self, t: f32) -> Self {

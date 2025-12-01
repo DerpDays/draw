@@ -2,7 +2,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use atlas::{AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture};
-use color::{AlphaColor, PremulColor, Srgb};
+use color::{AlphaColor, LinearSrgb, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics_v2::{make_positive_box, primitives::Text};
 use parley::{
@@ -83,7 +83,10 @@ pub fn render_text(
                                 start_position.x + inline_box.x + inline_box.width,
                                 start_position.y + inline_box.y + inline_box.height,
                             ],
-                            text.color.unwrap_or(AlphaColor::BLACK).premultiply(),
+                            text.color
+                                .unwrap_or(AlphaColor::BLACK)
+                                .convert()
+                                .premultiply(),
                         ),
                         vec![0, 1, 2, 0, 2, 3],
                     );
@@ -108,7 +111,11 @@ fn prepare_layout(ctx: &mut GraphicsContext<Vertex>, text: &Text) -> Layout<Colo
 
     // Set default text colour styles (set foreground text color)
     let color_brush = ColorBrush {
-        color: text.color.unwrap_or(AlphaColor::BLACK).premultiply(),
+        color: text
+            .color
+            .unwrap_or(AlphaColor::BLACK)
+            .convert()
+            .premultiply(),
     };
     let brush_style = StyleProperty::Brush(color_brush);
     // let font_stack = FontStack::Single(FontFamily::Generic(parley::GenericFamily::SystemUi));
@@ -241,7 +248,7 @@ impl<'a> GlyphRunRenderer<'a> {
         area: Box2D<f32>,
         glyph: &Arc<AllocatedTexture<T, TextureData>>,
         atlas: &LayeredAtlas<T, CacheKey, TextureData>,
-        fill: PremulColor<Srgb>,
+        fill: PremulColor<LinearSrgb>,
         kind: VertexKind,
     ) -> Mesh<Vertex> {
         let texture_mesh = glyph.to_mesh(area, atlas);
@@ -261,7 +268,7 @@ impl<'a> GlyphRunRenderer<'a> {
         atlas: &mut LayeredAtlas<F, CacheKey, TextureData>,
         atlas_keys: &mut Vec<Arc<AllocatedTexture<F, TextureData>>>,
         position: Point2D<f32>,
-        fill: PremulColor<Srgb>,
+        fill: PremulColor<LinearSrgb>,
         vertex_kind: VertexKind,
     ) -> Option<()> {
         let glyph = atlas.is_allocated(cache_key)?;
