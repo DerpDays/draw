@@ -102,7 +102,7 @@ impl<T: AtlasFormat, D> AllocatedTexture<T, D> {
                 max: Point2D::<f32>::new(x2, y2),
             };
 
-            let tile_block = tile.to_quad(tile_output, atlas);
+            let tile_block = tile.as_quad(tile_output, atlas);
             mesh.append_block(tile_block);
         }
         mesh
@@ -126,7 +126,7 @@ struct AllocatedTile {
     location: AtlasLocation,
 }
 impl AllocatedTile {
-    fn to_quad<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D>(
+    fn as_quad<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D>(
         &self,
         output_area: Box2D<f32>,
         atlas: &LayeredAtlas<T, K, D>,
@@ -289,9 +289,10 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         data: D,
     ) -> Result<Arc<AllocatedTexture<T, D>>> {
         if let Some(cache_key) = &cache_key
-            && let Some(allocation) = self.is_allocated(cache_key.clone()) {
-                return Ok(allocation);
-            };
+            && let Some(allocation) = self.is_allocated(cache_key.clone())
+        {
+            return Ok(allocation);
+        };
 
         let (width, height) = (texture.width, texture.height);
 
@@ -319,7 +320,7 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         Ok(allocation)
     }
 
-    #[must_use]
+    #[must_use = "allocated tile returned must be dropped manually"]
     fn allocate_tile(
         &mut self,
         device: &wgpu::Device,
@@ -414,7 +415,8 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         );
     }
 
-    #[must_use]
+    #[must_use = "the allocated texture is dropped when there are no more alive references to it"]
+    #[allow(clippy::too_many_arguments)]
     pub fn allocate_raw(
         &mut self,
         device: &wgpu::Device,
@@ -426,9 +428,10 @@ impl<T: AtlasFormat, K: std::hash::Hash + Eq + Clone, D> LayeredAtlas<T, K, D> {
         data: D,
     ) -> Result<Arc<AllocatedTexture<T, D>>> {
         if let Some(cache_key) = &cache_key
-            && let Some(allocation) = self.is_allocated(cache_key.clone()) {
-                return Ok(allocation);
-            };
+            && let Some(allocation) = self.is_allocated(cache_key.clone())
+        {
+            return Ok(allocation);
+        };
 
         let tile = self.allocate_tile(
             device,

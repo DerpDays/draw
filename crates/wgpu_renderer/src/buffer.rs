@@ -17,6 +17,7 @@ impl Drop for GrowableBuffer {
 }
 
 impl GrowableBuffer {
+    #[inline(always)]
     pub fn new(device: &wgpu::Device, usages: BufferUsages, label: Option<&'static str>) -> Self {
         Self::with_capacity(device, usages, 1024, label)
     }
@@ -123,10 +124,15 @@ impl GrowableBuffer {
         self.capacity = new_size;
     }
 
+    #[inline(always)]
     pub fn len(&self) -> usize {
         self.len
     }
-
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+    #[inline(always)]
     pub fn capacity(&self) -> usize {
         self.capacity
     }

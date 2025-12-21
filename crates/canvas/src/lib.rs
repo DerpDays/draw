@@ -1,5 +1,3 @@
-#![feature(const_trait_impl)]
-
 pub mod canvas;
 pub mod pipeline;
 pub mod projection;

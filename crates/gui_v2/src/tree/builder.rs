@@ -1,20 +1,33 @@
-use std::{cell::Cell, sync::Arc};
+use std::{cell::Cell, rc::Rc, sync::Arc};
 
 use input::{KeyboardEvent, MouseEvent};
 use slotmap::SlotMap;
-use sycamore_reactive::{create_effect, MaybeDyn};
+use sycamore_reactive::{MaybeDyn, create_effect};
 use taffy::Layout;
 
 use crate::{
+    ElementId,
+    TreeManager,
     events::{BlurEvent, EventHandler, FocusEvent},
     tree::{Element, MaybeDynStyle, StyleWrapper, Widget},
     zindex::ZIndexProperties,
-    ElementId,
-    TreeManager,
 };
 
+use crate::widgets::reactivity::ReactiveChildren;
+
 pub trait ErasedBuilder {
-    fn build(self: Box<Self>, arena: &mut SlotMap<ElementId, Element>) -> ElementId;
+    fn build(
+        self: Box<Self>,
+        arena: &mut SlotMap<ElementId, Element>,
+        parent_id: Option<ElementId>,
+    ) -> ElementId;
+
+    fn into_box_dyn(self) -> Box<dyn ErasedBuilder>
+    where
+        Self: Sized + 'static,
+    {
+        Box::new(self) as Box<dyn ErasedBuilder>
+    }
 }
 
 pub struct ElementBuilder<W: Widget> {
@@ -29,6 +42,7 @@ pub struct ElementBuilder<W: Widget> {
     pub(crate) focus_handler: EventHandler<FocusEvent>,
     pub(crate) blur_handler: EventHandler<BlurEvent>,
 
+    #[allow(clippy::type_complexity)]
     pub(crate) before_build: Option<Arc<dyn Fn(&W)>>,
     pub(crate) after_build: Option<Arc<dyn Fn(ElementId)>>,
 }
@@ -113,14 +127,66 @@ impl<W: Widget> ElementBuilder<W> {
         self
     }
 
+    pub fn inner(&self) -> &W {
+        &self.inner
+    }
     pub fn inner_mut(&mut self) -> &mut W {
         &mut self.inner
+    }
+    pub fn into_inner(self) -> W {
+        self.inner
     }
 }
 
 impl<W: Widget> ElementBuilder<W> {
     pub fn child(mut self, child: impl Into<BuilderList>) -> Self {
         self.children.extend(child.into().0);
+        self
+    }
+
+    /// Add reactive children that are dynamically created/removed based on a closure.
+    ///
+    /// The closure is called reactively, and whenever its output changes, children are
+    /// automatically added or removed. Each child gets its own reactive scope that is
+    /// properly disposed when the child is removed.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let items = create_signal(vec!["a", "b", "c"]);
+    /// div()
+    ///     .reactive_child(|| {
+    ///         items.get().into_iter().map(|item| {
+    ///             div().child(text(item))
+    ///         }).collect::<Vec<_>>()
+    ///     })
+    /// ```
+    pub fn reactive_child<F>(mut self, f: F) -> Self
+    where
+        F: Fn() -> Vec<Box<dyn ErasedBuilder>> + 'static,
+    {
+        let closure_for_effect = Rc::new(f);
+
+        // Set up the reactive effect in after_build
+        // We append to existing after_build if it exists
+        let existing_after_build = self.after_build.take();
+        self.after_build = Some(Arc::new(move |parent_id| {
+            // Call existing after_build if any
+            if let Some(ref existing) = existing_after_build {
+                existing(parent_id);
+            }
+
+            // Set up reactive children management
+            let reactive_children = ReactiveChildren::new(
+                {
+                    let closure = closure_for_effect.clone();
+                    move || closure()
+                },
+                parent_id,
+            );
+
+            reactive_children.setup_effect();
+        }));
+
         self
     }
 
@@ -147,13 +213,18 @@ impl<W: Widget> ElementBuilder<W> {
     }
 }
 impl<W: Widget + 'static> ElementBuilder<W> {
-    pub(crate) fn build(self, arena: &mut SlotMap<ElementId, Element>) -> ElementId {
+    pub(crate) fn build(
+        self,
+        arena: &mut SlotMap<ElementId, Element>,
+        parent_id: Option<ElementId>,
+    ) -> ElementId {
         if let Some(hook) = self.before_build {
             hook(&self.inner);
         }
 
         let key = arena.insert_with_key(|id| Element {
             node_id: id,
+            parent_id,
 
             inner: Box::new(self.inner),
             style: self.style,
@@ -174,7 +245,7 @@ impl<W: Widget + 'static> ElementBuilder<W> {
 
         // Build children
         for child in self.children {
-            let child_id = child.build(arena);
+            let child_id = child.build(arena, Some(key));
             arena[key].children.push(child_id);
         }
 
@@ -214,8 +285,12 @@ impl<W: Widget + 'static> ElementBuilder<W> {
 }
 
 impl<W: Widget + 'static> ErasedBuilder for ElementBuilder<W> {
-    fn build(self: Box<Self>, arena: &mut SlotMap<ElementId, Element>) -> ElementId {
-        (*self).build(arena)
+    fn build(
+        self: Box<Self>,
+        arena: &mut SlotMap<ElementId, Element>,
+        parent_id: Option<ElementId>,
+    ) -> ElementId {
+        (*self).build(arena, parent_id)
     }
 }
 
@@ -287,10 +362,22 @@ impl_for_each![
     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R),
     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S),
     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T),
-    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U),
-    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V),
-    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W),
-    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X),
-    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y),
-    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z)
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+    )
 ];

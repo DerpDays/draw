@@ -334,7 +334,7 @@ impl Tree {
 
             match self.parent(target) {
                 Some(parent) => target = parent,
-                None => break, // Safety: prevents infinite loop if hierarchy is broken
+                None => break,
             }
         }
     }
@@ -443,7 +443,7 @@ impl Tree {
             }
             current = parent;
         }
-        return false;
+        false
     }
 
     pub fn process_changes(&mut self) -> Option<()> {
@@ -455,7 +455,9 @@ impl Tree {
             let mut current = Some(node);
             while let Some(current_node) = current {
                 self.cache_clear(current_node);
+                tracing::info!("process changes");
                 current = self.parent(current_node);
+                tracing::info!("done process changes");
             }
         }
         // TODO: Don't recompute the entire layout tree every time.
@@ -495,27 +497,21 @@ pub struct TreeManager(Arc<Mutex<TreeManagerInner>>);
 struct TreeManagerInner {
     redraw_now_fn: Arc<dyn Fn() + Send + Sync>,
     new_handle_fn: Arc<dyn Fn() -> AnimationHandle + Send + Sync>,
-    // redraw_duration_fn: Arc<dyn Fn(Duration) + Send + Sync>,
     relayout_nodes: Vec<ElementId>,
     compute_render_order: bool,
-    // animation_manager: AnimationManager,
 }
 
 impl TreeManager {
-    // pub fn new<N, D>(redraw_now_fn: N, redraw_duration_fn: D) -> Self
     pub fn new<N, H>(redraw_now_fn: N, new_handle_fn: H) -> Self
     where
         N: Fn() + Send + Sync + 'static,
         H: Fn() -> AnimationHandle + Send + Sync + 'static,
-        // D: Fn(Duration) + Send + Sync + 'static,
     {
         Self(Arc::new(Mutex::new(TreeManagerInner {
             redraw_now_fn: Arc::new(redraw_now_fn),
             new_handle_fn: Arc::new(new_handle_fn),
-            // redraw_duration_fn: Arc::new(redraw_duration_fn),
             relayout_nodes: vec![],
             compute_render_order: false,
-            // animation_manager: AnimationManager::new(),
         })))
     }
     /// Set the global handler for the entire process.
@@ -567,8 +563,7 @@ impl TreeManager {
     }
 
     pub fn take_relayout_nodes(&self) -> Vec<ElementId> {
-        let mut nodes = &mut self.get_unwrap().relayout_nodes;
-        std::mem::replace(&mut nodes, vec![])
+        std::mem::take(&mut self.get_unwrap().relayout_nodes)
     }
     pub fn recompute_render_order(&self) {
         self.get_unwrap().compute_render_order = true

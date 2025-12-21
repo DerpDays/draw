@@ -10,8 +10,9 @@ euclid = { workspace = true }
 serde = { workspace = true, optional = true }
 
 smithay-client-toolkit = { workspace = true, optional = true, default-features = false }
+winit = { workspace = true, optional = true }
 
 [features]
 default = ["sctk", "serde"]
 sctk = ["dep:smithay-client-toolkit"]
-winit = ["dep:smithay-client-toolkit"]
+winit = ["dep:winit"]

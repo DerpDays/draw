@@ -1,12 +1,12 @@
 use graphics_v2::Primitive;
 use input::{MouseButton, MouseEvent, MouseEventKind};
-use sycamore_reactive::{batch, create_memo, create_signal, ReadSignal, Signal};
+use sycamore_reactive::{ReadSignal, Signal, batch, create_memo, create_signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
 use wgpu_renderer::{GraphicsContext, Vertex};
 
 use crate::{
     prelude::EventContext,
-    tree::{builder::ElementBuilder, Widget},
+    tree::{Widget, builder::ElementBuilder},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -42,22 +42,22 @@ pub struct ButtonSignals {
 
 impl ButtonSignals {
     /// Create a read signal that reacts to changes in the visual state
-    pub fn to_visual(&self) -> ReadSignal<ButtonVisualState> {
+    pub fn to_visual(self) -> ReadSignal<ButtonVisualState> {
         let Self {
             enabled,
             active,
             pressed,
             hovered,
-        } = *self;
+        } = self;
         create_memo(move || {
             if !enabled.get() {
-                return ButtonVisualState::Disabled;
+                ButtonVisualState::Disabled
             } else if pressed.get() {
-                return ButtonVisualState::Pressed;
+                ButtonVisualState::Pressed
             } else if active.get() {
-                return ButtonVisualState::Active;
+                ButtonVisualState::Active
             } else if hovered.get() {
-                return ButtonVisualState::Hovered;
+                ButtonVisualState::Hovered
             } else {
                 ButtonVisualState::Normal
             }
@@ -107,10 +107,16 @@ impl Widget for Button {
                     self.state.pressed.set(false);
                     self.state.hovered.set(false);
                 }),
-                MouseEventKind::Press { button, .. } if button == MouseButton::Left => {
+                MouseEventKind::Press {
+                    button: MouseButton::Left,
+                    ..
+                } => {
                     self.state.pressed.set(true);
                 }
-                MouseEventKind::Release { button, .. } if button == MouseButton::Left => {
+                MouseEventKind::Release {
+                    button: MouseButton::Left,
+                    ..
+                } => {
                     self.state.pressed.set(false);
                 }
                 _ => {}

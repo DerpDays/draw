@@ -5,7 +5,7 @@ mod ellipse;
 pub use ellipse::render_ellipse;
 
 mod text;
-pub use text::render_text;
+pub use text::{prepare_layout, render_text};
 
 use graphics_v2::Primitive;
 
@@ -18,6 +18,8 @@ pub trait Render {
         cache: &mut Option<PrimitiveCache>,
     ) -> Mesh<Vertex>;
 }
+
+#[allow(unused_variables)]
 impl Render for Primitive {
     fn to_mesh(
         &self,

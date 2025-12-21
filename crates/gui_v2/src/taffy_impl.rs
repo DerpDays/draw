@@ -12,7 +12,7 @@ use taffy::{
     TraverseTree,
 };
 
-use crate::{tree::Node, ElementId, Tree};
+use crate::{ElementId, Tree, tree::Node};
 
 pub struct ChildIter<'a>(std::slice::Iter<'a, ElementId>);
 impl<'a> Iterator for ChildIter<'a> {

@@ -453,7 +453,7 @@ impl<C: ApplyCoordinates> Text<C> {
         // Apply the fractional offset
         .offset(offset)
         // Render the image
-        .render(scaler, glyph.id)
+        .render(scaler, glyph.id as u16)
         .unwrap();
 
         let glyph_width = rendered_glyph.placement.width;
@@ -477,8 +477,8 @@ impl<C: ApplyCoordinates> Text<C> {
             Content::Mask => {
                 let allocated_glyph = mask_atlas
                     .allocate(
-                        &device,
-                        &queue,
+                        device,
+                        queue,
                         texture,
                         Some(cache_key),
                         TextureData::Text(TextData::from_swash(&rendered_glyph)),
@@ -487,7 +487,7 @@ impl<C: ApplyCoordinates> Text<C> {
                 mesh.append(&Self::glyph_to_mesh(
                     glyph_area,
                     &allocated_glyph,
-                    &mask_atlas,
+                    mask_atlas,
                     C::apply(VertexKind::MaskTexture(brush.color)),
                 ));
                 self.atlas_keys.mask_glyphs.push(allocated_glyph);
@@ -495,8 +495,8 @@ impl<C: ApplyCoordinates> Text<C> {
             Content::Color => {
                 let allocated_glyph = color_atlas
                     .allocate(
-                        &device,
-                        &queue,
+                        device,
+                        queue,
                         texture,
                         Some(cache_key),
                         TextureData::Text(TextData::from_swash(&rendered_glyph)),
@@ -505,7 +505,7 @@ impl<C: ApplyCoordinates> Text<C> {
                 mesh.append(&Self::glyph_to_mesh(
                     glyph_area,
                     &allocated_glyph,
-                    &color_atlas,
+                    color_atlas,
                     C::apply(VertexKind::ColorTexture),
                 ));
                 self.atlas_keys.color_glyphs.push(allocated_glyph);

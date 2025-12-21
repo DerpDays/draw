@@ -2,7 +2,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use atlas::{AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture};
-use color::{AlphaColor, LinearSrgb, PremulColor, Srgb};
+use color::{LinearSrgb, PremulColor};
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics_v2::{make_positive_box, primitives::Text};
 use parley::{
@@ -16,9 +16,9 @@ use parley::{
     StyleProperty,
 };
 use swash::{
-    scale::{image::Content, Render, Scaler, Source, StrikeWith},
-    zeno::{Format, Vector},
     FontRef,
+    scale::{Render, Scaler, Source, StrikeWith, image::Content},
+    zeno::{Format, Vector},
 };
 
 use crate::{
@@ -57,8 +57,11 @@ pub fn render_text(
         color_textures: Vec::new(),
     };
 
+    log::info!("rendering text");
     for line in layout.lines() {
+        log::info!("rendering line {:?}", line.is_empty());
         for item in line.items() {
+            log::info!("rendering item");
             match item {
                 PositionedLayoutItem::GlyphRun(glyph_run) => {
                     // renderer.render_glyph_run(&glyph_run, start_position);
@@ -83,10 +86,7 @@ pub fn render_text(
                                 start_position.x + inline_box.x + inline_box.width,
                                 start_position.y + inline_box.y + inline_box.height,
                             ],
-                            text.color
-                                .unwrap_or(AlphaColor::BLACK)
-                                .convert()
-                                .premultiply(),
+                            text.color.convert().premultiply(),
                         ),
                         vec![0, 1, 2, 0, 2, 3],
                     );
@@ -99,7 +99,7 @@ pub fn render_text(
     mesh
 }
 
-fn prepare_layout(ctx: &mut GraphicsContext<Vertex>, text: &Text) -> Layout<ColorBrush> {
+pub fn prepare_layout(ctx: &mut GraphicsContext<Vertex>, text: &Text) -> Layout<ColorBrush> {
     let max_advance = None;
 
     let mut builder = ctx.text_state.layout_ctx.ranged_builder(
@@ -111,11 +111,7 @@ fn prepare_layout(ctx: &mut GraphicsContext<Vertex>, text: &Text) -> Layout<Colo
 
     // Set default text colour styles (set foreground text color)
     let color_brush = ColorBrush {
-        color: text
-            .color
-            .unwrap_or(AlphaColor::BLACK)
-            .convert()
-            .premultiply(),
+        color: text.color.convert().premultiply(),
     };
     let brush_style = StyleProperty::Brush(color_brush);
     // let font_stack = FontStack::Single(FontFamily::Generic(parley::GenericFamily::SystemUi));
@@ -212,6 +208,8 @@ impl<'a> GlyphRunRenderer<'a> {
     }
 
     fn render(&mut self) {
+        let color = self.glyph_run.style().brush.color;
+        log::info!("rendering glyph run {color:?}");
         // Resolve properties of the GlyphRun
         let mut run_x = self.glyph_run.offset() + self.start_position.x;
         let run_y = self.glyph_run.baseline() + self.start_position.y;
@@ -231,11 +229,13 @@ impl<'a> GlyphRunRenderer<'a> {
         // Draw decorations: underline & strikethrough
         let run_metrics = self.glyph_run.run().metrics();
         if let Some(decoration) = &style.underline {
+            log::info!("decoration");
             let offset = decoration.offset.unwrap_or(run_metrics.underline_offset);
             let size = decoration.size.unwrap_or(run_metrics.underline_size);
             self.render_decoration(offset, size);
         }
         if let Some(decoration) = &style.strikethrough {
+            log::info!("decoration");
             let offset = decoration
                 .offset
                 .unwrap_or(run_metrics.strikethrough_offset);
@@ -351,7 +351,7 @@ impl<'a> GlyphRunRenderer<'a> {
         // Apply the fractional offset
         .offset(offset)
         // Render the image
-        .render(&mut self.scaler, glyph.id)
+        .render(&mut self.scaler, glyph.id as u16)
         .ok_or(GlyphRunError::FailedToRasterise)?;
 
         let glyph_width = rendered_glyph.placement.width;

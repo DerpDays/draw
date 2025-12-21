@@ -2,6 +2,6 @@ mod div;
 // mod svg;
 mod text;
 
-pub use div::{div, Div, DivOptions};
+pub use div::{Div, DivOptions, div};
 // pub use svg::{Svg, svg};
-pub use text::{text, Text};
+pub use text::{Text, TextOptions, text};

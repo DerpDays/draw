@@ -12,6 +12,9 @@ pub struct Key<M> {
 }
 
 impl<M> Key<M> {
+    /// # Safety
+    /// You must not use this key to access the arena, this exists purely for convenience of
+    /// temporarily swapping/replacing keys since `Key` is neither copy or clone.
     pub const unsafe fn empty_key() -> Self {
         Self {
             index: 0,
@@ -87,6 +90,7 @@ impl<M> Arena<M> {
         self.allocations.iter()
     }
     pub fn insert(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8]) -> Key<M> {
+        log::info!("inserting data into arena {data:?}");
         for (idx, slot) in self.freelist.iter().map(Key::copy).enumerate() {
             if data.len() <= slot.len() {
                 if data.len() == slot.len() {
@@ -174,6 +178,10 @@ impl<M> Arena<M> {
         data: &[u8],
         offset: usize,
     ) -> Key<M> {
+        assert!(
+            !data.is_empty(),
+            "tried to write empty data, this will result in overlapping keys!"
+        );
         self.buf.write(device, queue, offset, data);
         let key = Key::new(offset, data.len());
         match self

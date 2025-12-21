@@ -17,7 +17,6 @@ members = [
   "crates/atlas",
   "crates/canvas",
   "crates/input",
-  "crates/gui",
   "crates/gui_v2",
   "crates/gui_reactive",
   # "crates/gui_reactive_static",
@@ -40,7 +39,6 @@ wgpu_renderer = { path = "./crates/wgpu_renderer" }
 gui_v2 = { path = "./crates/gui_v2" }
 
 input = { path = "./crates/input", default-features = false }
-gui = { path = "./crates/gui" }
 gui_reactive = { path = "./crates/gui_reactive" }
 
 anyhow = "1.0.98"
@@ -75,7 +73,6 @@ wgpu = { version = "26.0.1", default-features = false, features = [
 
 euclid = "0.22.11"
 
-# cosmic-text = { version = "0.14.2", features = ["vi"] }
 guillotiere = "0.6.2"
 usvg = "0.45.1"
 taffy = "0.9.1"
@@ -91,10 +88,10 @@ calloop = "0.14.3"
 calloop-wayland-source = "0.4.1"
 
 swash = { version = "0.2.5", features = ["scale"] }
-parley = { version = "0.5.0" }
-# fontique = { version = "0.5.0" }
-# peniko = { version = "0.4.0" }
-# kurbo = { version = "0.11.2" }
+# NOTE: in wasm, even though we have the system feature enabled, system fonts will not be populated.
+parley = { version = "0.7.0", features = ["system"] }
+winit = { version = "0.30.12" }
+
 
 [patch.crates-io]
 taffy = { path = "./crates/taffy_rounding_patch" }

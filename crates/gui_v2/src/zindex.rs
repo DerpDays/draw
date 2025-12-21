@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use sycamore_reactive::MaybeDyn;
 
-use crate::{tree::Node, ElementId, Tree};
+use crate::{ElementId, Tree, tree::Node};
 
 /// Metadata about a gui tree node's z-index
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -58,10 +58,6 @@ impl ZIndexOrdering {
         Self { map, render_order }
     }
 
-    #[inline]
-    pub fn get_node_render_idx(&self, node: ElementId) -> Option<usize> {
-        self.map.get(&node).map(|x| *x)
-    }
     #[inline]
     pub fn render_order(&self) -> &[ElementId] {
         &self.render_order

@@ -1,17 +1,17 @@
 use graphics_v2::primitives::Ellipse;
-use lyon::tessellation::{BuffersBuilder, FillVertex, VertexBuffers};
+// use lyon::tessellation::{BuffersBuilder, FillVertex, VertexBuffers};
 
 use crate::{Mesh, Vertex};
 
-pub fn render_ellipse(ellipse: &Ellipse) -> Mesh<Vertex> {
-    let mut buffers = VertexBuffers::<Vertex, u32>::new();
-    let mut builder = BuffersBuilder::new(&mut buffers, |vertex: FillVertex<'_>| {
-        // Vertex::with_color(
-        //     vertex.position(),
-        //     C::apply(VertexKind::Color(ellipse.color)),
-        // );
-        todo!()
-    });
+pub fn render_ellipse(_ellipse: &Ellipse) -> Mesh<Vertex> {
+    // let mut buffers = VertexBuffers::<Vertex, u32>::new();
+    // let mut builder = BuffersBuilder::new(&mut buffers, |vertex: FillVertex<'_>| {
+    //     // Vertex::with_color(
+    //     //     vertex.position(),
+    //     //     C::apply(VertexKind::Color(ellipse.color)),
+    //     // );
+    //     todo!()
+    // });
     todo!();
 
     // let options = FillOptions::tolerance(0.1);
@@ -26,8 +26,8 @@ pub fn render_ellipse(ellipse: &Ellipse) -> Mesh<Vertex> {
     //     );
     // }
 
-    Mesh {
-        vertices: buffers.vertices,
-        indices: buffers.indices,
-    }
+    // Mesh {
+    //     vertices: buffers.vertices,
+    //     indices: buffers.indices,
+    // }
 }

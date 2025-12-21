@@ -5,10 +5,10 @@ use taffy::{AvailableSpace, Layout, Size};
 use wgpu_renderer::{GraphicsContext, Vertex};
 
 use crate::{
+    ElementId,
     events::{BlurEvent, EventContext, EventHandler, FocusEvent},
     reexports::reactive::{maybe_get_clone_untracked, maybe_get_untracked},
     zindex::ZIndexProperties,
-    ElementId,
 };
 
 pub mod builder;
@@ -46,6 +46,7 @@ pub trait Node {
     fn layout_cache_mut(&mut self) -> &mut taffy::Cache;
 
     fn node_id(&self) -> ElementId;
+    fn parent_id(&self) -> Option<ElementId>;
 }
 
 pub trait Widget {
@@ -79,6 +80,7 @@ pub trait Widget {
 
 pub struct Element {
     node_id: ElementId,
+    parent_id: Option<ElementId>,
 
     pub inner: Box<dyn Widget>,
     style: MaybeDyn<StyleWrapper>,
@@ -92,7 +94,7 @@ pub struct Element {
 
     cache: taffy::Cache,
 
-    children: Vec<ElementId>,
+    pub(crate) children: Vec<ElementId>,
 
     pub(crate) mouse_handler: EventHandler<MouseEvent>,
     pub(crate) keyboard_handler: EventHandler<KeyboardEvent>,
@@ -253,5 +255,8 @@ impl Node for Element {
 
     fn node_id(&self) -> ElementId {
         self.node_id
+    }
+    fn parent_id(&self) -> Option<ElementId> {
+        self.parent_id
     }
 }

@@ -1,15 +1,15 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use atlas::{
-    formats::{Mask, Rgba8},
     AllocatedTexture,
     LayeredAtlas,
+    formats::{Mask, Rgba8},
 };
-use color::{LinearSrgb, PremulColor, Srgb};
+use color::{LinearSrgb, PremulColor};
 use parley::{
-    swash::scale::{image::Image, ScaleContext},
     FontContext,
     LayoutContext,
+    swash::scale::{ScaleContext, image::Image},
 };
 use wgpu::BufferUsages;
 
@@ -18,7 +18,6 @@ use crate::{
     buffer::GrowableBuffer,
 };
 
-// pub mod pipeline;
 pub mod arena;
 pub mod buffer;
 pub mod primitives;
@@ -189,7 +188,7 @@ pub struct GlyphCacheKey {
     /// Index of the font within [`TextState`]'s [`FontContext`]
     pub font_index: u32,
     /// ID of the glyph within the given font.
-    pub glyph_id: u16,
+    pub glyph_id: u32,
     /// `f32` bits of font size
     pub font_size_bits: u32,
 }
@@ -221,8 +220,27 @@ impl TextData {
 
 impl Default for TextState {
     fn default() -> Self {
+        #[cfg(not(target_family = "wasm"))]
+        let font_ctx = FontContext::new();
+        // Register OpenSans as a default UISansSerif font for wasm since we don't have system
+        // fonts.
+        #[cfg(target_family = "wasm")]
+        let font_ctx = {
+            let mut font_ctx = FontContext::new();
+            let family = font_ctx.collection.register_fonts(
+                parley::fontique::Blob::new(Arc::new(include_bytes!(
+                    "../../../resources/fonts/opensans_variable.ttf"
+                ))),
+                None,
+            );
+            font_ctx.collection.set_generic_families(
+                parley::GenericFamily::UiSansSerif,
+                vec![family.first().unwrap().0].into_iter(),
+            );
+            font_ctx
+        };
         Self {
-            font_ctx: FontContext::new(),
+            font_ctx,
             layout_ctx: LayoutContext::new(),
             scale_ctx: ScaleContext::new(),
         }

@@ -1,12 +1,12 @@
 use graphics_v2::Primitive;
 use input::{MouseButton, MouseEvent, MouseEventKind};
-use sycamore_reactive::{batch, create_memo, create_signal, ReadSignal, Signal};
+use sycamore_reactive::{ReadSignal, Signal, batch, create_memo, create_signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
 use wgpu_renderer::{GraphicsContext, Vertex};
 
 use crate::{
     prelude::EventContext,
-    tree::{builder::ElementBuilder, Widget},
+    tree::{Widget, builder::ElementBuilder},
     widgets::reactivity::slider::sealed::BoundedRange,
 };
 

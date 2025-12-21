@@ -42,6 +42,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    // TODO: benchmark against pipeline swapping
     switch in.kind {
         case 0u, 3u: {return in.color;}
         case 1u, 4u: { return vec4<f32>(in.color.rgb, in.color.a * textureSampleLevel(mask_atlas, tex_sampler, in.tex_coords, in.texture, 0.).x) ;}

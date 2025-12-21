@@ -122,8 +122,7 @@ pub struct CanvasCoordinates;
 #[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct ViewportCoordinates;
 
-#[const_trait]
-pub trait ApplyCoordinates {
+pub const trait ApplyCoordinates {
     fn apply(kind: VertexKind) -> VertexKind;
 }
 

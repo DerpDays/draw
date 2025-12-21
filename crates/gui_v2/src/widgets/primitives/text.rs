@@ -1,35 +1,57 @@
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc};
 
-use color::AlphaColor;
+use color::{AlphaColor, Srgb};
 use euclid::default::{Point2D, Size2D};
 use graphics_v2::{
+    Primitive,
     primitives::{
         self,
         text::{
+            self,
             FontFamily,
             FontWeight,
             FontWidth,
             GenericFamily,
-            LineHeight,
             OverflowWrap,
             WhiteSpaceCollapse,
             WordBreakStrength,
         },
     },
-    Primitive,
 };
-use sycamore_reactive::{create_effect, ReadSignal};
+use sycamore_reactive::{MaybeDyn, ReadSignal, create_effect};
 use taffy::{AvailableSpace, Layout, Size, Style};
 use wgpu_renderer::{GraphicsContext, Vertex};
 
 use crate::{
-    tree::{builder::ElementBuilder, Widget},
     TreeManager,
+    reexports::reactive::maybe_get_clone_untracked,
+    tree::{Widget, builder::ElementBuilder},
 };
 
 pub struct Text {
     pub text: ReadSignal<String>,
+    options: MaybeDyn<TextOptions>,
 }
+#[derive(Clone, Debug, Default)]
+pub struct TextOptions {
+    pub color: Option<AlphaColor<Srgb>>,
+    pub font_family: Option<text::FontFamily>,
+    pub font_size: Option<f32>,
+    pub font_style: Option<text::FontStyle>,
+    pub font_weight: Option<text::FontWeight>,
+    pub font_width: Option<text::FontWidth>,
+    pub line_height: Option<text::LineHeight>,
+    pub overflow_wrap: Option<text::OverflowWrap>,
+    pub whitespace_collapse: Option<text::WhiteSpaceCollapse>,
+    pub word_break_strength: Option<text::WordBreakStrength>,
+}
+
+impl From<TextOptions> for MaybeDyn<TextOptions> {
+    fn from(value: TextOptions) -> Self {
+        MaybeDyn::Static(value)
+    }
+}
+
 impl Widget for Text {
     fn render(
         &mut self,
@@ -39,31 +61,55 @@ impl Widget for Text {
     ) -> Option<Primitive> {
         println!("Render Label: {}", self.text.get_clone_untracked());
         let text = self.text.get_clone_untracked();
+        let options = maybe_get_clone_untracked(&self.options);
 
         Some(Primitive::Text(primitives::Text {
             origin: Point2D::new(layout.location.x, layout.location.y),
             size: Size2D::new(layout.size.width, layout.size.height),
             text: Arc::from(text.as_str()),
-            color: Some(AlphaColor::WHITE),
-            font_family: FontFamily::Generic(GenericFamily::Serif),
-            font_size: 14.,
-            font_style: primitives::text::FontStyle::Normal,
-            font_weight: FontWeight::NORMAL,
-            font_width: FontWidth::NORMAL,
-            line_height: LineHeight::default(),
-            overflow_wrap: OverflowWrap::Normal,
-            whitespace_collapse: WhiteSpaceCollapse::Collapse,
-            word_break_strength: WordBreakStrength::Normal,
+            color: options.color.unwrap_or(AlphaColor::WHITE),
+            font_family: options
+                .font_family
+                .unwrap_or(FontFamily::Generic(GenericFamily::UiSansSerif)),
+            font_size: options.font_size.unwrap_or(14.),
+            font_style: options
+                .font_style
+                .unwrap_or(primitives::text::FontStyle::Normal),
+            font_weight: options.font_weight.unwrap_or(FontWeight::NORMAL),
+            font_width: options.font_width.unwrap_or(FontWidth::NORMAL),
+            line_height: options.line_height.unwrap_or_default(),
+            overflow_wrap: options.overflow_wrap.unwrap_or(OverflowWrap::Normal),
+            whitespace_collapse: options
+                .whitespace_collapse
+                .unwrap_or(WhiteSpaceCollapse::Collapse),
+            word_break_strength: options
+                .word_break_strength
+                .unwrap_or(WordBreakStrength::Normal),
         }))
     }
     fn measure(
         &mut self,
         known_dimensions: Size<Option<f32>>,
-        _: Size<AvailableSpace>,
+        _available_space: Size<AvailableSpace>,
         _: &Style,
     ) -> Size<f32> {
         // TODO: actually measure text
-        known_dimensions.unwrap_or(Size::zero())
+        // known_dimensions.unwrap_or(Size {
+        //     width: match available_space.width {
+        //         AvailableSpace::Definite(val) => val,
+        //         AvailableSpace::MinContent => f32::MAX,
+        //         AvailableSpace::MaxContent => f32::MAX,
+        //     },
+        //     height: match available_space.height {
+        //         AvailableSpace::Definite(val) => val,
+        //         AvailableSpace::MinContent => f32::MAX,
+        //         AvailableSpace::MaxContent => f32::MAX,
+        //     },
+        // })
+        known_dimensions.unwrap_or(Size {
+            width: taffy::prelude::length(100.),
+            height: taffy::prelude::length(10.),
+        })
     }
     fn debug_label(&self) -> &'static str {
         "Text"
@@ -75,16 +121,47 @@ impl Widget for Text {
 }
 
 pub fn text(text: ReadSignal<String>) -> ElementBuilder<Text> {
-    ElementBuilder::new_with_after_build(Text { text }, move |elem_id| {
-        let mgr = TreeManager::global();
+    ElementBuilder::new_with_after_build(
+        Text {
+            text,
+            options: MaybeDyn::Static(TextOptions::default()),
+        },
+        move |elem_id| {
+            let mgr = TreeManager::global();
 
-        create_effect(move || {
-            text.track();
-            tracing::debug!("new text!!");
-            mgr.relayout(elem_id);
-            mgr.now();
-        });
-    })
+            create_effect(move || {
+                text.track();
+                tracing::debug!("new text!!");
+                mgr.relayout(elem_id);
+                mgr.now();
+            });
+        },
+    )
+}
+
+impl ElementBuilder<Text> {
+    pub fn options(self, options: impl Into<MaybeDyn<TextOptions>>) -> Self {
+        let options = options.into();
+        let inner = Text {
+            text: self.inner().text,
+            options: options.clone(),
+        };
+        ElementBuilder::set_inner(self, inner).append_after_build(move |_| {
+            let mgr = TreeManager::global();
+            let options = options.clone();
+
+            let first_run = Cell::new(true);
+            create_effect(move || {
+                options.track();
+                if !first_run.get() {
+                    tracing::debug!("updating div options");
+                    mgr.now();
+                } else {
+                    first_run.set(false);
+                }
+            });
+        })
+    }
 }
 
 // use std::{marker::PhantomData, sync::Arc};

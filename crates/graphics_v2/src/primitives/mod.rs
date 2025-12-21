@@ -141,7 +141,7 @@ pub struct Text {
     pub size: Size2D<f32>,
 
     pub text: Arc<str>,
-    pub color: Option<AlphaColor<Srgb>>,
+    pub color: AlphaColor<Srgb>,
 
     pub font_family: text::FontFamily,
     pub font_size: f32,

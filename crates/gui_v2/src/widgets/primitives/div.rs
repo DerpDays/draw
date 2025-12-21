@@ -5,23 +5,16 @@ use std::{
 
 use color::AlphaColor;
 use euclid::default::{Point2D, Size2D};
-use graphics_v2::{
-    primitives::Rectangle, // Systems,
-    // Vertex,
-    // ViewportCoordinates,
-    BasicColor,
-    Primitive,
-    Rounding,
-};
-use sycamore_reactive::{create_effect, MaybeDyn};
+use graphics_v2::{BasicColor, Primitive, Rounding, primitives::Rectangle};
+use sycamore_reactive::{MaybeDyn, create_effect};
 use taffy::{AvailableSpace, Layout, Size, Style};
 use wgpu_renderer::{GraphicsContext, Vertex};
 
-use crate::{reexports::reactive::maybe_get_untracked, AnimationHandle};
+use crate::{AnimationHandle, reexports::reactive::maybe_get_untracked};
 
 use crate::{
-    tree::{builder::ElementBuilder, Widget},
     TreeManager,
+    tree::{Widget, builder::ElementBuilder},
 };
 
 pub struct Div {
@@ -35,7 +28,6 @@ struct BackgroundDiv {
     transition_state: Option<TransitionState>,
 
     last_options: DivOptions,
-    last_layout: taffy::Layout,
 }
 
 struct TransitionState {
@@ -96,7 +88,7 @@ impl DivOptions {
             size,
             rounding: self.rounding(),
             color: self.bg_color(),
-            stroke_color: self.bg_color(),
+            stroke_color: self.stroke_color(),
             stroke_width: self.stroke_width(),
         }
     }
@@ -115,26 +107,13 @@ impl DivOptions {
 impl Widget for Div {
     fn render(
         &mut self,
-        ctx: &mut GraphicsContext<Vertex>,
+        _ctx: &mut GraphicsContext<Vertex>,
         layout: &Layout,
-        style: &Style,
+        _style: &Style,
     ) -> Option<Primitive> {
         let bg = self.background.as_mut()?;
 
         let mut options = maybe_get_untracked(&bg.options);
-
-        // let current_rect = Rectangle {
-        //     origin: Point2D::new(layout.location.x, layout.location.y),
-        //     size: Size2D::new(layout.size.width, layout.size.height),
-        //     rounding: current_options.rounding.unwrap_or(Rounding::ZERO),
-        //     color: current_options
-        //         .bg_color
-        //         .unwrap_or(BasicColor::Solid(AlphaColor::TRANSPARENT)),
-        //     stroke_color: current_options
-        //         .bg_color
-        //         .unwrap_or(BasicColor::Solid(AlphaColor::TRANSPARENT)),
-        //     stroke_width: current_options.stroke_width.unwrap_or(0.),
-        // };
 
         if options != bg.last_options {
             if let Some(state) = &mut bg.transition_state {
@@ -210,7 +189,7 @@ impl ElementBuilder<Div> {
     pub fn options(self, options: impl Into<MaybeDyn<DivOptions>>) -> Self {
         let options = options.into();
         let bg_div = {
-            let box_sizing = taffy::BoxSizing::default();
+            let _box_sizing = taffy::BoxSizing::default();
             let last_options = maybe_get_untracked(&options);
             // let rect = Rectangle::new(Point2D::zero(), Size2D::zero(), last_options);
             BackgroundDiv {
@@ -220,7 +199,6 @@ impl ElementBuilder<Div> {
                 transition_state: None,
 
                 last_options,
-                last_layout: Layout::new(),
             }
         };
 

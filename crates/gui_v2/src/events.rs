@@ -3,8 +3,8 @@ use std::sync::Arc;
 use input::{KeyboardEvent, MouseEvent};
 
 use crate::{
-    tree::{builder::ElementBuilder, Node, Widget},
     ElementId,
+    tree::{Node, Widget, builder::ElementBuilder},
 };
 
 /// Represents the phase of event propagation.
@@ -250,9 +250,11 @@ pub struct EventHandler<E> {
     inner: Option<EventHandlerInner<E>>,
 }
 
+/// Takes an element implementing the Node trait, and event context for the given event type.
+type EventHandlerFn<E> = Arc<dyn Fn(&dyn Node, &mut EventContext<E>)>;
+
 pub struct EventHandlerInner<E> {
-    // owner: Owner,
-    handler: Arc<dyn Fn(&dyn Node, &mut EventContext<E>)>,
+    handler: EventHandlerFn<E>,
 }
 impl<E> EventHandler<E> {
     pub fn empty() -> Self {
@@ -284,7 +286,7 @@ impl<W: Widget> ElementBuilder<W> {
     /// Assign a mouse event handler to this element.
     ///
     /// ```rust
-    /// div().on_mouse(|event: MouseEvent| ..);
+    /// div().on_mouse(|this, event: MouseEvent| ..);
     /// ```
     pub fn on_mouse<F>(mut self, func: F) -> Self
     where
@@ -297,7 +299,7 @@ impl<W: Widget> ElementBuilder<W> {
     /// Assign a keyboard event handler to this element.
     ///
     /// ```rust
-    /// div().on_keyboard(|event: KeyboardEvent| ..);
+    /// div().on_keyboard(|this, event: KeyboardEvent| ..);
     /// ```
     pub fn on_keyboard<F>(mut self, func: F) -> Self
     where
@@ -310,7 +312,7 @@ impl<W: Widget> ElementBuilder<W> {
     /// Assign a focus event handler to this element.
     ///
     /// ```rust
-    /// div().on_focus(|event: FocusEvent| ..);
+    /// div().on_focus(|this, event: FocusEvent| ..);
     /// ```
     pub fn on_focus<F>(mut self, func: F) -> Self
     where
@@ -323,7 +325,7 @@ impl<W: Widget> ElementBuilder<W> {
     /// Assign a blur event handler to this element.
     ///
     /// ```rust
-    /// div().on_blur(|event: blurEvent| ..);
+    /// div().on_blur(|this, event: BlurEvent| ..);
     /// ```
     pub fn on_blur<F>(mut self, func: F) -> Self
     where

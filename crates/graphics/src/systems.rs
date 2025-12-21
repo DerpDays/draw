@@ -71,7 +71,7 @@ pub struct GlyphCacheKey {
     /// Index of the font within [`TextState`]'s [`FontContext`]
     pub font_index: u32,
     /// ID of the glyph within the given font.
-    pub glyph_id: u16,
+    pub glyph_id: u32,
     /// `f32` bits of font size
     pub font_size_bits: u32,
 }

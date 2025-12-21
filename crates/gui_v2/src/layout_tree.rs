@@ -46,10 +46,7 @@ impl LayoutTree {
             );
         }
         for node in tree.render_order.render_order() {
-            bounding_boxes.push((
-                node.clone(),
-                box_from_layout(map.get(node).unwrap().abs_layout),
-            ));
+            bounding_boxes.push((*node, box_from_layout(map.get(node).unwrap().abs_layout)));
         }
         Self {
             map,
@@ -64,7 +61,6 @@ impl LayoutTree {
             .filter_map(move |(node, bounding_box)| {
                 bounding_box.contains_inclusive(point).then_some(*node)
             })
-            .into_iter()
     }
 }
 

@@ -1,14 +1,20 @@
-use std::sync::{Arc, Mutex, RwLock, Weak};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, RwLock, Weak},
+};
 
-use sycamore_reactive::{create_root, RootHandle};
+use euclid::default::Point2D;
+use sycamore_reactive::{RootHandle, create_root};
 
 use input::{KeyboardEvent, MouseEvent, MouseEventKind};
-use slotmap::{Key, SecondaryMap, SlotMap};
+use slotmap::{Key, SlotMap};
 use taffy::{AvailableSpace, CacheTree, Size};
-use wgpu_renderer::{gui_cache::GuiCache, GraphicsContext, Vertex};
+use wgpu_renderer::{GraphicsContext, Vertex, gui_cache::GuiCache};
 
 pub mod events;
 mod layout_tree;
+pub mod reexports;
 mod taffy_impl;
 pub mod tree;
 pub mod widgets;
@@ -17,40 +23,16 @@ mod zindex;
 use crate::{
     events::{BlurEvent, EventContext, EventPhase},
     layout_tree::LayoutTree,
-    tree::{builder::ElementBuilder, Element, Node, Widget},
+    tree::{Element, Node, Widget, builder::ElementBuilder},
     zindex::ZIndexOrdering,
 };
 
 pub mod prelude {
     pub use crate::events::{EventContext, EventPhase, *};
-    pub use taffy::prelude::*;
     pub use color;
     pub use graphics_v2;
     pub use sycamore_reactive::*;
-}
-
-pub mod reexports {
-    pub mod reactive {
-        pub use sycamore_reactive::*;
-
-        pub fn maybe_get_untracked<T: Copy + Into<MaybeDyn<T>>>(maybe_dyn: &MaybeDyn<T>) -> T {
-            match maybe_dyn {
-                MaybeDyn::Static(val) => *val,
-                MaybeDyn::Signal(signal) => signal.get_untracked(),
-                MaybeDyn::Derived(derived) => maybe_get_untracked(&derived()),
-            }
-        }
-        pub fn maybe_get_clone_untracked<T: Clone + Into<MaybeDyn<T>>>(
-            maybe_dyn: &MaybeDyn<T>,
-        ) -> T {
-            match maybe_dyn {
-                MaybeDyn::Static(val) => val.clone(),
-                MaybeDyn::Signal(signal) => signal.get_clone_untracked(),
-                MaybeDyn::Derived(derived) => maybe_get_clone_untracked(&derived()),
-            }
-        }
-    }
-    pub use taffy;
+    pub use taffy::prelude::*;
 }
 
 slotmap::new_key_type! { pub struct ElementId; }
@@ -61,8 +43,7 @@ pub struct Tree {
 
     root_node: ElementId,
     alloc: SlotMap<ElementId, Element>,
-    node_parents: SecondaryMap<ElementId, Option<ElementId>>,
-
+    // node_parents: SecondaryMap<ElementId, Option<ElementId>>,
     capture: Capture,
     size: Size<AvailableSpace>,
 
@@ -91,19 +72,17 @@ impl Tree {
         W: Widget + 'static,
     {
         let mut alloc = SlotMap::with_key();
-        let mut node_parents = SecondaryMap::new();
+        // let mut node_parents = SecondaryMap::new();
 
         // we can set this to default since we can confirm
         let mut root_node: ElementId = ElementId::null();
         let owner = manager.with(|| {
             create_root(|| {
-                root_node = f().build(&mut alloc);
+                root_node = f().build(&mut alloc, None);
             })
         });
         debug_assert!(!root_node.is_null(), "root node cannot be null");
-        tracing::info!("built root!!!!");
-
-        Self::populate_parents_map(root_node, &alloc, &mut node_parents);
+        tracing::trace!("initial tree has been built");
 
         let render_order = ZIndexOrdering::default();
         let layout_tree = LayoutTree::default();
@@ -114,7 +93,6 @@ impl Tree {
 
             root_node,
             alloc,
-            node_parents,
 
             capture: Capture::default(),
             size,
@@ -126,24 +104,6 @@ impl Tree {
         tree.compute_root_layout();
 
         tree
-    }
-    fn populate_parents_map(
-        root_node: ElementId,
-        alloc: &SlotMap<ElementId, Element>,
-        node_parents: &mut SecondaryMap<ElementId, Option<ElementId>>,
-    ) {
-        let mut stack: Vec<(ElementId, Option<ElementId>)> = Vec::with_capacity(alloc.len());
-        stack.push((root_node, None)); // start with root, which has no parent
-
-        while let Some((node_id, parent_id)) = stack.pop() {
-            // record parent for this node
-            node_parents.insert(node_id, parent_id);
-
-            // push all children with current node as their parent
-            for &child_id in alloc[node_id].children().iter() {
-                stack.push((child_id, Some(node_id)));
-            }
-        }
     }
 }
 
@@ -192,10 +152,9 @@ impl Tree {
             .children()
     }
     pub fn parent(&self, node_id: ElementId) -> Option<ElementId> {
-        *self.node_parents
-            .get(node_id)
-            .expect("called `Tree::parent` for a node not in the tree")
+        self.get(node_id).parent_id()
     }
+
     pub fn compute_root_layout(&mut self) {
         self.compute_layout(self.root_node(), self.size);
         self.layout_tree = LayoutTree::new(self);
@@ -229,7 +188,9 @@ impl Tree {
                                     inner,
                                 );
                                 self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+                                tracing::info!("calling parent 0!!");
                                 current = self.parent(inner);
+                                tracing::info!("done parent 0!!");
                             }
                         }
                         return Some(());
@@ -248,16 +209,22 @@ impl Tree {
                 }
 
                 let node = self.layout_tree.hit(event.position).next()?;
+                tracing::info!("hit {node:?}");
+                tracing::warn!("parent: {:?}", self.parent(node));
 
                 // If we previously hit a node in our last mouse event, check if the new hit is the same,
                 // if so we will not modify any events.
                 if let Some(prev) = self.capture.last_entered_node {
                     if prev != node {
-                        let transition = if self.has_ancestor(node, prev) {
+                        tracing::info!("failed on t1");
+                        let t1 = self.has_ancestor(node, prev);
+                        tracing::info!("failed on t2");
+                        let t2 = self.has_ancestor(prev, node);
+                        let transition = if t1 {
                             // if the previous node is an ancestor of the new hit, send an enter event to all
                             // nodes from the ancestor onwards.
                             Some((MouseEventKind::Enter, prev, node))
-                        } else if self.has_ancestor(prev, node) {
+                        } else if t2 {
                             // if the new hit is the ancestor of the previous node, send leave events to all
                             // nodes inbetween.
                             Some((MouseEventKind::Leave, node, prev))
@@ -277,23 +244,30 @@ impl Tree {
                                 let mut node1 = prev;
                                 let mut node2 = node;
 
+                                tracing::info!("node depth");
                                 let mut depth1 = self.get_node_depth(node1);
                                 let mut depth2 = self.get_node_depth(node2);
 
                                 // move the deeper node up until both nodes are at the same level
                                 while depth1 > depth2 {
+                                    tracing::info!("calling parent 1!!");
                                     node1 = self.parent(node1).unwrap();
+                                    tracing::info!("done parent 1!!");
                                     depth1 -= 1;
                                 }
                                 while depth2 > depth1 {
+                                    tracing::info!("calling parent 2!!");
                                     node2 = self.parent(node2).unwrap();
+                                    tracing::info!("done parent 2!!");
                                     depth2 -= 1;
                                 }
 
                                 // move both up until they meet
                                 while node1 != node2 {
+                                    tracing::info!("calling parent 3!!");
                                     node1 = self.parent(node1).unwrap();
                                     node2 = self.parent(node2).unwrap();
+                                    tracing::info!("done parent 3!!");
                                 }
 
                                 self.dispatch_event_chain(
@@ -319,7 +293,10 @@ impl Tree {
                         let ctx =
                             EventContext::non_bubbling(MouseEvent::enter(event.position), inner);
                         self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+
+                        tracing::info!("calling parent 4!!");
                         current = self.parent(inner);
+                        tracing::info!("done parent 4!!");
                     }
                 }
 
@@ -407,6 +384,7 @@ impl Tree {
                 }
             }
         }
+
         self.handle_event_dispatch_cleanup(ctx);
     }
     fn handle_event_dispatch_cleanup<E>(&mut self, mut ctx: EventContext<E>) {
@@ -426,20 +404,17 @@ impl Tree {
     fn handle_kb_focus<E>(&mut self, ctx: &mut EventContext<E>) {
         if let Some(capture) = ctx.is_requesting_kb_focus_capture() {
             if let Some(prev) = self.capture.kb_focus {
-                tracing::info!("pushed new blur event");
                 self.dispatch_generic_event(EventContext::direct(BlurEvent, prev), |node, ctx| {
                     node.blur_event(ctx)
                 });
             }
             self.capture.kb_focus = Some(capture);
-            tracing::info!("pushed new focus event");
 
             self.dispatch_generic_event(EventContext::direct(BlurEvent, capture), |node, ctx| {
                 node.blur_event(ctx)
             });
         } else if ctx.is_requesting_kb_focus_release() {
             if let Some(prev) = self.capture.kb_focus {
-                tracing::info!("pushed new blur event");
                 self.dispatch_generic_event(EventContext::direct(BlurEvent, prev), |node, ctx| {
                     node.blur_event(ctx)
                 });
@@ -469,11 +444,47 @@ impl Tree {
         false
     }
 
-    pub fn process_changes(&mut self) -> Option<()> {
+    pub fn process_changes(&mut self, ctx: &mut GraphicsContext<Vertex>) -> Option<()> {
+        // Process child operations first
+        let mut child_ops = self.manager.take_child_operations();
+        let child_ops_empty = child_ops.is_empty();
+        for op in child_ops.drain(..) {
+            match op {
+                ChildOperation::AddChild {
+                    parent,
+                    builder,
+                    callback,
+                } => {
+                    let child_id = self.add_child_direct(parent, builder);
+                    tracing::info!("added child: {child_id:?}");
+                    if let Some(cb) = callback {
+                        cb(child_id);
+                    }
+                }
+                ChildOperation::RemoveChild {
+                    parent,
+                    child,
+                    scope_dispose,
+                } => {
+                    // Dispose scope first if provided
+                    if let Some(dispose) = scope_dispose {
+                        dispose();
+                    }
+                    self.remove_child_direct(ctx, parent, child);
+                    tracing::info!("removed child: {child:?}");
+                }
+            }
+        }
+
+        if !child_ops_empty {
+            self.manager.recompute_render_order()
+        }
+
         let nodes = self.manager.take_relayout_nodes();
-        if nodes.is_empty() {
+        if nodes.is_empty() && child_ops.is_empty() {
             return None;
         }
+
         for node in nodes.clone() {
             let mut current = Some(node);
             while let Some(current_node) = current {
@@ -481,13 +492,118 @@ impl Tree {
                 current = self.parent(current_node);
             }
         }
-        // TODO: Don't recompute the entire layout tree every time.
-        self.compute_root_layout();
+
         if self.manager.take_compute_render_order() {
             self.render_order = ZIndexOrdering::new(self)
         }
+        // TODO: Don't recompute the entire layout tree every time.
+        self.compute_root_layout();
 
         Some(())
+    }
+
+    fn add_child_direct(
+        &mut self,
+        parent: ElementId,
+        builder: Box<dyn tree::builder::ErasedBuilder>,
+    ) -> ElementId {
+        // Build the node within the reactive context
+        // The scope management is handled in ReactiveChildren widget
+        let child_id = self.owner.clone().run_in(|| {
+            self.manager
+                .clone()
+                .with(|| builder.build(&mut self.alloc, Some(parent)))
+        });
+
+        // Add to parent's children list
+        if let Some(parent_elem) = self.alloc.get_mut(parent) {
+            parent_elem.children.push(child_id);
+        }
+
+        // Invalidate parent's layout cache and trigger relayout
+        self.invalidate_node(parent);
+
+        child_id
+    }
+
+    fn remove_child_direct(
+        &mut self,
+        ctx: &mut GraphicsContext<Vertex>,
+        parent: ElementId,
+        child: ElementId,
+    ) {
+        // Validate parent-child relationship
+        if self.parent(child) != Some(parent) {
+            tracing::warn!(
+                "Attempted to remove child {:?} from parent {:?}, but parent relationship doesn't match",
+                child,
+                parent
+            );
+            return;
+        }
+
+        // Collect all descendants to remove (including the child itself)
+        let mut to_remove = vec![child];
+        let mut stack = vec![child];
+
+        while let Some(current) = stack.pop() {
+            if let Some(elem) = self.alloc.get(current) {
+                for &grandchild in elem.children() {
+                    to_remove.push(grandchild);
+                    stack.push(grandchild);
+                }
+            }
+        }
+
+        // Remove from parent's children list
+        if let Some(parent_elem) = self.alloc.get_mut(parent) {
+            parent_elem.children.retain(|&id| id != child);
+        }
+
+        // Clean up focus/capture state
+        for &removed_node in &to_remove {
+            if self.capture.mouse_capture == Some(removed_node) {
+                self.capture.mouse_capture = None;
+            }
+            if self.capture.kb_focus == Some(removed_node) {
+                self.capture.kb_focus = None;
+            }
+            if self.capture.last_entered_node == Some(removed_node) {
+                let mut current = self.capture.last_entered_node;
+                while let Some(parent) = current {
+                    if !to_remove.contains(&parent) {
+                        self.capture.last_entered_node = Some(parent);
+                        break;
+                    }
+
+                    let ctx =
+                        EventContext::non_bubbling(MouseEvent::leave(Point2D::zero()), parent);
+                    self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+                    current = self.parent(parent);
+                }
+            }
+        }
+
+        // Remove from alloc and parent map
+        for node_id in &to_remove {
+            self.gui_cache.remove(ctx, *node_id);
+            self.alloc.remove(*node_id);
+        }
+
+        // Invalidate parent's layout
+        self.invalidate_node(parent);
+    }
+
+    fn invalidate_node(&mut self, node: ElementId) {
+        // Clear layout cache for this node and all ancestors
+        let mut current = Some(node);
+        while let Some(node_id) = current {
+            self.cache_clear(node_id);
+            self.manager.relayout(node_id);
+            current = self.parent(node_id);
+        }
+        // Mark render order as needing recomputation
+        self.manager.recompute_render_order();
     }
 
     pub fn render_order(&mut self, ctx: &mut GraphicsContext<Vertex>) -> Vec<u32> {
@@ -500,31 +616,46 @@ impl Tree {
                         .alloc
                         .get_mut(*node)
                         .expect("tried to render a node not in the tree");
-                    tracing::warn!("rendering node {node:?}");
                     if elem.get_style().display != taffy::Display::None
-                        && let Some(primitive) = elem.render(ctx, &layout) {
-                    tracing::warn!("has primitive {primitive:?} layout: {layout:?}");
-                            self.gui_cache.update(ctx, elem.node_id(), primitive);
-                            actual_order.push(*node);
-                        }
+                        && let Some(primitive) = elem.render(ctx, &layout)
+                    {
+                        // tracing::warn!("has primitive {primitive:?} layout: {layout:?}");
+                        self.gui_cache.update(ctx, elem.node_id(), primitive);
+                        actual_order.push(*node);
+                    }
                 }
-                self.gui_cache
-                    .render_order(&actual_order)
+                self.gui_cache.render_order(&actual_order)
             })
         })
     }
 }
 
-static CURRENT_MANAGER: RwLock<Option<TreeManager>> = RwLock::new(None);
+thread_local! {
+    static CURRENT_MANAGER: RwLock<Option<TreeManager>> = const { RwLock::new(None) };
+}
 
 #[derive(Clone)]
-pub struct TreeManager(Arc<Mutex<TreeManagerInner>>);
+pub struct TreeManager(Rc<RefCell<TreeManagerInner>>);
+
+pub(crate) enum ChildOperation {
+    AddChild {
+        parent: ElementId,
+        builder: Box<dyn tree::builder::ErasedBuilder>,
+        callback: Option<Box<dyn FnOnce(ElementId)>>,
+    },
+    RemoveChild {
+        parent: ElementId,
+        child: ElementId,
+        scope_dispose: Option<Box<dyn FnOnce()>>,
+    },
+}
 
 struct TreeManagerInner {
     redraw_now_fn: Arc<dyn Fn() + Send + Sync>,
     new_handle_fn: Arc<dyn Fn() -> AnimationHandle + Send + Sync>,
     relayout_nodes: Vec<ElementId>,
     compute_render_order: bool,
+    child_operations: Vec<ChildOperation>,
 }
 
 impl TreeManager {
@@ -533,36 +664,34 @@ impl TreeManager {
     where
         N: Fn() + Send + Sync + 'static,
         H: Fn() -> AnimationHandle + Send + Sync + 'static,
-        // D: Fn(Duration) + Send + Sync + 'static,
     {
-        Self(Arc::new(Mutex::new(TreeManagerInner {
+        Self(Rc::new(RefCell::new(TreeManagerInner {
             redraw_now_fn: Arc::new(redraw_now_fn),
             new_handle_fn: Arc::new(new_handle_fn),
-            // redraw_duration_fn: Arc::new(redraw_duration_fn),
+
             relayout_nodes: vec![],
             compute_render_order: false,
-            // animation_manager: AnimationManager::new(),
+            child_operations: vec![],
         })))
     }
     /// Set the global handler for the entire process.
     pub fn set_global(handler: TreeManager) {
-        *CURRENT_MANAGER.write().unwrap() = Some(handler);
+        CURRENT_MANAGER.with(|mgr| {
+            *mgr.write().unwrap() = Some(handler);
+        })
     }
 
     pub fn global() -> TreeManager {
-        CURRENT_MANAGER
-            .read()
-            .unwrap()
-            .clone()
-            .expect("tried to get global manager while none is currently set")
+        CURRENT_MANAGER.with(|mgr| {
+            mgr.read()
+                .unwrap()
+                .clone()
+                .expect("tried to get global manager while none is currently set")
+        })
     }
 
-    pub fn global_warn_none() -> Option<TreeManager> {
-        let mgr = CURRENT_MANAGER.read().unwrap().clone();
-        if mgr.is_none() {
-            tracing::warn!("Tried to get the current tree manager while none was set!");
-        }
-        mgr
+    pub fn try_global() -> Option<TreeManager> {
+        CURRENT_MANAGER.with(|mgr| mgr.read().unwrap().clone())
     }
 
     /// Temporarily set this handler as the global one while running `f`,
@@ -572,17 +701,17 @@ impl TreeManager {
         F: FnOnce() -> R,
     {
         // Store the previous value
-        let prev = CURRENT_MANAGER.read().unwrap().clone();
-        *CURRENT_MANAGER.write().unwrap() = Some(self.clone());
+        let prev = Self::try_global();
+        Self::set_global(self.clone());
         let val = f();
-        *CURRENT_MANAGER.write().unwrap() = prev;
+        CURRENT_MANAGER.with(|mgr| {
+            *mgr.write().unwrap() = prev;
+        });
         val
     }
 
-    fn get_unwrap(&self) -> std::sync::MutexGuard<'_, TreeManagerInner> {
-        self.0
-            .lock()
-            .expect("Can only access TreeManager from one thread at a time.")
+    fn get_unwrap(&self) -> std::cell::RefMut<'_, TreeManagerInner> {
+        self.0.borrow_mut()
     }
 }
 
@@ -607,14 +736,47 @@ impl TreeManager {
     pub fn now(&self) {
         (self.get_unwrap().redraw_now_fn)();
     }
-    // pub fn duration(&self, duration: Duration) {
-    //     (self.get_unwrap().redraw_duration_fn)(duration);
-    // }
 
     pub fn new_animation_handle(&self) -> AnimationHandle {
         let handle = (self.get_unwrap().new_handle_fn)();
         self.now();
         handle
+    }
+
+    pub fn queue_add_child<C>(
+        &self,
+        parent: ElementId,
+        builder: Box<dyn tree::builder::ErasedBuilder>,
+        callback: Option<C>,
+    ) where
+        C: FnOnce(ElementId) + 'static,
+    {
+        let ops = &mut self.get_unwrap().child_operations;
+        ops.push(ChildOperation::AddChild {
+            parent,
+            builder,
+            callback: callback.map(|c| Box::new(c) as Box<dyn FnOnce(ElementId)>),
+        });
+    }
+
+    pub fn queue_remove_child<D>(
+        &self,
+        parent: ElementId,
+        child: ElementId,
+        scope_dispose: Option<D>,
+    ) where
+        D: FnOnce() + 'static,
+    {
+        let ops = &mut self.get_unwrap().child_operations;
+        ops.push(ChildOperation::RemoveChild {
+            parent,
+            child,
+            scope_dispose: scope_dispose.map(|d| Box::new(d) as Box<dyn FnOnce()>),
+        });
+    }
+
+    pub(crate) fn take_child_operations(&self) -> Vec<ChildOperation> {
+        std::mem::take(&mut self.get_unwrap().child_operations)
     }
 }
 
@@ -650,4 +812,4 @@ impl AnimationManager {
 }
 
 #[derive(Clone)]
-pub struct AnimationHandle(Weak<()>);
+pub struct AnimationHandle(#[allow(unused)] Weak<()>);
