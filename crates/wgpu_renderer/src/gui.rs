@@ -1,6 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
+use color::AlphaColor;
 use graphics_v2::Primitive;
+use gui_v2::{ElementId, GuiRenderer, MeasureCtx};
 
 use crate::{
     GraphicsContext,
@@ -75,5 +77,52 @@ impl<T: Hash + Eq> GuiCache<T> {
                     .map(|x| *x + (entry.vertex_alloc.byte_index() / size_of::<Vertex>()) as u32)
             })
             .collect::<Vec<_>>()
+    }
+}
+
+pub struct WgpuRenderer {
+    pub ctx: GraphicsContext,
+    pub cache: GuiCache<ElementId>,
+}
+impl GuiRenderer for WgpuRenderer {
+    type Renderer = GraphicsContext<Vertex>;
+    type Cache = GuiCache<ElementId>;
+
+    fn update_cached(&mut self, elem_id: ElementId, primitive: graphics_v2::Primitive) {
+        self.cache.update(&mut self.ctx, elem_id, primitive);
+    }
+
+    fn remove_cached(&mut self, elem_id: ElementId) {
+        self.cache.remove(&mut self.ctx, elem_id);
+    }
+}
+impl MeasureCtx for WgpuRenderer {
+    fn measure_text(
+        &mut self,
+        text: graphics_v2::primitives::TextMeasure,
+    ) -> gui_v2::reexports::taffy::Size<f32> {
+        let layout = crate::primitives::prepare_text_layout(
+            &mut self.ctx,
+            &text.text,
+            AlphaColor::BLACK,
+            &text.text_layout,
+            text.max_width.or(match text.available_space_width {
+                graphics_v2::primitives::AvailableSpace::Definite(x) => Some(x),
+                _ => None,
+            }),
+        );
+        let width = match text.available_space_width {
+            graphics_v2::primitives::AvailableSpace::Definite(_) => layout.width(),
+            graphics_v2::primitives::AvailableSpace::MinContent => {
+                layout.calculate_content_widths().min
+            }
+            graphics_v2::primitives::AvailableSpace::MaxContent => {
+                layout.calculate_content_widths().max
+            }
+        };
+        gui_v2::reexports::taffy::Size {
+            width,
+            height: layout.height(),
+        }
     }
 }

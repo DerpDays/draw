@@ -2,9 +2,9 @@ use graphics_v2::Primitive;
 use input::{MouseButton, MouseEvent, MouseEventKind};
 use sycamore_reactive::{ReadSignal, Signal, batch, create_memo, create_signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
-use wgpu_renderer::{GraphicsContext, Vertex};
 
 use crate::{
+    MeasureCtx,
     prelude::EventContext,
     tree::{Widget, builder::ElementBuilder},
     widgets::reactivity::slider::sealed::BoundedRange,
@@ -64,16 +64,12 @@ impl SliderSignals {
 }
 
 impl Widget for Slider {
-    fn render(
-        &mut self,
-        _: &mut GraphicsContext<Vertex>,
-        _: &Layout,
-        _: &Style,
-    ) -> Option<Primitive> {
+    fn render(&mut self, _: &Layout, _: &Style) -> Option<Primitive> {
         None
     }
     fn measure(
         &mut self,
+        _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _: Size<AvailableSpace>,
         _: &Style,
@@ -90,7 +86,7 @@ impl Widget for Slider {
 
     fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>, layout: &Layout) {
         if !ctx.in_capture_phase() {
-            tracing::info!("default mouse event!!");
+            log::info!("default mouse event!!");
             if !self.state.enabled.get_untracked() {
                 self.state.pressed.set(false);
                 self.state.hovered.set(false);

@@ -8,9 +8,8 @@ use euclid::default::{Point2D, Size2D};
 use graphics_v2::{BasicColor, Primitive, Rounding, primitives::Rectangle};
 use sycamore_reactive::{MaybeDyn, create_effect};
 use taffy::{AvailableSpace, Layout, Size, Style};
-use wgpu_renderer::{GraphicsContext, Vertex};
 
-use crate::{AnimationHandle, reexports::reactive::maybe_get_untracked};
+use crate::{AnimationHandle, MeasureCtx, reexports::reactive::maybe_get_untracked};
 
 use crate::{
     TreeManager,
@@ -105,12 +104,7 @@ impl DivOptions {
 }
 
 impl Widget for Div {
-    fn render(
-        &mut self,
-        _ctx: &mut GraphicsContext<Vertex>,
-        layout: &Layout,
-        _style: &Style,
-    ) -> Option<Primitive> {
+    fn render(&mut self, layout: &Layout, _style: &Style) -> Option<Primitive> {
         let bg = self.background.as_mut()?;
 
         let mut options = maybe_get_untracked(&bg.options);
@@ -166,6 +160,7 @@ impl Widget for Div {
 
     fn measure(
         &mut self,
+        _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _: Size<AvailableSpace>,
         _: &Style,
@@ -213,7 +208,7 @@ impl ElementBuilder<Div> {
             create_effect(move || {
                 options.track();
                 if !first_run.get() {
-                    tracing::debug!("updating div options");
+                    log::debug!("updating div options");
                     mgr.now();
                 } else {
                     first_run.set(false);

@@ -1,16 +1,16 @@
 use std::cell::Cell;
 
 use euclid::default::{Point2D, Size2D};
-use graphics::{primitives::SvgOptions, Drawable, Mesh, Systems, Vertex, ViewportCoordinates};
-use sycamore_reactive::{create_effect, MaybeDyn, ReadSignal, Signal};
+use graphics::{Drawable, Mesh, Systems, Vertex, ViewportCoordinates, primitives::SvgOptions};
+use sycamore_reactive::{MaybeDyn, ReadSignal, Signal, create_effect};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::reexports::reactive::maybe_get_untracked;
 
 use crate::{
-    tree::{builder::ElementBuilder, Widget},
-    widgets::LayoutEqNoLocation,
     TreeManager,
+    tree::{Widget, builder::ElementBuilder},
+    widgets::LayoutEqNoLocation,
 };
 
 pub struct Svg {

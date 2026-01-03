@@ -1020,12 +1020,10 @@ dependencies = [
  "euclid",
  "graphics_v2",
  "input",
+ "log",
  "slotmap",
  "sycamore-reactive",
  "taffy",
- "tracing",
- "tracing-subscriber",
- "wgpu_renderer",
 ]
 
 [[package]]
@@ -3209,6 +3207,7 @@ dependencies = [
  "color",
  "euclid",
  "graphics_v2",
+ "gui_v2",
  "log",
  "lyon",
  "parley",

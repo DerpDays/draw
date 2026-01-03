@@ -5,11 +5,9 @@ edition = { workspace = true }
 
 [dependencies]
 graphics_v2 = { workspace = true }
-wgpu_renderer = { workspace = true }
 input = { workspace = true }
 
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+log = { workspace = true }
 
 accesskit = { workspace = true, optional = true }
 slotmap = "1.0.7"

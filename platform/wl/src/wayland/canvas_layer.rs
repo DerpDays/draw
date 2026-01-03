@@ -2,28 +2,28 @@ use std::ptr::NonNull;
 
 use color_eyre::eyre::{Context, OptionExt, Result};
 use euclid::default::{Point2D, Size2D};
-use input::{sctk::KeyEventKind, CursorIcon, MouseEvent, MouseEventKind};
+use input::{CursorIcon, MouseEvent, MouseEventKind, sctk::KeyEventKind};
 use renderer::reexports::wgpu;
 use smithay_client_toolkit::{
     compositor::Region,
     reexports::client::{
-        protocol::{wl_output::WlOutput, wl_surface::WlSurface},
         Proxy,
+        protocol::{wl_output::WlOutput, wl_surface::WlSurface},
     },
     seat::pointer::{PointerEvent, ThemedPointer},
     shell::{
-        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerSurface},
         WaylandSurface,
+        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerSurface},
     },
 };
 use tracing::{info, trace};
 
 use crate::wayland::{
-    protocols::{FractionalScale, Viewport},
     OverlayMode,
-    RedrawManagerV2,
+    RedrawManager,
     ShareableState,
     WaylandState,
+    protocols::{FractionalScale, Viewport},
 };
 
 // Layer shell view implementation
@@ -36,7 +36,7 @@ pub struct LayerShellCanvasView {
     pub scale_factor: Option<f64>,
     pub physical_size: Size2D<u32>,
 
-    pub canvas: canvas::view::View<RedrawManagerV2>,
+    pub canvas: canvas::view::View<RedrawManager>,
     pub previous_cursor_icon: Option<CursorIcon>,
 
     pub mode: OverlayMode,
@@ -129,7 +129,7 @@ impl LayerShellCanvasView {
                 &state.wgpu,
                 physical_size.cast(),
                 1.,
-                state.redraw_manager_v2.clone(),
+                state.redraw_manager.clone(),
             ),
             previous_cursor_icon: None,
 
@@ -262,13 +262,14 @@ impl LayerShellCanvasView {
             .mouse_event(MouseEvent { position, kind }, &state.wgpu);
 
         if let Some(cursor_icon) = cursor_icon
-            && self.previous_cursor_icon != Some(cursor_icon) {
-                self.previous_cursor_icon = Some(cursor_icon);
-                _ = themed_pointer.set_cursor(
-                    &state.wayland.connection,
-                    input::sctk::cursor_icon(cursor_icon),
-                );
-            };
+            && self.previous_cursor_icon != Some(cursor_icon)
+        {
+            self.previous_cursor_icon = Some(cursor_icon);
+            _ = themed_pointer.set_cursor(
+                &state.wayland.connection,
+                input::sctk::cursor_icon(cursor_icon),
+            );
+        };
     }
 
     pub fn keyboard_event(&mut self, state: &mut ShareableState, kind: &KeyEventKind) {

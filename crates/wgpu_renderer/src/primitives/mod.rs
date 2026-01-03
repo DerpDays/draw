@@ -5,7 +5,7 @@ mod ellipse;
 pub use ellipse::render_ellipse;
 
 mod text;
-pub use text::{prepare_layout, render_text};
+pub use text::{prepare_text_layout, render_text};
 
 use graphics_v2::Primitive;
 

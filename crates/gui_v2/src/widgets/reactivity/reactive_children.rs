@@ -3,10 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use graphics_v2::Primitive;
 use sycamore_reactive::{NodeHandle, create_child_scope, create_effect};
 use taffy::{AvailableSpace, Layout, Size};
-use wgpu_renderer::{GraphicsContext, Vertex};
 
 use crate::{
     ElementId,
+    MeasureCtx,
     TreeManager,
     tree::{Widget, builder::ErasedBuilder},
 };
@@ -54,7 +54,7 @@ impl ReactiveChildren {
                     .drain(..)
                     .map(|(child_id, scope_handle)| {
                         // Dispose the scope first to clean up effects
-                        tracing::trace!("disposing of reactive child {child_id:?}");
+                        log::trace!("disposing of reactive child {child_id:?}");
                         scope_handle.dispose();
                         child_id
                     })
@@ -102,18 +102,14 @@ impl ReactiveChildren {
 }
 
 impl Widget for ReactiveChildren {
-    fn render(
-        &mut self,
-        _ctx: &mut GraphicsContext<Vertex>,
-        _layout: &Layout,
-        _style: &taffy::Style,
-    ) -> Option<Primitive> {
+    fn render(&mut self, _layout: &Layout, _style: &taffy::Style) -> Option<Primitive> {
         // ReactiveChildren is a container widget, it doesn't render itself
         None
     }
 
     fn measure(
         &mut self,
+        _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _available: Size<AvailableSpace>,
         _style: &taffy::Style,

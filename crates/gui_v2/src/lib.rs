@@ -10,7 +10,6 @@ use sycamore_reactive::{RootHandle, create_root};
 use input::{KeyboardEvent, MouseEvent, MouseEventKind};
 use slotmap::{Key, SlotMap};
 use taffy::{AvailableSpace, CacheTree, Size};
-use wgpu_renderer::{GraphicsContext, Vertex, gui_cache::GuiCache};
 
 pub mod events;
 mod layout_tree;
@@ -37,20 +36,31 @@ pub mod prelude {
 
 slotmap::new_key_type! { pub struct ElementId; }
 
-pub struct Tree {
+pub trait GuiRenderer: MeasureCtx {
+    type Renderer;
+    type Cache;
+
+    fn update_cached(&mut self, elem_id: ElementId, primitive: graphics_v2::Primitive);
+    fn remove_cached(&mut self, elem_id: ElementId);
+}
+
+pub trait MeasureCtx {
+    fn measure_text(&mut self, text: graphics_v2::primitives::TextMeasure) -> taffy::Size<f32>;
+}
+
+pub struct Tree<R: GuiRenderer> {
     pub owner: RootHandle,
     pub manager: TreeManager,
 
     root_node: ElementId,
     alloc: SlotMap<ElementId, Element>,
-    // node_parents: SecondaryMap<ElementId, Option<ElementId>>,
     capture: Capture,
     size: Size<AvailableSpace>,
 
-    // node_info: HashMap<DynNodeId, NodeInfo>,
     render_order: ZIndexOrdering,
     pub layout_tree: LayoutTree,
-    gui_cache: wgpu_renderer::gui_cache::GuiCache<ElementId>,
+
+    renderer: Rc<RefCell<R>>,
 }
 
 /// State about the tree's current keyboard focus and mouse capture.
@@ -65,8 +75,13 @@ pub struct Capture {
     last_entered_node: Option<ElementId>,
 }
 
-impl Tree {
-    pub fn build<F, W>(size: Size<AvailableSpace>, manager: TreeManager, f: F) -> Self
+impl<R: GuiRenderer> Tree<R> {
+    pub fn build<F, W>(
+        renderer: Rc<RefCell<R>>,
+        size: Size<AvailableSpace>,
+        manager: TreeManager,
+        f: F,
+    ) -> Self
     where
         F: FnOnce() -> ElementBuilder<W> + 'static,
         W: Widget + 'static,
@@ -82,7 +97,7 @@ impl Tree {
             })
         });
         debug_assert!(!root_node.is_null(), "root node cannot be null");
-        tracing::trace!("initial tree has been built");
+        log::trace!("initial tree has been built");
 
         let render_order = ZIndexOrdering::default();
         let layout_tree = LayoutTree::default();
@@ -98,7 +113,8 @@ impl Tree {
             size,
             render_order,
             layout_tree,
-            gui_cache: GuiCache::default(),
+
+            renderer,
         };
         tree.render_order = ZIndexOrdering::new(&tree);
         tree.compute_root_layout();
@@ -107,7 +123,7 @@ impl Tree {
     }
 }
 
-impl Tree {
+impl<R: GuiRenderer> Tree<R> {
     pub fn nodes(&self) -> Vec<ElementId> {
         let mut stack = vec![self.root_node];
         let mut visited = vec![];
@@ -125,7 +141,7 @@ impl Tree {
     pub fn resize(&mut self, size: Size<AvailableSpace>) {
         self.size = size;
         for node in self.nodes() {
-            tracing::info!("clearing cache for node {node:?}!");
+            log::info!("clearing cache for node {node:?}!");
             self.cache_clear(node);
         }
         self.compute_root_layout();
@@ -176,7 +192,7 @@ impl Tree {
                 // If the mouse event is an actual enter/exit event, reset the tree to its default state.
                 match event.kind {
                     MouseEventKind::Leave | MouseEventKind::Enter => {
-                        tracing::info!("Got an enter or leave event, resetting capture.");
+                        log::info!("Got an enter or leave event, resetting capture.");
                         self.capture.mouse_capture = None;
                         if let Some(prev) = self.capture.last_entered_node.take() {
                             // Send leave events to all nodes that were previously entered by going up the
@@ -188,9 +204,9 @@ impl Tree {
                                     inner,
                                 );
                                 self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
-                                tracing::info!("calling parent 0!!");
+                                log::info!("calling parent 0!!");
                                 current = self.parent(inner);
-                                tracing::info!("done parent 0!!");
+                                log::info!("done parent 0!!");
                             }
                         }
                         return Some(());
@@ -200,7 +216,7 @@ impl Tree {
 
                 // If the mouse is currently captured, directly send the event to the captured node.
                 if let Some(node) = self.capture.mouse_capture {
-                    tracing::info!("Sending direct mouse event since mouse is captured!");
+                    log::info!("Sending direct mouse event since mouse is captured!");
                     let mut ctx = EventContext::direct(event, node);
                     self.alloc.get_mut(node).unwrap().mouse_event(&mut ctx);
                     self.handle_event_dispatch_cleanup(ctx);
@@ -209,16 +225,16 @@ impl Tree {
                 }
 
                 let node = self.layout_tree.hit(event.position).next()?;
-                tracing::info!("hit {node:?}");
-                tracing::warn!("parent: {:?}", self.parent(node));
+                log::info!("hit {node:?}");
+                log::warn!("parent: {:?}", self.parent(node));
 
                 // If we previously hit a node in our last mouse event, check if the new hit is the same,
                 // if so we will not modify any events.
                 if let Some(prev) = self.capture.last_entered_node {
                     if prev != node {
-                        tracing::info!("failed on t1");
+                        log::info!("failed on t1");
                         let t1 = self.has_ancestor(node, prev);
-                        tracing::info!("failed on t2");
+                        log::info!("failed on t2");
                         let t2 = self.has_ancestor(prev, node);
                         let transition = if t1 {
                             // if the previous node is an ancestor of the new hit, send an enter event to all
@@ -236,7 +252,7 @@ impl Tree {
 
                         match transition {
                             Some((kind, ancestor, target)) => {
-                                tracing::info!("sending {kind:?} events");
+                                log::info!("sending {kind:?} events");
                                 self.dispatch_event_chain(ancestor, target, kind, event);
                             }
                             None => {
@@ -244,30 +260,30 @@ impl Tree {
                                 let mut node1 = prev;
                                 let mut node2 = node;
 
-                                tracing::info!("node depth");
+                                log::info!("node depth");
                                 let mut depth1 = self.get_node_depth(node1);
                                 let mut depth2 = self.get_node_depth(node2);
 
                                 // move the deeper node up until both nodes are at the same level
                                 while depth1 > depth2 {
-                                    tracing::info!("calling parent 1!!");
+                                    log::info!("calling parent 1!!");
                                     node1 = self.parent(node1).unwrap();
-                                    tracing::info!("done parent 1!!");
+                                    log::info!("done parent 1!!");
                                     depth1 -= 1;
                                 }
                                 while depth2 > depth1 {
-                                    tracing::info!("calling parent 2!!");
+                                    log::info!("calling parent 2!!");
                                     node2 = self.parent(node2).unwrap();
-                                    tracing::info!("done parent 2!!");
+                                    log::info!("done parent 2!!");
                                     depth2 -= 1;
                                 }
 
                                 // move both up until they meet
                                 while node1 != node2 {
-                                    tracing::info!("calling parent 3!!");
+                                    log::info!("calling parent 3!!");
                                     node1 = self.parent(node1).unwrap();
                                     node2 = self.parent(node2).unwrap();
-                                    tracing::info!("done parent 3!!");
+                                    log::info!("done parent 3!!");
                                 }
 
                                 self.dispatch_event_chain(
@@ -294,9 +310,9 @@ impl Tree {
                             EventContext::non_bubbling(MouseEvent::enter(event.position), inner);
                         self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
 
-                        tracing::info!("calling parent 4!!");
+                        log::info!("calling parent 4!!");
                         current = self.parent(inner);
-                        tracing::info!("done parent 4!!");
+                        log::info!("done parent 4!!");
                     }
                 }
 
@@ -310,10 +326,10 @@ impl Tree {
 
     pub fn on_keyboard(&mut self, event: KeyboardEvent) -> Option<()> {
         // Only handle keyboard events if a node currently has keyboard focus.
-        tracing::trace!("checking kb_focus {:?}", self.capture.kb_focus);
+        log::trace!("checking kb_focus {:?}", self.capture.kb_focus);
         let node = self.capture.kb_focus?;
 
-        tracing::trace!("there is a focused node.");
+        log::trace!("there is a focused node.");
 
         let mut ctx = EventContext::direct(event, node);
         self.alloc.get_mut(node).unwrap().keyboard_event(&mut ctx);
@@ -444,7 +460,7 @@ impl Tree {
         false
     }
 
-    pub fn process_changes(&mut self, ctx: &mut GraphicsContext<Vertex>) -> Option<()> {
+    pub fn process_changes(&mut self) -> Option<()> {
         // Process child operations first
         let mut child_ops = self.manager.take_child_operations();
         let child_ops_empty = child_ops.is_empty();
@@ -456,7 +472,7 @@ impl Tree {
                     callback,
                 } => {
                     let child_id = self.add_child_direct(parent, builder);
-                    tracing::info!("added child: {child_id:?}");
+                    log::info!("added child: {child_id:?}");
                     if let Some(cb) = callback {
                         cb(child_id);
                     }
@@ -470,8 +486,8 @@ impl Tree {
                     if let Some(dispose) = scope_dispose {
                         dispose();
                     }
-                    self.remove_child_direct(ctx, parent, child);
-                    tracing::info!("removed child: {child:?}");
+                    self.remove_child_direct(parent, child);
+                    log::info!("removed child: {child:?}");
                 }
             }
         }
@@ -526,15 +542,10 @@ impl Tree {
         child_id
     }
 
-    fn remove_child_direct(
-        &mut self,
-        ctx: &mut GraphicsContext<Vertex>,
-        parent: ElementId,
-        child: ElementId,
-    ) {
+    fn remove_child_direct(&mut self, parent: ElementId, child: ElementId) {
         // Validate parent-child relationship
         if self.parent(child) != Some(parent) {
-            tracing::warn!(
+            log::warn!(
                 "Attempted to remove child {:?} from parent {:?}, but parent relationship doesn't match",
                 child,
                 parent
@@ -584,9 +595,9 @@ impl Tree {
             }
         }
 
-        // Remove from alloc and parent map
+        // Remove from alloc and renderer cache
         for node_id in &to_remove {
-            self.gui_cache.remove(ctx, *node_id);
+            self.renderer.borrow_mut().remove_cached(*node_id);
             self.alloc.remove(*node_id);
         }
 
@@ -606,7 +617,7 @@ impl Tree {
         self.manager.recompute_render_order();
     }
 
-    pub fn render_order(&mut self, ctx: &mut GraphicsContext<Vertex>) -> Vec<u32> {
+    pub fn render_order(&mut self) -> Vec<ElementId> {
         self.owner.clone().run_in(|| {
             self.manager.clone().with(|| {
                 let mut actual_order = Vec::with_capacity(self.render_order.render_order().len());
@@ -616,15 +627,17 @@ impl Tree {
                         .alloc
                         .get_mut(*node)
                         .expect("tried to render a node not in the tree");
+
                     if elem.get_style().display != taffy::Display::None
-                        && let Some(primitive) = elem.render(ctx, &layout)
+                        && let Some(primitive) = elem.render(&layout)
                     {
-                        // tracing::warn!("has primitive {primitive:?} layout: {layout:?}");
-                        self.gui_cache.update(ctx, elem.node_id(), primitive);
+                        self.renderer
+                            .borrow_mut()
+                            .update_cached(elem.node_id(), primitive);
                         actual_order.push(*node);
                     }
                 }
-                self.gui_cache.render_order(&actual_order)
+                actual_order
             })
         })
     }

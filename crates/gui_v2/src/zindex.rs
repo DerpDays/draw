@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use sycamore_reactive::MaybeDyn;
 
-use crate::{ElementId, Tree, tree::Node};
+use crate::{ElementId, GuiRenderer, Tree, tree::Node};
 
 /// Metadata about a gui tree node's z-index
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -49,7 +49,7 @@ enum NodeGrouping {
 }
 
 impl ZIndexOrdering {
-    pub fn new(tree: &Tree) -> Self {
+    pub fn new<R: GuiRenderer>(tree: &Tree<R>) -> Self {
         let mut map = HashMap::new();
         let render_order = Self::sort_stacking_context(tree, tree.root_node());
         for (idx, node) in render_order.iter().enumerate() {
@@ -63,7 +63,7 @@ impl ZIndexOrdering {
         &self.render_order
     }
 
-    fn sort_stacking_context(tree: &Tree, root: ElementId) -> Vec<ElementId> {
+    fn sort_stacking_context<R: GuiRenderer>(tree: &Tree<R>, root: ElementId) -> Vec<ElementId> {
         let mut sorted = vec![];
         let mut stack = tree.children(root).to_vec();
         stack.reverse();

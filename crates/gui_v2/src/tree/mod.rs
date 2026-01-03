@@ -2,10 +2,10 @@ use graphics_v2::Primitive;
 use input::{KeyboardEvent, MouseEvent};
 use sycamore_reactive::{MaybeDyn, ReadSignal, Signal};
 use taffy::{AvailableSpace, Layout, Size};
-use wgpu_renderer::{GraphicsContext, Vertex};
 
 use crate::{
     ElementId,
+    MeasureCtx,
     events::{BlurEvent, EventContext, EventHandler, FocusEvent},
     reexports::reactive::{maybe_get_clone_untracked, maybe_get_untracked},
     zindex::ZIndexProperties,
@@ -14,9 +14,10 @@ use crate::{
 pub mod builder;
 
 pub trait Node {
-    fn render(&mut self, ctx: &mut GraphicsContext<Vertex>, layout: &Layout) -> Option<Primitive>;
+    fn render(&mut self, layout: &Layout) -> Option<Primitive>;
     fn measure(
         &mut self,
+        measure_ctx: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         available: Size<AvailableSpace>,
         style: &taffy::Style,
@@ -50,15 +51,14 @@ pub trait Node {
 }
 
 pub trait Widget {
-    fn render(
-        &mut self,
-        ctx: &mut GraphicsContext<Vertex>,
-        layout: &Layout,
-        style: &taffy::Style,
-    ) -> Option<Primitive>;
+    fn render(&mut self, layout: &Layout, style: &taffy::Style) -> Option<Primitive>;
 
+    /// Measures the size of this element.
+    ///
+    /// NOTE: this is only ran when the element is a leaf node (i.e. no children).
     fn measure(
         &mut self,
+        measure_ctx: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         available: Size<AvailableSpace>,
         style: &taffy::Style,
@@ -78,11 +78,11 @@ pub trait Widget {
     fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>, layout: &Layout) {}
 }
 
-pub struct Element {
+pub struct Element<'a> {
     node_id: ElementId,
     parent_id: Option<ElementId>,
 
-    pub inner: Box<dyn Widget>,
+    pub inner: Box<dyn Widget + 'a>,
     style: MaybeDyn<StyleWrapper>,
     zindex: MaybeDyn<ZIndexProperties>,
 
@@ -101,7 +101,7 @@ pub struct Element {
     pub(crate) focus_handler: EventHandler<FocusEvent>,
     pub(crate) blur_handler: EventHandler<BlurEvent>,
 }
-impl std::fmt::Debug for Element {
+impl std::fmt::Debug for Element<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Element")
             .field("node_id", &self.node_id)
@@ -163,20 +163,22 @@ impl From<ReadSignal<StyleWrapper>> for MaybeDynStyle {
     }
 }
 
-impl Node for Element {
+impl Node for Element<'_> {
     #[inline(always)]
-    fn render(&mut self, ctx: &mut GraphicsContext<Vertex>, layout: &Layout) -> Option<Primitive> {
+    fn render(&mut self, layout: &Layout) -> Option<Primitive> {
         self.inner
-            .render(ctx, layout, &maybe_get_clone_untracked(&self.style).into())
+            .render(layout, &maybe_get_clone_untracked(&self.style).into())
     }
     #[inline(always)]
     fn measure(
         &mut self,
+        measure_ctx: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         available_space: Size<AvailableSpace>,
         style: &taffy::Style,
     ) -> Size<f32> {
-        self.inner.measure(known_dimensions, available_space, style)
+        self.inner
+            .measure(measure_ctx, known_dimensions, available_space, style)
     }
     #[inline(always)]
     fn debug_label(&self) -> &'static str {

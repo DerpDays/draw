@@ -140,9 +140,14 @@ pub struct Text {
     pub origin: Point2D<f32>,
     pub size: Size2D<f32>,
 
-    pub text: Arc<str>,
+    pub text: String,
     pub color: AlphaColor<Srgb>,
+    pub text_layout: TextLayoutOptions,
+}
 
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TextLayoutOptions {
     pub font_family: text::FontFamily,
     pub font_size: f32,
     pub font_style: text::FontStyle,
@@ -152,4 +157,21 @@ pub struct Text {
     pub overflow_wrap: text::OverflowWrap,
     pub whitespace_collapse: text::WhiteSpaceCollapse,
     pub word_break_strength: text::WordBreakStrength,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum AvailableSpace {
+    Definite(f32),
+    MinContent,
+    MaxContent,
+}
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TextMeasure {
+    pub max_width: Option<f32>,
+    pub available_space_width: AvailableSpace,
+
+    pub text: String,
+    pub text_layout: TextLayoutOptions,
 }

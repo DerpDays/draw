@@ -24,16 +24,17 @@ pub fn render_rectangle(rect: &Rectangle) -> Mesh<Vertex> {
     let area = make_positive_box(Box2D::from_origin_and_size(rect.origin, rect.size));
 
     // does not require tesselation, making it cheap to generate
+    // FIXME: this is wrong
     if rect.stroke_width != 0. {
         let mut vertices = Vec::with_capacity(8);
         let mut indices = Vec::with_capacity(12);
+        basic_quad(area, &rect.stroke_color, &mut vertices);
+        indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
         basic_quad(
-            area.outer_box(SideOffsets2D::new_all_same(rect.stroke_width)),
+            area.inner_box(SideOffsets2D::new_all_same(rect.stroke_width)),
             &rect.color,
             &mut vertices,
         );
-        indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
-        basic_quad(area, &rect.color, &mut vertices);
         indices.extend_from_slice(&[4, 5, 6, 4, 6, 7]);
         Mesh { vertices, indices }
     } else {

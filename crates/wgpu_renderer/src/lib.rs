@@ -25,7 +25,7 @@ mod vertex;
 pub use vertex::{Vertex, VertexKind};
 
 #[cfg(feature = "gui")]
-pub mod gui_cache;
+pub mod gui;
 
 #[derive(Clone)]
 pub struct PrimitiveCache {
@@ -68,7 +68,7 @@ slotmap::new_key_type! {
 
 pub struct VertexArenaMarker;
 
-pub struct GraphicsContext<V> {
+pub struct GraphicsContext<V = Vertex> {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 

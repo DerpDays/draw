@@ -2,9 +2,12 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use atlas::{AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture};
-use color::{LinearSrgb, PremulColor};
+use color::{AlphaColor, LinearSrgb, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D};
-use graphics_v2::{make_positive_box, primitives::Text};
+use graphics_v2::{
+    make_positive_box,
+    primitives::{Text, TextLayoutOptions},
+};
 use parley::{
     Alignment,
     AlignmentOptions,
@@ -44,7 +47,13 @@ pub fn render_text(
 
     let start_position = area.min.round();
 
-    let layout = prepare_layout(ctx, text);
+    let layout = prepare_text_layout(
+        ctx,
+        &text.text,
+        text.color,
+        &text.text_layout,
+        Some(text.size.width),
+    );
 
     // let cursor = Cursor::from_byte_index(&layout, 3, parley::Affinity::Downstream);
 
@@ -99,33 +108,34 @@ pub fn render_text(
     mesh
 }
 
-pub fn prepare_layout(ctx: &mut GraphicsContext<Vertex>, text: &Text) -> Layout<ColorBrush> {
-    let max_advance = None;
-
-    let mut builder = ctx.text_state.layout_ctx.ranged_builder(
-        &mut ctx.text_state.font_ctx,
-        &text.text,
-        1.25,
-        true,
-    );
+pub fn prepare_text_layout(
+    ctx: &mut GraphicsContext<Vertex>,
+    text: &String,
+    color: AlphaColor<Srgb>,
+    options: &TextLayoutOptions,
+    max_width: Option<f32>,
+) -> Layout<ColorBrush> {
+    let mut builder =
+        ctx.text_state
+            .layout_ctx
+            .ranged_builder(&mut ctx.text_state.font_ctx, text, 1.25, true);
 
     // Set default text colour styles (set foreground text color)
     let color_brush = ColorBrush {
-        color: text.color.convert().premultiply(),
+        color: color.convert().premultiply(),
     };
     let brush_style = StyleProperty::Brush(color_brush);
-    // let font_stack = FontStack::Single(FontFamily::Generic(parley::GenericFamily::SystemUi));
-    let font_stack = FontStack::Single(text.font_family.clone().into());
+    let font_stack = FontStack::Single(options.font_family.clone().into());
     builder.push_default(brush_style);
     builder.push_default(font_stack);
-    builder.push_default(StyleProperty::LineHeight(text.line_height.into()));
-    builder.push_default(StyleProperty::FontSize(text.font_size));
-    builder.push_default(StyleProperty::FontWeight(text.font_weight.into()));
-    builder.push_default(StyleProperty::OverflowWrap(text.overflow_wrap.into()));
+    builder.push_default(StyleProperty::LineHeight(options.line_height.into()));
+    builder.push_default(StyleProperty::FontSize(options.font_size));
+    builder.push_default(StyleProperty::FontWeight(options.font_weight.into()));
+    builder.push_default(StyleProperty::OverflowWrap(options.overflow_wrap.into()));
 
-    let mut layout: Layout<ColorBrush> = builder.build(&text.text);
-    layout.break_all_lines(max_advance);
-    layout.align(max_advance, Alignment::Start, AlignmentOptions::default());
+    let mut layout: Layout<ColorBrush> = builder.build(text);
+    layout.break_all_lines(max_width);
+    layout.align(max_width, Alignment::Start, AlignmentOptions::default());
     layout
 }
 

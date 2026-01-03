@@ -6,10 +6,10 @@ use std::{
 };
 
 use calloop::{
-    ping::{make_ping, Ping},
-    timer::TimeoutAction,
     EventLoop,
     LoopHandle,
+    ping::{Ping, make_ping},
+    timer::TimeoutAction,
 };
 use calloop_wayland_source::WaylandSource;
 use color_eyre::eyre::{Context, OptionExt, Result};
@@ -26,22 +26,22 @@ use smithay_client_toolkit::{
     delegate_shm,
     output::{OutputHandler, OutputInfo, OutputState},
     reexports::client::{
+        Connection,
+        EventQueue,
+        QueueHandle,
         backend::ObjectId,
         globals::registry_queue_init,
         protocol::{
             wl_output::{self, WlOutput},
             wl_surface::WlSurface,
         },
-        Connection,
-        EventQueue,
-        QueueHandle,
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
-    seat::{pointer::ThemedPointer, SeatState},
+    seat::{SeatState, pointer::ThemedPointer},
     shell::{
-        wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
         WaylandSurface,
+        wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
     },
     shm::{Shm, ShmHandler},
 };
@@ -106,7 +106,6 @@ pub struct ShareableState {
     app_pipeline: canvas::pipeline::DrawPipeline,
     pub loop_handle: LoopHandle<'static, State>,
     pub redraw_manager: RedrawManager,
-    pub redraw_manager_v2: RedrawManagerV2,
 }
 
 pub struct Data {
@@ -198,8 +197,7 @@ impl WaylandConnection {
             wgpu,
             app_pipeline,
             loop_handle: event_loop.handle(),
-            redraw_manager: RedrawManager::new(event_loop.handle(), 60),
-            redraw_manager_v2: RedrawManagerV2::new(event_loop.handle()),
+            redraw_manager: RedrawManager::new(event_loop.handle()),
         };
 
         let state = State {
@@ -391,11 +389,11 @@ impl CompositorHandler for State {
             }
             if self
                 .shareable
-                .redraw_manager_v2
+                .redraw_manager
                 .animation_manager
                 .is_animating()
             {
-                self.shareable.redraw_manager_v2.request_redraw();
+                self.shareable.redraw_manager.request_redraw();
             }
         } else {
             warn!("`frame` called for surface not in canvas_outputs");
@@ -511,11 +509,7 @@ impl FractionalScaleHandler for State {
         scale: u32,
     ) {
         if let Some(view) = Self::from_surface(&mut self.canvas_outputs, surface) {
-            view.set_scale_factor(
-                &mut self.shareable,
-                <u32 as Into<f64>>::into(scale)
-                    / 120.,
-            );
+            view.set_scale_factor(&mut self.shareable, <u32 as Into<f64>>::into(scale) / 120.);
         }
         // self.views.from_surface(surface).set_scale_factor(
         //     &mut self.shareable,
@@ -524,110 +518,12 @@ impl FractionalScaleHandler for State {
     }
 }
 
-// Commands that can be sent to the event loop
-enum RedrawCommand {
-    Redraw,
-    RedrawWithDuration(Duration),
-}
-
 #[derive(Clone)]
 pub struct RedrawManager {
-    sender: calloop::channel::Sender<RedrawCommand>,
-
-    anim_frame_duration: Duration,
-    current_anim_end: Arc<Mutex<Option<Instant>>>,
-}
-
-impl RedrawManager {
-    pub fn new(handle: LoopHandle<'static, State>, animation_fps: u64) -> RedrawManager {
-        let (sender, receiver) = calloop::channel::channel();
-
-        let manager = Self {
-            sender,
-
-            anim_frame_duration: Duration::from_millis(1000 / animation_fps),
-            current_anim_end: Arc::new(Mutex::new(None)),
-        };
-
-        let animation_end = manager.current_anim_end.clone();
-        let animation_frame_duration = manager.anim_frame_duration;
-
-        let handle_clone = handle.clone();
-
-        handle
-            .insert_source(
-                receiver,
-                move |event: calloop::channel::Event<RedrawCommand>, _, state| {
-                    match event {
-                        calloop::channel::Event::Msg(cmd) => match cmd {
-                            RedrawCommand::Redraw => {
-                                tracing::trace!("Redraw requested!");
-
-                                do_redraw(state);
-                            }
-                            RedrawCommand::RedrawWithDuration(duration) => {
-                                tracing::trace!("Redraw requested with duration: {:?}", duration);
-                                let mut anim_end = animation_end.lock().unwrap();
-                                let now = Instant::now();
-                                *anim_end = Some(
-                                    anim_end
-                                        .map(|old| (now + duration).max(old))
-                                        .unwrap_or(now + duration),
-                                );
-                                do_redraw(state);
-                                // schedule repeated frames until animation_end passes
-                                let animation_end = animation_end.clone();
-                                handle_clone
-                                    .insert_source(
-                                        calloop::timer::Timer::from_duration(
-                                            animation_frame_duration,
-                                        ),
-                                        move |_, _, state| {
-                                            let now = Instant::now();
-                                            let end = *animation_end.lock().unwrap();
-                                            let is_animating = end.is_some_and(|e| now < e);
-                                            if is_animating {
-                                                do_redraw(state);
-                                                TimeoutAction::ToDuration(animation_frame_duration)
-                                            } else {
-                                                *animation_end.lock().unwrap() = None;
-                                                TimeoutAction::Drop
-                                            }
-                                        },
-                                    )
-                                    .unwrap();
-                            }
-                        },
-                        calloop::channel::Event::Closed => {
-                            panic!("redraw channel closed");
-                        }
-                    }
-                },
-            )
-            .unwrap();
-
-        manager
-    }
-}
-
-impl RedrawRequest for RedrawManager {
-    fn request_redraw(&self) {
-        let _ = self.sender.send(RedrawCommand::Redraw);
-    }
-
-    fn request_redraw_duration(&self, duration: Duration) {
-        let _ = self
-            .sender
-            .send(RedrawCommand::RedrawWithDuration(duration));
-    }
-}
-
-#[derive(Clone)]
-pub struct RedrawManagerV2 {
     animation_manager: Arc<AnimationManager>,
     redraw_ping: Ping,
 }
-impl RedrawManagerV2 {
+impl RedrawManager {
     pub fn new(loop_handle: LoopHandle<'static, State>) -> Self {
         let animation_manager = Arc::new(AnimationManager::new());
         let (ping, source) = make_ping().expect("failed to create redraw ping source");
@@ -651,7 +547,7 @@ impl RedrawManagerV2 {
     }
 }
 
-impl RedrawRequestV2 for RedrawManagerV2 {
+impl RedrawRequestV2 for RedrawManager {
     fn request_redraw(&self) {
         self.redraw_ping.ping();
     }

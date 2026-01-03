@@ -4,7 +4,7 @@ use euclid::default::{Box2D, Point2D};
 
 use taffy::{Layout, PrintTree};
 
-use crate::{ElementId, Tree};
+use crate::{ElementId, GuiRenderer, Tree};
 
 #[derive(Debug, Default)]
 pub struct Linear {
@@ -24,7 +24,7 @@ impl LayoutTree {
 }
 
 impl LayoutTree {
-    pub fn new(tree: &Tree) -> Self {
+    pub fn new<R: GuiRenderer>(tree: &Tree<R>) -> Self {
         let mut map = HashMap::new();
         let mut stack = vec![(tree.root_node(), taffy::Point::ZERO)];
         let mut bounding_boxes: Vec<(ElementId, Box2D<f32>)> = Vec::with_capacity(1000);

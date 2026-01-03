@@ -92,6 +92,8 @@ swash = { version = "0.2.5", features = ["scale"] }
 parley = { version = "0.7.0", features = ["system"] }
 winit = { version = "0.30.12" }
 
+profiling = { version = "1.0.17" }
+
 
 [patch.crates-io]
 taffy = { path = "./crates/taffy_rounding_patch" }

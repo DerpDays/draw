@@ -12,7 +12,7 @@ use taffy::{
     TraverseTree,
 };
 
-use crate::{ElementId, Tree, tree::Node};
+use crate::{ElementId, GuiRenderer, MeasureCtx, Tree, tree::Node};
 
 pub struct ChildIter<'a>(std::slice::Iter<'a, ElementId>);
 impl<'a> Iterator for ChildIter<'a> {
@@ -21,8 +21,11 @@ impl<'a> Iterator for ChildIter<'a> {
         self.0.next().cloned()
     }
 }
-impl TraversePartialTree<ElementId> for Tree {
-    type ChildIter<'a> = ChildIter<'a>;
+impl<R: GuiRenderer> TraversePartialTree<ElementId> for Tree<R> {
+    type ChildIter<'a>
+        = ChildIter<'a>
+    where
+        R: 'a;
     fn child_ids<'a>(&'a self, node_id: ElementId) -> Self::ChildIter<'a> {
         ChildIter(
             self.alloc
@@ -53,9 +56,9 @@ impl TraversePartialTree<ElementId> for Tree {
     }
 }
 
-impl TraverseTree<ElementId> for Tree {}
+impl<R: GuiRenderer> TraverseTree<ElementId> for Tree<R> {}
 
-impl LayoutPartialTree<ElementId> for Tree {
+impl<R: GuiRenderer> LayoutPartialTree<ElementId> for Tree<R> {
     type CoreContainerStyle<'a>
         = Style
     where
@@ -117,15 +120,28 @@ impl LayoutPartialTree<ElementId> for Tree {
                 (_, false) => {
                     let style_clone = style.clone();
 
-                    let measure_function = |known_dimensions, available_space| {
-                        tree.alloc
-                            .get_mut(node)
-                            .expect("tried to measure a node not in the tree")
-                            .measure(known_dimensions, available_space, &style_clone)
-                    };
-                    // INFO: we do not use the calc (hence why style can be send), hence we return
-                    // zero for the calc fn.
-                    taffy::compute_leaf_layout(inputs, &style, |_, _| 0.0, measure_function)
+                    {
+                        // SAFETY:
+                        // The renderer is borrowed only while computing a leaf layout.
+                        // `compute_leaf_layout` calls the measure closure synchronously, and leaf
+                        // measurement does not have access to the tree, and hence can't re-borrow.
+                        let mut renderer = tree.renderer.borrow_mut();
+                        let measure_ctx: &mut dyn MeasureCtx = &mut *renderer;
+                        let measure_function = |known_dimensions, available_space| {
+                            tree.alloc
+                                .get_mut(node)
+                                .expect("tried to measure a node not in the tree")
+                                .measure(
+                                    measure_ctx,
+                                    known_dimensions,
+                                    available_space,
+                                    &style_clone,
+                                )
+                        };
+                        // INFO: we do not use the calc (hence why style can be send), hence we return
+                        // zero for the calc fn.
+                        taffy::compute_leaf_layout(inputs, &style, |_, _| 0.0, measure_function)
+                    }
                 }
             }
         })
@@ -137,7 +153,7 @@ impl LayoutPartialTree<ElementId> for Tree {
 ///
 /// As long as the node_id provided is a valid node belonging to this tree (which has the
 /// inner tree pinned), this is safe.
-impl CacheTree<ElementId> for Tree {
+impl<R: GuiRenderer> CacheTree<ElementId> for Tree<R> {
     fn cache_get(
         &self,
         node_id: ElementId,
@@ -176,7 +192,7 @@ impl CacheTree<ElementId> for Tree {
     }
 }
 
-impl LayoutBlockContainer<ElementId> for Tree {
+impl<R: GuiRenderer> LayoutBlockContainer<ElementId> for Tree<R> {
     type BlockContainerStyle<'a>
         = Style
     where
@@ -203,7 +219,7 @@ impl LayoutBlockContainer<ElementId> for Tree {
     }
 }
 
-impl LayoutFlexboxContainer<ElementId> for Tree {
+impl<R: GuiRenderer> LayoutFlexboxContainer<ElementId> for Tree<R> {
     type FlexboxContainerStyle<'a>
         = Style
     where
@@ -229,7 +245,7 @@ impl LayoutFlexboxContainer<ElementId> for Tree {
     }
 }
 
-impl LayoutGridContainer<ElementId> for Tree {
+impl<R: GuiRenderer> LayoutGridContainer<ElementId> for Tree<R> {
     type GridContainerStyle<'a>
         = Style
     where
@@ -255,7 +271,7 @@ impl LayoutGridContainer<ElementId> for Tree {
     }
 }
 
-impl RoundTree<ElementId> for Tree {
+impl<R: GuiRenderer> RoundTree<ElementId> for Tree<R> {
     fn get_unrounded_layout(&self, node_id: ElementId) -> Layout {
         *self
             .alloc
@@ -272,7 +288,7 @@ impl RoundTree<ElementId> for Tree {
     }
 }
 
-impl PrintTree<ElementId> for Tree {
+impl<R: GuiRenderer> PrintTree<ElementId> for Tree<R> {
     fn get_debug_label(&self, node_id: ElementId) -> &'static str {
         self.alloc
             .get(node_id)
