@@ -16,3 +16,4 @@ winit = { workspace = true, optional = true }
 default = ["sctk", "serde"]
 sctk = ["dep:smithay-client-toolkit"]
 winit = ["dep:winit"]
+serde = ["dep:serde", "bitflags/serde"]

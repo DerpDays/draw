@@ -135,7 +135,6 @@ impl<C: NodeForEach + 'static> Element<Div, C> {
             move || options.get(),
             move |new, old, _| {
                 if Some(new) != old {
-                    tracing::debug!("new text!!");
                     mgr.relayout(node_id);
                     mgr.now();
                 }

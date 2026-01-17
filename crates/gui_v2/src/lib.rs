@@ -76,6 +76,7 @@ pub struct Capture {
 }
 
 impl<R: GuiRenderer> Tree<R> {
+    #[profiling::function]
     pub fn build<F, W>(
         renderer: Rc<RefCell<R>>,
         size: Size<AvailableSpace>,
@@ -138,6 +139,7 @@ impl<R: GuiRenderer> Tree<R> {
     ///
     /// It is important to note that this will not request a redraw, it is up to you,
     /// the callee to do this (if you want).
+    #[profiling::function]
     pub fn resize(&mut self, size: Size<AvailableSpace>) {
         self.size = size;
         for node in self.nodes() {
@@ -176,6 +178,7 @@ impl<R: GuiRenderer> Tree<R> {
         self.layout_tree = LayoutTree::new(self);
     }
 
+    #[profiling::function]
     #[inline(always)]
     fn compute_layout(
         &mut self,
@@ -186,6 +189,7 @@ impl<R: GuiRenderer> Tree<R> {
         taffy::round_layout(self, node_id);
     }
 
+    #[profiling::function]
     pub fn on_mouse(&mut self, event: MouseEvent) -> Option<()> {
         self.owner.clone().run_in(|| {
             self.manager.clone().with(|| {
@@ -324,6 +328,7 @@ impl<R: GuiRenderer> Tree<R> {
         })
     }
 
+    #[profiling::function]
     pub fn on_keyboard(&mut self, event: KeyboardEvent) -> Option<()> {
         // Only handle keyboard events if a node currently has keyboard focus.
         log::trace!("checking kb_focus {:?}", self.capture.kb_focus);
@@ -337,6 +342,7 @@ impl<R: GuiRenderer> Tree<R> {
     }
 
     // dispatch an event that doesnt bubble to each of the nodes from a target node to a parent.
+    #[profiling::function]
     fn dispatch_event_chain(
         &mut self,
         ancestor: ElementId,
@@ -355,6 +361,7 @@ impl<R: GuiRenderer> Tree<R> {
         }
     }
 
+    #[profiling::function]
     fn dispatch_generic_event<E>(
         &mut self,
         mut ctx: EventContext<E>,
@@ -460,6 +467,7 @@ impl<R: GuiRenderer> Tree<R> {
         false
     }
 
+    #[profiling::function]
     pub fn process_changes(&mut self) -> Option<()> {
         // Process child operations first
         let mut child_ops = self.manager.take_child_operations();
@@ -518,6 +526,7 @@ impl<R: GuiRenderer> Tree<R> {
         Some(())
     }
 
+    #[profiling::function]
     fn add_child_direct(
         &mut self,
         parent: ElementId,
@@ -542,6 +551,7 @@ impl<R: GuiRenderer> Tree<R> {
         child_id
     }
 
+    #[profiling::function]
     fn remove_child_direct(&mut self, parent: ElementId, child: ElementId) {
         // Validate parent-child relationship
         if self.parent(child) != Some(parent) {
@@ -605,6 +615,7 @@ impl<R: GuiRenderer> Tree<R> {
         self.invalidate_node(parent);
     }
 
+    #[profiling::function]
     fn invalidate_node(&mut self, node: ElementId) {
         // Clear layout cache for this node and all ancestors
         let mut current = Some(node);
@@ -617,6 +628,7 @@ impl<R: GuiRenderer> Tree<R> {
         self.manager.recompute_render_order();
     }
 
+    #[profiling::function]
     pub fn render_order(&mut self) -> Vec<ElementId> {
         self.owner.clone().run_in(|| {
             self.manager.clone().with(|| {
@@ -628,6 +640,7 @@ impl<R: GuiRenderer> Tree<R> {
                         .get_mut(*node)
                         .expect("tried to render a node not in the tree");
 
+                    // TODO: do not re-render everything
                     if elem.get_style().display != taffy::Display::None
                         && let Some(primitive) = elem.render(&layout)
                     {

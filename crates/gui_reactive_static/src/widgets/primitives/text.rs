@@ -53,7 +53,6 @@ pub fn text(text: impl Into<Signal<String>>) -> Element<Text, ()> {
         move || text.get(),
         move |new, old, _| {
             if Some(new) != old {
-                tracing::debug!("new text!!");
                 mgr.relayout(node_id);
                 mgr.now();
             }

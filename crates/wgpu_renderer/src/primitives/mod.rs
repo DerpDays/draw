@@ -26,6 +26,7 @@ impl Render for Primitive {
         ctx: &mut GraphicsContext<Vertex>,
         cache: &mut Option<PrimitiveCache>,
     ) -> Mesh<Vertex> {
+        profiling::function_scope!(format!("{self:?}").as_str());
         match self {
             Primitive::Ellipse(ellipse) => render_ellipse(ellipse),
             Primitive::Line(line) => todo!(),

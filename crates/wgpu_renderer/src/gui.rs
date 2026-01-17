@@ -114,10 +114,10 @@ impl MeasureCtx for WgpuRenderer {
         let width = match text.available_space_width {
             graphics_v2::primitives::AvailableSpace::Definite(_) => layout.width(),
             graphics_v2::primitives::AvailableSpace::MinContent => {
-                layout.calculate_content_widths().min
+                layout.calculate_content_widths().min + 1.
             }
             graphics_v2::primitives::AvailableSpace::MaxContent => {
-                layout.calculate_content_widths().max
+                layout.calculate_content_widths().max + 1.
             }
         };
         gui_v2::reexports::taffy::Size {

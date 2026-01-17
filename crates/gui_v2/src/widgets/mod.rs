@@ -3,7 +3,7 @@ use euclid::default::{Point2D, Vector2D};
 pub mod primitives;
 pub mod reactivity;
 
-trait LayoutEqNoLocation {
+pub trait LayoutEqNoLocation {
     fn eq_no_location(&self, other: &Self) -> bool;
     fn location_delta(&self, old: &Self) -> Vector2D<f32>;
 }

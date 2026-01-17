@@ -1,20 +1,16 @@
 use euclid::default::Size2D;
-use graphics::{
-    systems::{SystemsOwned, TextState, TextureState},
-    Drawable,
-};
+use graphics::systems::{SystemsOwned, TextState, TextureState};
 use tracing::info;
 
 use input::{CursorIcon, KeyboardEvent, MouseEvent};
 use renderer::GrowableMeshBuffer;
 
 use crate::{
+    RedrawRequestV2,
     canvas::Canvas,
     pipeline::{Binds, DrawPipeline, ProjectionBind},
     projection::Projection,
     tools::{ToolKind, ToolMessage, Tools},
-    RedrawRequest,
-    RedrawRequestV2,
 };
 
 pub struct View<T: RedrawRequestV2 + Clone + 'static> {
@@ -343,6 +339,7 @@ impl<T: RedrawRequestV2 + Clone + Send + Sync + 'static> View<T> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&pipeline.render_pipeline);

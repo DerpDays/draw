@@ -78,7 +78,6 @@ impl From<TextOptions> for MaybeDyn<TextOptions> {
 
 impl Widget for Text {
     fn render(&mut self, layout: &Layout, _: &Style) -> Option<Primitive> {
-        println!("Render Label: {}", self.text.get_clone_untracked());
         let text = self.text.get_clone_untracked();
         let options = maybe_get_clone_untracked(&self.options);
 
@@ -104,8 +103,7 @@ impl Widget for Text {
             max_width: known_dimensions.width,
             available_space_width: match available_space.width {
                 AvailableSpace::Definite(x) => primitives::AvailableSpace::Definite(x),
-                AvailableSpace::MinContent => primitives::AvailableSpace::MinContent,
-                AvailableSpace::MaxContent => primitives::AvailableSpace::MaxContent,
+                _ => primitives::AvailableSpace::MaxContent,
             },
             text,
             text_layout: options.to_layout_options(),
@@ -132,7 +130,6 @@ pub fn text(text: ReadSignal<String>) -> ElementBuilder<Text> {
 
             create_effect(move || {
                 text.track();
-                log::debug!("new text!!");
                 mgr.relayout(elem_id);
                 mgr.now();
             });

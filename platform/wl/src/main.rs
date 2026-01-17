@@ -1,4 +1,9 @@
-use std::{fs::File, os::unix::net::UnixListener, path::Path};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    os::unix::net::UnixListener,
+    path::Path,
+};
 
 use async_executor::LocalExecutor;
 // use async_executor::{Executor, LocalExecutor};
@@ -120,70 +125,74 @@ fn setup_client(
     stream.set_nonblocking(true)?;
 
     let generic =
-        calloop::generic::Generic::new(stream, calloop::Interest::READ, calloop::Mode::Level);
+        calloop::generic::Generic::new(stream, calloop::Interest::READ, calloop::Mode::OneShot);
     handle.insert_source(generic, |_, stream, state| {
-        let res = bincode::decode_from_std_read::<IpcCommand, _, _>(
-            &mut stream.as_ref(),
-            bincode::config::standard(),
-        );
-        match res {
-            Ok(command) => {
-                let (_outputs, cmd) = command.into_tuple();
-                tracing::info!("got a new that sent Command::{cmd:?}");
-                match cmd {
-                    Command::Quit => todo!(),
-                    Command::Msg(message) => match message {
-                        Message::Quit => {
-                            tracing::info!("Removing all outputs");
-                            state.canvas_outputs.clear();
-                        }
-                        Message::Open => {
-                            for (output, info) in state.shareable.wayland.get_displays() {
-                                tracing::info!("opening canvas on output: {:?}", info.name);
-                                state.add_canvas_output(output);
-                            }
-                        }
-                        Message::SaveCanvas { path: _ } => todo!(),
-                        Message::ClearCanvas => todo!(),
-                        Message::ToggleInteractivity => todo!(),
-                        Message::SetInteractive => {
-                            for view in state.canvas_outputs.values_mut() {
-                                if let Err(err) = view.set_mode(
-                                    &mut state.shareable,
-                                    wayland::OverlayMode::Interactive,
-                                ) {
-                                    tracing::error!("failed to set mode to interactive: {err:?}");
-                                };
-                            }
-                        }
-                        Message::SetVisible => {
-                            for view in state.canvas_outputs.values_mut() {
-                                if let Err(err) = view
-                                    .set_mode(&mut state.shareable, wayland::OverlayMode::Visible)
-                                {
-                                    tracing::error!("failed to set mode to visible: {err:?}");
-                                };
-                            }
-                        }
-                        Message::SetHidden => {
-                            for view in state.canvas_outputs.values_mut() {
-                                if let Err(err) = view
-                                    .set_mode(&mut state.shareable, wayland::OverlayMode::Hidden)
-                                {
-                                    tracing::error!("failed to set mode to hidden: {err:?}");
-                                };
-                            }
-                        }
-                        Message::Draw(..) => todo!(),
-                    },
-                }
-                Ok(calloop::PostAction::Continue)
-            }
-            Err(_) => {
-                tracing::info!("closing IPC connection!");
-                Ok(calloop::PostAction::Remove)
-            }
+        let mut buf = Vec::new();
+        if let Err(e) = &mut stream.as_ref().read_to_end(&mut buf) {
+            tracing::info!("failed to read ipc command stream: {e:?}");
+            tracing::info!("closing IPC connection!");
+            return Ok(calloop::PostAction::Remove);
         }
+
+        let decoded: Result<IpcCommand, rkyv::rancor::Error> = rkyv::from_bytes(&buf);
+        let command = match decoded {
+            Ok(cmd) => cmd,
+            Err(e) => {
+                tracing::error!("failed to decode IPC command: {e:?}");
+                tracing::info!("closing IPC connection!");
+                return Ok(calloop::PostAction::Remove);
+            }
+        };
+
+        let (_outputs, cmd) = command.into_tuple();
+        tracing::info!("got a new that sent Command::{cmd:?}");
+        match cmd {
+            Command::Quit => todo!(),
+            Command::Msg(message) => match message {
+                Message::Quit => {
+                    tracing::info!("Removing all outputs");
+                    state.canvas_outputs.clear();
+                }
+                Message::Open => {
+                    for (output, info) in state.shareable.wayland.get_displays() {
+                        tracing::info!("opening canvas on output: {:?}", info.name);
+                        state.add_canvas_output(output);
+                    }
+                }
+                Message::SaveCanvas { path: _ } => todo!(),
+                Message::ClearCanvas => todo!(),
+                Message::ToggleInteractivity => todo!(),
+                Message::SetInteractive => {
+                    for view in state.canvas_outputs.values_mut() {
+                        if let Err(err) =
+                            view.set_mode(&mut state.shareable, wayland::OverlayMode::Interactive)
+                        {
+                            tracing::error!("failed to set mode to interactive: {err:?}");
+                        };
+                    }
+                }
+                Message::SetVisible => {
+                    for view in state.canvas_outputs.values_mut() {
+                        if let Err(err) =
+                            view.set_mode(&mut state.shareable, wayland::OverlayMode::Visible)
+                        {
+                            tracing::error!("failed to set mode to visible: {err:?}");
+                        };
+                    }
+                }
+                Message::SetHidden => {
+                    for view in state.canvas_outputs.values_mut() {
+                        if let Err(err) =
+                            view.set_mode(&mut state.shareable, wayland::OverlayMode::Hidden)
+                        {
+                            tracing::error!("failed to set mode to hidden: {err:?}");
+                        };
+                    }
+                }
+                Message::Draw(..) => todo!(),
+            },
+        }
+        Ok(calloop::PostAction::Remove)
     })?;
     Ok(())
 }
@@ -191,28 +200,18 @@ fn setup_client(
 // Parse command line options.
 fn handle_client<T: AsRef<Path>>(args: Arguments, sock_path: T) -> Result<()> {
     let mut stream = std::os::unix::net::UnixStream::connect(&sock_path)?;
-    match args.command {
-        Some(Command::Quit) => {
-            bincode::encode_into_std_write(
-                IpcCommand::new(args.outputs, Command::Quit),
-                &mut stream,
-                bincode::config::standard(),
-            )?;
-        }
-        Some(Command::Msg(msg)) => {
-            bincode::encode_into_std_write(
-                IpcCommand::new(args.outputs, Command::Msg(msg)),
-                &mut stream,
-                bincode::config::standard(),
-            )?;
-        }
-        None => {
-            bincode::encode_into_std_write(
-                IpcCommand::new(args.outputs, Command::Msg(Message::Open)),
-                &mut stream,
-                bincode::config::standard(),
-            )?;
-        }
+    let command = match args.command {
+        Some(Command::Quit) => IpcCommand::new(args.outputs, Command::Quit),
+        Some(Command::Msg(msg)) => IpcCommand::new(args.outputs, Command::Msg(msg)),
+        None => IpcCommand::new(args.outputs, Command::Msg(Message::Open)),
+    };
+
+    if let Err(e) = stream.write_all(
+        rkyv::to_bytes::<rkyv::rancor::Error>(&command)
+            .wrap_err("failed to convert command to bytes")?
+            .as_slice(),
+    ) {
+        eprintln!("failed to write command to stream: {e:?}");
     }
 
     println!("oneshot instance sent message");

@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use bincode::{Decode, Encode};
 use clap::{ArgAction, Args, Parser, Subcommand};
 use euclid::default::Point2D;
+use rkyv::{Archive, Deserialize, Serialize};
 
 // TODO: completions with clap-complete
 
@@ -25,7 +25,8 @@ pub struct Arguments {
     pub outputs: Vec<String>,
 }
 
-#[derive(Clone, Debug, Decode, Encode)]
+#[derive(Archive, Deserialize, Serialize, Clone, Debug)]
+#[rkyv()]
 pub struct IpcCommand {
     outputs: Vec<String>,
     command: Command,
@@ -39,17 +40,18 @@ impl IpcCommand {
     }
 }
 
-#[derive(Clone, Debug, Decode, Encode, Subcommand)]
+#[derive(Archive, Deserialize, Serialize, Clone, Debug, Subcommand)]
+#[rkyv()]
 #[command(rename_all = "snake_case")]
 #[command(disable_help_subcommand = true)]
 pub enum Command {
     Quit,
-    /// Send commands to the currently running canvas instsance
+    /// Send commands to the currently running canvas instance
     #[command(subcommand)]
     Msg(Message),
 }
-
-#[derive(Clone, Debug, Decode, Encode, Subcommand)]
+#[derive(Archive, Deserialize, Serialize, Clone, Debug, Subcommand)]
+#[rkyv()]
 #[command(rename_all = "snake_case")]
 #[command(disable_help_subcommand = true)]
 pub enum Message {
@@ -59,6 +61,7 @@ pub enum Message {
     Open,
 
     SaveCanvas {
+        #[rkyv(with = rkyv::with::Map<rkyv::with::AsString>)]
         path: Option<PathBuf>,
     },
     ClearCanvas,
@@ -78,7 +81,8 @@ pub enum Message {
 }
 
 // TODO: add all of these draw commands
-#[derive(Clone, Debug, Decode, Encode, Subcommand)]
+#[derive(Archive, Deserialize, Serialize, Clone, Debug, Subcommand)]
+#[rkyv()]
 pub enum DrawCommand {
     Pen(PenArgs),
     Line,
@@ -90,14 +94,16 @@ pub enum DrawCommand {
     Eraser(PositionArg),
 }
 
-#[derive(Args, Clone, Debug, Decode, Encode)]
+#[derive(Archive, Deserialize, Serialize, Args, Clone, Debug)]
+#[rkyv()]
 pub struct PenArgs {
     /// All of the points that the highlighter will visit, in the format x.x,y.y
     #[arg(required = true, last=true, value_parser= clap::value_parser!(PositionArg), num_args = 2..)]
     points: Vec<PositionArg>,
 }
 
-#[derive(Args, Clone, Copy, Debug, Decode, Encode)]
+#[derive(Archive, Deserialize, Serialize, Args, Clone, Copy, Debug)]
+#[rkyv()]
 pub struct PositionArg {
     x: f32,
     y: f32,

@@ -45,6 +45,7 @@ impl State {
                 required_limits: Default::default(),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
+                experimental_features: wgpu::ExperimentalFeatures::default(),
             })
             .await?;
 
@@ -315,6 +316,7 @@ pub fn render_bg(texture_view: &wgpu::TextureView, wgpu_state: &State, color: wg
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
     }
 

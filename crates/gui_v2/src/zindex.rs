@@ -40,6 +40,7 @@ impl ZIndexProperties {
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct ZIndexOrdering {
     map: HashMap<ElementId, usize>,
+    // TODO: incorporate hitboxes and deal with hidden elements.
     render_order: Vec<ElementId>,
 }
 

@@ -25,7 +25,7 @@ color-eyre = { workspace = true }
 
 clap = { workspace = true }
 # For IPC over unix domain sockets.
-bincode = { workspace = true }
+rkyv = { workspace = true }
 
 
 calloop = { workspace = true, features = ["executor"] }

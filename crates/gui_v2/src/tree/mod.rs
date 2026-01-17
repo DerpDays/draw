@@ -78,11 +78,11 @@ pub trait Widget {
     fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>, layout: &Layout) {}
 }
 
-pub struct Element<'a> {
+pub struct Element {
     node_id: ElementId,
     parent_id: Option<ElementId>,
 
-    pub inner: Box<dyn Widget + 'a>,
+    pub inner: Box<dyn Widget>,
     style: MaybeDyn<StyleWrapper>,
     zindex: MaybeDyn<ZIndexProperties>,
 
@@ -101,7 +101,7 @@ pub struct Element<'a> {
     pub(crate) focus_handler: EventHandler<FocusEvent>,
     pub(crate) blur_handler: EventHandler<BlurEvent>,
 }
-impl std::fmt::Debug for Element<'_> {
+impl std::fmt::Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Element")
             .field("node_id", &self.node_id)
@@ -163,7 +163,7 @@ impl From<ReadSignal<StyleWrapper>> for MaybeDynStyle {
     }
 }
 
-impl Node for Element<'_> {
+impl Node for Element {
     #[inline(always)]
     fn render(&mut self, layout: &Layout) -> Option<Primitive> {
         self.inner

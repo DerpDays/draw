@@ -17,6 +17,8 @@ taffy = { workspace = true }
 color = { workspace = true }
 euclid = { workspace = true }
 
+profiling = { workspace = true }
+
 
 [features]
 default = ["accesskit"]

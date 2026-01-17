@@ -15,27 +15,27 @@ use crate::{
 
 use crate::widgets::reactivity::ReactiveChildren;
 
-pub trait ErasedBuilder<'a> {
+pub trait ErasedBuilder {
     fn build(
         self: Box<Self>,
-        arena: &'a mut SlotMap<ElementId, Element<'a>>,
+        arena: &mut SlotMap<ElementId, Element>,
         parent_id: Option<ElementId>,
     ) -> ElementId;
 
-    fn into_box_dyn(self) -> Box<dyn ErasedBuilder<'a> + 'a>
+    fn into_box_dyn(self) -> Box<dyn ErasedBuilder>
     where
-        Self: Sized + 'a,
+        Self: Sized + 'static,
     {
-        Box::new(self) as Box<dyn ErasedBuilder<'a> + 'a>
+        Box::new(self) as Box<dyn ErasedBuilder>
     }
 }
 
-pub struct ElementBuilder<'a, W: Widget + 'a> {
+pub struct ElementBuilder<W: Widget> {
     inner: W,
     style: MaybeDyn<StyleWrapper>,
     zindex: MaybeDyn<ZIndexProperties>,
 
-    children: Vec<Box<dyn ErasedBuilder<'a> + 'a>>,
+    children: Vec<Box<dyn ErasedBuilder>>,
 
     pub(crate) mouse_handler: EventHandler<MouseEvent>,
     pub(crate) keyboard_handler: EventHandler<KeyboardEvent>,
@@ -43,11 +43,11 @@ pub struct ElementBuilder<'a, W: Widget + 'a> {
     pub(crate) blur_handler: EventHandler<BlurEvent>,
 
     #[allow(clippy::type_complexity)]
-    pub(crate) before_build: Option<Arc<dyn Fn(&W) + 'a>>,
-    pub(crate) after_build: Option<Arc<dyn Fn(ElementId) + 'a>>,
+    pub(crate) before_build: Option<Arc<dyn Fn(&W)>>,
+    pub(crate) after_build: Option<Arc<dyn Fn(ElementId)>>,
 }
 
-impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
+impl<W: Widget> ElementBuilder<W> {
     pub fn new(inner: W) -> Self {
         Self {
             inner,
@@ -68,7 +68,7 @@ impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
 
     pub fn new_with_before_build<F>(inner: W, before_build: F) -> Self
     where
-        F: Fn(&W) + 'a,
+        F: Fn(&W) + 'static,
     {
         let mut builder = Self::new(inner);
         builder.before_build = Some(Arc::new(before_build) as Arc<dyn Fn(&W)>);
@@ -77,7 +77,8 @@ impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
 
     pub fn append_before_build<F>(mut self, before_build: F) -> Self
     where
-        F: Fn(&W) + 'a,
+        F: Fn(&W) + 'static,
+        W: 'static,
     {
         self.before_build = if let Some(prev_build) = self.before_build {
             Some(Arc::new(move |inner: &W| {
@@ -92,7 +93,7 @@ impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
 
     pub fn replace_before_build<F>(mut self, before_build: F) -> Self
     where
-        F: Fn(&W) + 'a,
+        F: Fn(&W) + 'static,
     {
         self.before_build = Some(Arc::new(before_build) as Arc<dyn Fn(&W)>);
         self
@@ -100,7 +101,7 @@ impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
 
     pub fn new_with_after_build<F>(inner: W, after_build: F) -> Self
     where
-        F: Fn(ElementId) + 'a,
+        F: Fn(ElementId) + 'static,
     {
         let mut builder = Self::new(inner);
         builder.after_build = Some(Arc::new(after_build) as Arc<dyn Fn(ElementId)>);
@@ -108,7 +109,7 @@ impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
     }
     pub fn append_after_build<F>(mut self, after_build: F) -> Self
     where
-        F: Fn(ElementId) + 'a,
+        F: Fn(ElementId) + 'static,
     {
         self.after_build = if let Some(prev_build) = self.after_build {
             Some(Arc::new(move |elem_id| {
@@ -137,11 +138,8 @@ impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
     }
 }
 
-impl<'a, W: Widget> ElementBuilder<'a, W> {
-    pub fn child(mut self, child: impl Into<BuilderList<'a>>) -> Self
-    where
-        Self: 'a,
-    {
+impl<W: Widget> ElementBuilder<W> {
+    pub fn child(mut self, child: impl Into<BuilderList>) -> Self {
         self.children.extend(child.into().0);
         self
     }
@@ -164,7 +162,7 @@ impl<'a, W: Widget> ElementBuilder<'a, W> {
     /// ```
     pub fn reactive_child<F>(mut self, f: F) -> Self
     where
-        F: Fn() -> Vec<Box<dyn ErasedBuilder<'a>>>,
+        F: Fn() -> Vec<Box<dyn ErasedBuilder>> + 'static,
     {
         let closure_for_effect = Rc::new(f);
 
@@ -214,36 +212,23 @@ impl<'a, W: Widget> ElementBuilder<'a, W> {
         self
     }
 }
-impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
+impl<W: Widget + 'static> ElementBuilder<W> {
     pub(crate) fn build(
         self,
-        arena: &'a mut SlotMap<ElementId, Element<'a>>,
+        arena: &mut SlotMap<ElementId, Element>,
         parent_id: Option<ElementId>,
     ) -> ElementId {
         if let Some(hook) = self.before_build {
             hook(&self.inner);
         }
 
-        let Self {
-            inner,
-            children,
-            after_build,
-            style,
-            zindex,
-            mouse_handler,
-            keyboard_handler,
-            focus_handler,
-            blur_handler,
-            ..
-        } = self;
-
         let key = arena.insert_with_key(|id| Element {
             node_id: id,
             parent_id,
 
-            inner: Box::new(inner),
-            style,
-            zindex,
+            inner: Box::new(self.inner),
+            style: self.style,
+            zindex: self.zindex,
 
             rel_final_layout: Layout::new(),
             rel_unrounded_layout: Layout::new(),
@@ -252,20 +237,20 @@ impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
 
             children: Vec::new(),
 
-            mouse_handler,
-            keyboard_handler,
-            focus_handler,
-            blur_handler,
+            mouse_handler: self.mouse_handler,
+            keyboard_handler: self.keyboard_handler,
+            focus_handler: self.focus_handler,
+            blur_handler: self.blur_handler,
         });
 
         // Build children
-        for child in children {
+        for child in self.children {
             let child_id = child.build(arena, Some(key));
             arena[key].children.push(child_id);
         }
 
         // Post-build hooks
-        if let Some(hook) = after_build {
+        if let Some(hook) = self.after_build {
             hook(key);
         }
 
@@ -299,25 +284,25 @@ impl<'a, W: Widget + 'a> ElementBuilder<'a, W> {
     }
 }
 
-impl<'a, W: Widget + 'a> ErasedBuilder<'a> for ElementBuilder<'a, W> {
+impl<W: Widget + 'static> ErasedBuilder for ElementBuilder<W> {
     fn build(
         self: Box<Self>,
-        arena: &'a mut SlotMap<ElementId, Element<'a>>,
+        arena: &mut SlotMap<ElementId, Element>,
         parent_id: Option<ElementId>,
     ) -> ElementId {
         (*self).build(arena, parent_id)
     }
 }
 
-pub struct BuilderList<'a>(Vec<Box<dyn ErasedBuilder<'a> + 'a>>);
+pub struct BuilderList(Vec<Box<dyn ErasedBuilder>>);
 
-impl<'a, T: ErasedBuilder<'a> + 'a> From<T> for BuilderList<'a> {
+impl<T: ErasedBuilder + 'static> From<T> for BuilderList {
     fn from(val: T) -> Self {
         BuilderList(vec![Box::new(val)])
     }
 }
 
-impl<'a, T: ErasedBuilder<'a> + 'a> From<Vec<T>> for BuilderList<'a> {
+impl<T: ErasedBuilder + 'static> From<Vec<T>> for BuilderList {
     fn from(val: Vec<T>) -> Self {
         BuilderList(
             val.into_iter()
@@ -327,7 +312,7 @@ impl<'a, T: ErasedBuilder<'a> + 'a> From<Vec<T>> for BuilderList<'a> {
     }
 }
 
-impl<'a, T: ErasedBuilder<'a> + 'a, const N: usize> From<[T; N]> for BuilderList<'a> {
+impl<T: ErasedBuilder + 'static, const N: usize> From<[T; N]> for BuilderList {
     fn from(val: [T; N]) -> Self {
         BuilderList(
             val.into_iter()
@@ -356,43 +341,43 @@ macro_rules! impl_for_each {
 }
 
 // Generate impls for tuple sizes 1 through 16 (or higher if you like)
-// impl_for_each![
-//     (A),
-//     (A, B),
-//     (A, B, C),
-//     (A, B, C, D),
-//     (A, B, C, D, E),
-//     (A, B, C, D, E, F),
-//     (A, B, C, D, E, F, G),
-//     (A, B, C, D, E, F, G, H),
-//     (A, B, C, D, E, F, G, H, I),
-//     (A, B, C, D, E, F, G, H, I, J),
-//     (A, B, C, D, E, F, G, H, I, J, K),
-//     (A, B, C, D, E, F, G, H, I, J, K, L),
-//     (A, B, C, D, E, F, G, H, I, J, K, L, M),
-//     (A, B, C, D, E, F, G, H, I, J, K, L, M, N),
-//     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O),
-//     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P),
-//     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q),
-//     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R),
-//     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S),
-//     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T),
-//     (
-//         A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U
-//     ),
-//     (
-//         A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V
-//     ),
-//     (
-//         A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W
-//     ),
-//     (
-//         A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X
-//     ),
-//     (
-//         A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y
-//     ),
-//     (
-//         A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
-//     )
-// ];
+impl_for_each![
+    (A),
+    (A, B),
+    (A, B, C),
+    (A, B, C, D),
+    (A, B, C, D, E),
+    (A, B, C, D, E, F),
+    (A, B, C, D, E, F, G),
+    (A, B, C, D, E, F, G, H),
+    (A, B, C, D, E, F, G, H, I),
+    (A, B, C, D, E, F, G, H, I, J),
+    (A, B, C, D, E, F, G, H, I, J, K),
+    (A, B, C, D, E, F, G, H, I, J, K, L),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y
+    ),
+    (
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+    )
+];

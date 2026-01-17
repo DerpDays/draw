@@ -21,7 +21,10 @@ serde = { workspace = true, optional = true, features = ["rc"] }
 
 color = { workspace = true }
 wgpu = { workspace = true }
-slotmap = "1.0.7"
+
+slotmap = { workspace = true }
+
+profiling = { workspace = true }
 
 [features]
 default = ["gui"]

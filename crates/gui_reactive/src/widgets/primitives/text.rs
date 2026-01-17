@@ -1,10 +1,10 @@
 use graphics::{Mesh, Systems, Vertex};
-use sycamore_reactive::{create_effect, ReadSignal};
+use sycamore_reactive::{ReadSignal, create_effect};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
-    tree::{builder::ElementBuilder, Widget},
     TreeManager,
+    tree::{Widget, builder::ElementBuilder},
 };
 
 pub struct Text {
@@ -45,7 +45,6 @@ pub fn text(text: ReadSignal<String>) -> ElementBuilder<Text> {
 
         create_effect(move || {
             text.track();
-            tracing::debug!("new text!!");
             mgr.relayout(elem_id);
             mgr.now();
         });

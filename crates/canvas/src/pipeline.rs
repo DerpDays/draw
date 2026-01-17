@@ -1,6 +1,5 @@
 use renderer::State;
 use wgpu::{
-    util::DeviceExt,
     BindGroup,
     BindGroupDescriptor,
     BindGroupEntry,
@@ -12,6 +11,7 @@ use wgpu::{
     Sampler,
     SamplerDescriptor,
     TextureView,
+    util::DeviceExt,
 };
 
 use crate::projection::Projection;
@@ -43,7 +43,7 @@ impl DrawPipeline {
             label: Some("atlas sampler"),
             min_filter: FilterMode::Nearest,
             mag_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             lod_min_clamp: 0f32,
             lod_max_clamp: 0f32,
             ..Default::default()
@@ -56,7 +56,7 @@ impl DrawPipeline {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render pipeline layout"),
                 bind_group_layouts: &[&projection_layout, &texture_atlas_layout],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -88,8 +88,8 @@ impl DrawPipeline {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
             cache: None,
+            multiview_mask: None,
         });
 
         Self {
