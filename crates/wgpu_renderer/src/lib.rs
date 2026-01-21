@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{/* marker::PhantomData, */ sync::Arc};
 
 use atlas::{
     AllocatedTexture,
@@ -11,10 +11,10 @@ use parley::{
     LayoutContext,
     swash::scale::{ScaleContext, image::Image},
 };
-use wgpu::BufferUsages;
+// use wgpu::BufferUsages;
 
 use crate::{
-    arena::{Arena, Key},
+    // arena::{Arena, Key},
     buffer::GrowableBuffer,
 };
 
@@ -26,6 +26,9 @@ pub use vertex::{Vertex, VertexKind};
 
 #[cfg(feature = "gui")]
 pub mod gui;
+
+#[cfg(feature = "gui")]
+mod shaders;
 
 #[derive(Clone)]
 pub struct PrimitiveCache {
@@ -68,90 +71,86 @@ slotmap::new_key_type! {
 
 pub struct VertexArenaMarker;
 
-pub struct GraphicsContext<V = Vertex> {
+pub struct GraphicsContext {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 
-    vertex_arena: Arena<VertexArenaMarker>,
-    index_buf: GrowableBuffer,
-
     pub texture_state: TextureState,
-    text_state: TextState,
-
-    vertex_type: PhantomData<V>,
+    pub text_state: TextState,
+    // vertex_arena: Arena<VertexArenaMarker>,
+    // index_buf: GrowableBuffer,
+    // vertex_type: PhantomData<V>,
 }
 
-impl<V> GraphicsContext<V> {
+impl GraphicsContext {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
             device: device.clone(),
             queue: queue.clone(),
 
-            vertex_arena: Arena::new(device, BufferUsages::VERTEX),
-            index_buf: GrowableBuffer::new(device, BufferUsages::INDEX, None),
-
+            // vertex_arena: Arena::new(device, BufferUsages::VERTEX),
+            // index_buf: GrowableBuffer::new(device, BufferUsages::INDEX, None),
             texture_state: TextureState::new(device),
             text_state: TextState::default(),
-
-            vertex_type: PhantomData,
+            // vertex_type: PhantomData,
         }
     }
-    pub fn with_capacity(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        vertex_capacity: usize,
-        index_capacity: usize,
-    ) -> Self {
-        Self {
-            device: device.clone(),
-            queue: queue.clone(),
-
-            vertex_arena: Arena::with_capacity(device, BufferUsages::VERTEX, vertex_capacity),
-            index_buf: GrowableBuffer::with_capacity(
-                device,
-                BufferUsages::INDEX,
-                index_capacity,
-                None,
-            ),
-
-            texture_state: TextureState::new(device),
-            text_state: TextState::default(),
-
-            vertex_type: PhantomData,
-        }
-    }
+    // pub fn with_capacity(
+    //     device: &wgpu::Device,
+    //     queue: &wgpu::Queue,
+    //     vertex_capacity: usize,
+    //     index_capacity: usize,
+    // ) -> Self {
+    //     Self {
+    //         device: device.clone(),
+    //         queue: queue.clone(),
+    //
+    //         vertex_arena: Arena::with_capacity(device, BufferUsages::VERTEX, vertex_capacity),
+    //         index_buf: GrowableBuffer::with_capacity(
+    //             device,
+    //             BufferUsages::INDEX,
+    //             index_capacity,
+    //             None,
+    //         ),
+    //
+    //         texture_state: TextureState::new(device),
+    //         text_state: TextState::default(),
+    //
+    //         vertex_type: PhantomData,
+    //     }
+    // }
 }
 
-impl<V> GraphicsContext<V> {
-    pub fn insert(&mut self, data: &[u8]) -> Key<VertexArenaMarker> {
-        debug_assert!(
-            data.len().is_multiple_of(size_of::<V>()),
-            "inserted data does not align to the given vertex size"
-        );
-        self.vertex_arena.insert(&self.device, &self.queue, data)
-    }
-
-    pub fn update(&mut self, key: Key<VertexArenaMarker>, data: &[u8]) -> Key<VertexArenaMarker> {
-        debug_assert!(
-            data.len().is_multiple_of(size_of::<V>()),
-            "inserted data does not align to the given vertex size"
-        );
-        self.vertex_arena
-            .update(&self.device, &self.queue, key, data)
-    }
-}
-impl<V> GraphicsContext<V> {
-    pub fn vertex_buf(&self) -> &wgpu::Buffer {
-        self.vertex_arena.inner_buffer()
-    }
-    pub fn indices_buf(&self) -> &wgpu::Buffer {
-        &self.index_buf.buf
-    }
-    pub fn replace_indices(&mut self, indices: &[u32]) {
-        self.index_buf
-            .replace(&self.device, &self.queue, bytemuck::cast_slice(indices));
-    }
-}
+// impl<V> GraphicsContext<V> {
+//     pub fn insert(&mut self, data: &[u8]) -> Key<VertexArenaMarker> {
+//         debug_assert!(
+//             data.len().is_multiple_of(size_of::<V>()),
+//             "inserted data does not align to the given vertex size"
+//         );
+//         self.vertex_arena.insert(&self.device, &self.queue, data)
+//     }
+//
+//     pub fn update(&mut self, key: Key<VertexArenaMarker>, data: &[u8]) -> Key<VertexArenaMarker> {
+//         debug_assert!(
+//             data.len().is_multiple_of(size_of::<V>()),
+//             "inserted data does not align to the given vertex size"
+//         );
+//         self.vertex_arena
+//             .update(&self.device, &self.queue, key, data)
+//     }
+// }
+// impl<V> GraphicsContext<V> {
+//     pub fn vertex_buf(&self) -> &wgpu::Buffer {
+//         self.vertex_arena.inner_buffer()
+//     }
+//     pub fn indices_buf(&self) -> &wgpu::Buffer {
+//         &self.index_buf.buf
+//     }
+//     pub fn replace_indices(&mut self, indices: &[u32]) {
+//         self.index_buf
+//             .replace(&self.device, &self.queue, bytemuck::cast_slice(indices));
+//     }
+// }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ColorBrush {

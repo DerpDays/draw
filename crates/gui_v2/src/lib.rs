@@ -38,7 +38,6 @@ slotmap::new_key_type! { pub struct ElementId; }
 
 pub trait GuiRenderer: MeasureCtx {
     type Renderer;
-    type Cache;
 
     fn update_cached(&mut self, elem_id: ElementId, primitive: graphics_v2::Primitive);
     fn remove_cached(&mut self, elem_id: ElementId);

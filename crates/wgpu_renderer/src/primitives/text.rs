@@ -39,7 +39,7 @@ use crate::{
 };
 
 pub fn render_text(
-    ctx: &mut GraphicsContext<Vertex>,
+    ctx: &mut GraphicsContext,
     text: &Text,
     cache: &mut Option<PrimitiveCache>,
 ) -> Mesh<Vertex> {
@@ -109,7 +109,7 @@ pub fn render_text(
 }
 
 pub fn prepare_text_layout(
-    ctx: &mut GraphicsContext<Vertex>,
+    ctx: &mut GraphicsContext,
     text: &String,
     color: AlphaColor<Srgb>,
     options: &TextLayoutOptions,
@@ -167,19 +167,19 @@ impl<'a> GlyphRunRenderer<'a> {
     pub fn new(
         mesh: &'a mut Mesh<Vertex>,
         cache: &'a mut PrimitiveCache,
-        ctx: &'a mut GraphicsContext<Vertex>,
+        ctx: &'a mut GraphicsContext,
         // scale_ctx: &'a mut ScaleContext,
         // texture_state: &'a mut ScaleContext,
         glyph_run: &'a GlyphRun<'a, ColorBrush>,
         start_position: Point2D<f32>,
     ) -> Self {
         let &mut GraphicsContext {
-            ref mut texture_state,
-            ref mut text_state,
             ref device,
             ref queue,
+            ref mut texture_state,
+            ref mut text_state,
             ..
-        }: &mut GraphicsContext<Vertex> = ctx;
+        }: &mut GraphicsContext = ctx;
         // Get the "Run" from the "GlyphRun"
         let run = glyph_run.run();
 

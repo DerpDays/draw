@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{any::Any, fmt::Debug, sync::Arc};
 
 use color::{AlphaColor, Srgb};
 use euclid::default::{Point2D, Size2D, Vector2D};
@@ -6,8 +6,7 @@ use euclid::default::{Point2D, Size2D, Vector2D};
 use crate::{BasicColor, LineCap, Rounding};
 pub mod text;
 
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug)]
 pub enum Primitive {
     Ellipse(Ellipse),
     Line(Line),
@@ -18,6 +17,51 @@ pub enum Primitive {
     Svg(Svg),
     Text(Text),
     Triangle(Triangle),
+
+    Custom(Box<dyn CustomPrimitive>),
+}
+impl Clone for Primitive {
+    fn clone(&self) -> Self {
+        match self {
+            Primitive::Custom(c) => Primitive::Custom(c.clone_box()),
+            other => other.clone(), // works for the concrete variants
+        }
+    }
+}
+
+impl PartialEq for Primitive {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Primitive::Custom(a), Primitive::Custom(b)) => a.eq_box(&**b),
+            _ => {
+                std::mem::discriminant(self) == std::mem::discriminant(other)
+                    && format!("{:?}", self) == format!("{:?}", other)
+            }
+        }
+    }
+}
+
+pub trait CustomPrimitiveImpl {}
+pub trait CustomPrimitive: Any + std::fmt::Debug {
+    fn as_any(&self) -> &dyn Any;
+    fn clone_box(&self) -> Box<dyn CustomPrimitive>;
+    fn eq_box(&self, other: &dyn CustomPrimitive) -> bool;
+}
+impl<T> CustomPrimitive for T
+where
+    T: CustomPrimitiveImpl + Any + Clone + Debug + PartialEq + 'static,
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn CustomPrimitive> {
+        Box::new(self.clone())
+    }
+
+    fn eq_box(&self, other: &dyn CustomPrimitive) -> bool {
+        other.as_any().downcast_ref::<T>() == Some(self)
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
