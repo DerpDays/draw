@@ -219,6 +219,7 @@ impl BasicShapeState {
     }
 
     #[inline(always)]
+    #[profiling::function]
     pub fn swap_pipeline(
         &self,
         render_pass: &mut wgpu::RenderPass,
@@ -234,6 +235,7 @@ impl BasicShapeState {
     }
 
     #[inline(always)]
+    #[profiling::function]
     pub fn render_mesh_alloc(
         &self,
         render_pass: &mut wgpu::RenderPass,

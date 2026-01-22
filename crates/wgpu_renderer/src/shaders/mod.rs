@@ -106,6 +106,7 @@ pub struct RendererPass<'a> {
 }
 
 impl RendererPass<'_> {
+    #[profiling::function]
     fn swap_pipeline(&mut self, renderer: &WgpuRenderer, draw_type: DrawType) -> DrawType {
         if Some(draw_type) != self.last_draw_type {
             match draw_type {
@@ -122,6 +123,7 @@ impl RendererPass<'_> {
                 }
                 DrawType::Texture => todo!(),
             }
+            self.last_draw_type = Some(draw_type);
         };
         draw_type
     }
@@ -131,6 +133,7 @@ impl RendererPass<'_> {
         self.swap_pipeline(renderer, primitive.to_draw_type());
     }
     #[cfg(feature = "gui")]
+    #[profiling::function]
     pub fn draw_element(&mut self, renderer: &WgpuRenderer, elem: ElementId) {
         let Some(elem) = renderer.gui_cache.get(&elem) else {
             log::warn!("tried to draw a gui element without a cache entry");
