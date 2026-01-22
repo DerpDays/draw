@@ -98,5 +98,5 @@ profiling = "1.0.17"
 
 
 [patch.crates-io]
-taffy = { path = "./crates/taffy_rounding_patch" }
+taffy = { path = "../taffy_rounding_patch" }
 # calloop = { path = "./crates/calloop_schedule_sync" }

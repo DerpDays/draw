@@ -1,5 +1,4 @@
 mod rectangle;
-use std::intrinsics::unreachable;
 
 pub use rectangle::render_rectangle;
 
@@ -11,7 +10,12 @@ pub use text::{prepare_text_layout, render_text};
 
 use graphics_v2::Primitive;
 
-use crate::{GraphicsContext, Mesh, PrimitiveCache, vertex::Vertex};
+use crate::{
+    GraphicsContext,
+    Mesh,
+    PrimitiveCache,
+    shaders::{basic_shape::BasicShapeVertex, text::TextVertex},
+};
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum DrawType {
@@ -19,6 +23,13 @@ pub enum DrawType {
     BasicShapeMultisample,
     Text,
     Texture,
+}
+
+pub enum PrimitiveMesh {
+    BasicShape(Mesh<BasicShapeVertex>),
+    BasicShapeMultisample(Mesh<BasicShapeVertex>),
+    Text(Mesh<TextVertex>),
+    Texture(Mesh<TextVertex>),
 }
 pub trait ToDrawType {
     fn to_draw_type(&self) -> DrawType;
@@ -41,63 +52,33 @@ impl ToDrawType for Primitive {
     }
 }
 
-pub trait PrimitiveToBasicShapeMesh {
-    fn basic_shape_mesh(
-        &self,
-        ctx: &mut GraphicsContext,
-        cache: &mut Option<PrimitiveCache>,
-    ) -> Mesh<crate::shaders::BasicShapeVertex> {
-        unimplemented!("basic_shape_mesh not implemented for this primitive")
-    }
-}
-impl PrimitiveToBasicShapeMesh for graphics_v2::primitives::Text {}
-
-#[allow(unused_variables)]
 pub trait PrimitiveToMesh {
-    fn basic_shape_mesh(
+    fn to_mesh(
         &self,
         ctx: &mut GraphicsContext,
         cache: &mut Option<PrimitiveCache>,
-    ) -> Mesh<crate::shaders::BasicShapeVertex> {
-        unimplemented!("basic_shape_mesh not implemented for this primitive")
-    }
-    fn text_mesh(
+    ) -> PrimitiveMesh;
+}
+impl PrimitiveToMesh for Primitive {
+    fn to_mesh(
         &self,
         ctx: &mut GraphicsContext,
         cache: &mut Option<PrimitiveCache>,
-    ) -> Mesh<crate::shaders::TextVertex> {
-        unimplemented!("text_mesh not implemented for this primitive")
-    }
-    fn texture_mesh(
-        &self,
-        ctx: &mut GraphicsContext,
-        cache: &mut Option<PrimitiveCache>,
-    ) -> Mesh<crate::shaders::TextVertex> {
-        unimplemented!("texture_mesh not implemented for this primitive")
+    ) -> PrimitiveMesh {
+        match self {
+            Primitive::Ellipse(ellipse) => todo!(),
+            Primitive::Line(line) => todo!(),
+            Primitive::CubicBezier(cubic_bezier) => todo!(),
+            Primitive::Pen(pen) => todo!(),
+            Primitive::Quad(quad) => todo!(),
+            Primitive::Rectangle(rectangle) => {
+                PrimitiveMesh::BasicShape(render_rectangle(rectangle))
+            }
+            Primitive::Svg(svg) => todo!(),
+            Primitive::Text(text) => PrimitiveMesh::Text(render_text(ctx, text, cache)),
+            Primitive::Text(text) => todo!(),
+            Primitive::Triangle(triangle) => todo!(),
+            Primitive::Custom(custom_primitive) => todo!(),
+        }
     }
 }
-
-impl PrimitiveToMesh for Primitive {}
-
-// #[allow(unused_variables)]
-// impl Render for Primitive {
-//     fn to_mesh(
-//         &self,
-//         ctx: &mut GraphicsContext,
-//         cache: &mut Option<PrimitiveCache>,
-//     ) -> Mesh<Vertex> {
-//         profiling::function_scope!(format!("{self:?}").as_str());
-//         match self {
-//             Primitive::Ellipse(ellipse) => render_ellipse(ellipse),
-//             Primitive::Line(line) => todo!(),
-//             Primitive::CubicBezier(cubic_bezier) => todo!(),
-//             Primitive::Pen(pen) => todo!(),
-//             Primitive::Quad(quad) => todo!(),
-//             Primitive::Rectangle(rectangle) => render_rectangle(rectangle),
-//             Primitive::Svg(svg) => todo!(),
-//             Primitive::Text(text) => render_text(ctx, text, cache),
-//             Primitive::Triangle(triangle) => todo!(),
-//             Primitive::Custom(custom) => todo!(),
-//         }
-//     }
-// }

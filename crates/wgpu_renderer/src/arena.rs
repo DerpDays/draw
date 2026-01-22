@@ -147,6 +147,7 @@ impl<M> Arena<M> {
                 self.freelist.remove(index + 1);
             }
         }
+        self.shrink_to_fit()
     }
 
     pub fn update(

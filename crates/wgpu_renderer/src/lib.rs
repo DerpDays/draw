@@ -24,11 +24,11 @@ pub mod primitives;
 mod vertex;
 pub use vertex::{Vertex, VertexKind};
 
-#[cfg(feature = "gui")]
-pub mod gui;
+// #[cfg(feature = "gui")]
+// pub mod gui;
 
 #[cfg(feature = "gui")]
-mod shaders;
+pub mod shaders;
 
 #[derive(Clone)]
 pub struct PrimitiveCache {

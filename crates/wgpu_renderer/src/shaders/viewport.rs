@@ -47,7 +47,7 @@ impl ViewportBinds {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("ViewportBinds"),
                 contents: bytemuck::bytes_of(&viewport),
-                usage: wgpu::BufferUsages::VERTEX,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ViewportBinds"),

@@ -1,4 +1,4 @@
-@group(0) @binding(0) var<uniform> viewport_projection: Viewport2D;
+@group(0) @binding(0) var<uniform> viewport: Viewport2D;
 
 struct Viewport2D {
     scale: vec2<f32>,
@@ -18,7 +18,7 @@ struct VertexOutput {
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = (input.position * viewport.scale) + viewport.translate;
+    out.clip_position = vec4<f32>((input.position * viewport.scale) + viewport.translate, 0., 1.);
     out.color = input.color;
     return out;
 }

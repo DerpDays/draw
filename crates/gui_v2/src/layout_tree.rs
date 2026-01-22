@@ -29,7 +29,7 @@ impl LayoutTree {
         let mut stack = vec![(tree.root_node(), taffy::Point::ZERO)];
         let mut bounding_boxes: Vec<(ElementId, Box2D<f32>)> = Vec::with_capacity(1000);
         while let Some((node, parent_origin)) = stack.pop() {
-            let mut layout = tree.get_final_layout(node);
+            let mut layout = tree.get_final_layout(node.into());
             layout.location = layout.location + parent_origin;
 
             // Push children in reverse order to process them first (top-most elements)

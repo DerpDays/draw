@@ -35,6 +35,16 @@ pub mod prelude {
 }
 
 slotmap::new_key_type! { pub struct ElementId; }
+impl From<ElementId> for taffy::NodeId {
+    fn from(value: ElementId) -> Self {
+        Self::new(value.0.as_ffi())
+    }
+}
+impl From<taffy::NodeId> for ElementId {
+    fn from(value: taffy::NodeId) -> Self {
+        ElementId(slotmap::KeyData::from_ffi(value.into()))
+    }
+}
 
 pub trait GuiRenderer: MeasureCtx {
     type Renderer;
@@ -143,7 +153,7 @@ impl<R: GuiRenderer> Tree<R> {
         self.size = size;
         for node in self.nodes() {
             log::info!("clearing cache for node {node:?}!");
-            self.cache_clear(node);
+            self.cache_clear(node.into());
         }
         self.compute_root_layout();
     }
@@ -184,8 +194,8 @@ impl<R: GuiRenderer> Tree<R> {
         node_id: ElementId,
         available_space: taffy::Size<taffy::AvailableSpace>,
     ) {
-        taffy::compute_root_layout(self, node_id, available_space);
-        taffy::round_layout(self, node_id);
+        taffy::compute_root_layout(self, node_id.into(), available_space);
+        taffy::round_layout(self, node_id.into());
     }
 
     #[profiling::function]
@@ -511,7 +521,7 @@ impl<R: GuiRenderer> Tree<R> {
         for node in nodes.clone() {
             let mut current = Some(node);
             while let Some(current_node) = current {
-                self.cache_clear(current_node);
+                self.cache_clear(current_node.into());
                 current = self.parent(current_node);
             }
         }
@@ -619,7 +629,7 @@ impl<R: GuiRenderer> Tree<R> {
         // Clear layout cache for this node and all ancestors
         let mut current = Some(node);
         while let Some(node_id) = current {
-            self.cache_clear(node_id);
+            self.cache_clear(node_id.into());
             self.manager.relayout(node_id);
             current = self.parent(node_id);
         }

@@ -1,4 +1,4 @@
-@group(0) @binding(0) var<uniform> viewport_projection: Viewport2D;
+@group(0) @binding(0) var<uniform> viewport: Viewport2D;
 @group(1) @binding(0) var mask_atlas: texture_2d_array<f32>;
 @group(1) @binding(1) var color_atlas: texture_2d_array<f32>;
 @group(1) @binding(2) var tex_sampler: sampler;
@@ -28,7 +28,7 @@ struct VertexOutput {
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = (input.position * viewport.scale) + viewport.translate;
+    out.clip_position = vec4<f32>((input.position * viewport.scale) + viewport.translate, 0., 1.);
     out.color = input.color;
     out.kind = input.kind;
     out.texture = input.texture;
@@ -39,8 +39,11 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (in.kind == 0u) {
+        return in.color;
+    } else if (in.kind == 1u) {
         let mask = textureSampleLevel(mask_atlas, tex_sampler, in.tex_coords, in.texture, 0.0).r;
         // in.color.rgb is premultiplied
+        // return vec4(1., 1., 1., 1.);
         return vec4(in.color.rgb * mask, in.color.a * mask);
     }
     return textureSampleLevel(color_atlas, tex_sampler, in.tex_coords, in.texture, 0.);

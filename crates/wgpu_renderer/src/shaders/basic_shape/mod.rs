@@ -1,8 +1,13 @@
-use graphics_v2::Primitive;
+use color::{LinearSrgb, PremulColor};
+use euclid::default::Point2D;
+use graphics_v2::{BasicLinearGradient, Primitive};
 
-use crate::{GraphicsContext, arena::Arena, buffer::GrowableBuffer, shaders::ViewportBinds};
-
-pub struct BasicShapeVertexArena;
+use crate::{
+    GraphicsContext,
+    Mesh,
+    arena::Arena,
+    shaders::{AllocMesh, ViewportBinds},
+};
 
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -17,11 +22,8 @@ impl BasicShapeVertex {
 
     pub const fn buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
         debug_assert!(
-            size_of::<Self>()
-                .div_exact(wgpu::VERTEX_ALIGNMENT as usize)
-                .is_some(),
-            "vertex alignment is not aligned to {:?} bytes",
-            wgpu::VERTEX_ALIGNMENT
+            size_of::<Self>() % wgpu::VERTEX_ALIGNMENT as usize == 0,
+            "vertex alignment is not aligned to wgpu::VERTEX_ALIGNMENT bytes",
         );
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
@@ -31,19 +33,70 @@ impl BasicShapeVertex {
     }
 }
 
-pub struct BasicShapes {
+impl BasicShapeVertex {
+    #[inline(always)]
+    pub const fn new_color(position: [f32; 2], color: PremulColor<LinearSrgb>) -> Self {
+        Self {
+            position,
+            color: color.components,
+        }
+    }
+    /// Create the vertices needed for a solid single color rectangle with min/max coordinates in
+    /// CCW order. indices: 0,1,2 0,2,3
+    #[inline(always)]
+    pub const fn new_solid_rect(
+        min: [f32; 2],
+        max: [f32; 2],
+        color: PremulColor<LinearSrgb>,
+    ) -> [Self; 4] {
+        [
+            Self::new_color([max[0], min[1]], color),
+            Self::new_color(min, color),
+            Self::new_color([min[0], max[1]], color),
+            Self::new_color(max, color),
+        ]
+    }
+
+    /// Create the vertices needed for a linear gradient rectangle with min/max coordinates in
+    /// CCW order. indices: 0,1,2 0,2,3
+    #[inline(always)]
+    pub fn new_gradient_rect(
+        min: [f32; 2],
+        max: [f32; 2],
+        color: &BasicLinearGradient,
+    ) -> [Self; 4] {
+        [
+            Self::new_color(
+                [max[0], min[1]],
+                color.get_point_premul_cs(Point2D::new(max[0], min[1])),
+            ),
+            Self::new_color(min, color.get_point_premul_cs(Point2D::new(min[0], min[1]))),
+            Self::new_color(
+                [min[0], max[1]],
+                color.get_point_premul_cs(Point2D::new(min[0], min[1])),
+            ),
+            Self::new_color(max, color.get_point_premul_cs(Point2D::new(max[0], max[1]))),
+        ]
+    }
+}
+
+pub struct VertexArenaMarker;
+pub struct IndexArenaMarker;
+
+pub struct BasicShapeState {
     pub pipeline: wgpu::RenderPipeline,
     pub msaa_pipeline: wgpu::RenderPipeline,
 
-    pub vertex_arena: Arena<BasicShapeVertexArena>,
-    staging_index_buf: GrowableBuffer,
+    pub vertices_arena: Arena<VertexArenaMarker>,
+    pub indices_arena: Arena<IndexArenaMarker>,
 }
 
-impl BasicShapes {
+impl BasicShapeState {
     fn create_pipeline(
         ctx: &GraphicsContext,
         viewport: &ViewportBinds,
         multisample: wgpu::MultisampleState,
+        render_targets: &[Option<wgpu::ColorTargetState>],
     ) -> wgpu::RenderPipeline {
         let module = ctx
             .device
@@ -62,7 +115,7 @@ impl BasicShapes {
                 vertex: wgpu::VertexState {
                     module: &module,
                     entry_point: None,
-                    compilation_options: Default::default(),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[BasicShapeVertex::buffer_layout()],
                 },
                 primitive: wgpu::PrimitiveState {
@@ -80,7 +133,7 @@ impl BasicShapes {
                     module: &module,
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[],
+                    targets: render_targets,
                 }),
                 multiview_mask: None,
                 cache: None,
@@ -88,10 +141,19 @@ impl BasicShapes {
     }
 }
 
-impl BasicShapes {
-    pub fn new(ctx: &GraphicsContext, viewport_binds: &ViewportBinds) -> Self {
+impl BasicShapeState {
+    pub fn new(
+        ctx: &GraphicsContext,
+        viewport_binds: &ViewportBinds,
+        render_targets: &[Option<wgpu::ColorTargetState>],
+    ) -> Self {
         Self {
-            pipeline: Self::create_pipeline(ctx, viewport_binds, wgpu::MultisampleState::default()),
+            pipeline: Self::create_pipeline(
+                ctx,
+                viewport_binds,
+                wgpu::MultisampleState::default(),
+                render_targets,
+            ),
             msaa_pipeline: Self::create_pipeline(
                 ctx,
                 viewport_binds,
@@ -100,19 +162,88 @@ impl BasicShapes {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
+                render_targets,
             ),
-            vertex_arena: Arena::new(&ctx.device, wgpu::BufferUsages::VERTEX),
-            staging_index_buf: GrowableBuffer::new(
+            vertices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::VERTEX),
+            indices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::INDEX),
+        }
+    }
+
+    #[inline(always)]
+    pub fn insert_mesh(
+        &mut self,
+        ctx: &GraphicsContext,
+        mesh: Mesh<BasicShapeVertex>,
+    ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
+        AllocMesh {
+            vertices: self.vertices_arena.insert(
                 &ctx.device,
-                wgpu::BufferUsages::INDEX,
-                Some("basic_shapes - index_buf"),
+                &ctx.queue,
+                bytemuck::cast_slice(&mesh.vertices),
+            ),
+            indices: self.indices_arena.insert(
+                &ctx.device,
+                &ctx.queue,
+                bytemuck::cast_slice(&mesh.indices),
             ),
         }
     }
 
-    pub fn render_primitive(&self, render_pass: &mut wgpu::RenderPass, _primitive: Primitive) {
+    #[inline(always)]
+    pub fn update_mesh(
+        &mut self,
+        ctx: &GraphicsContext,
+        alloc: AllocMesh<VertexArenaMarker, IndexArenaMarker>,
+        new: Mesh<BasicShapeVertex>,
+    ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
+        AllocMesh {
+            vertices: self.vertices_arena.update(
+                &ctx.device,
+                &ctx.queue,
+                alloc.vertices,
+                bytemuck::cast_slice(&new.vertices),
+            ),
+            indices: self.indices_arena.update(
+                &ctx.device,
+                &ctx.queue,
+                alloc.indices,
+                bytemuck::cast_slice(&new.indices),
+            ),
+        }
+    }
+
+    #[inline(always)]
+    pub fn remove_mesh(&mut self, alloc: AllocMesh<VertexArenaMarker, IndexArenaMarker>) {
+        self.vertices_arena.remove(alloc.vertices);
+        self.indices_arena.remove(alloc.indices);
+    }
+
+    #[inline(always)]
+    pub fn swap_pipeline(
+        &self,
+        render_pass: &mut wgpu::RenderPass,
+        viewport_binds: &ViewportBinds,
+    ) {
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_vertex_buffer(0, self.vertex_arena.inner_buffer().slice(..));
-        todo!()
+        render_pass.set_bind_group(0, viewport_binds.bind_group(), &[]);
+        render_pass.set_vertex_buffer(0, self.vertices_arena.inner_buffer().slice(..));
+        render_pass.set_index_buffer(
+            self.indices_arena.inner_buffer().slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
+    }
+
+    #[inline(always)]
+    pub fn render_mesh_alloc(
+        &self,
+        render_pass: &mut wgpu::RenderPass,
+        alloc: &AllocMesh<VertexArenaMarker, IndexArenaMarker>,
+    ) {
+        render_pass.draw_indexed(
+            (alloc.indices.byte_index() / 4) as u32
+                ..((alloc.indices.byte_index() + alloc.indices.len()) / 4) as u32,
+            (alloc.vertices.byte_index() / size_of::<BasicShapeVertex>()) as i32,
+            0..1,
+        );
     }
 }
