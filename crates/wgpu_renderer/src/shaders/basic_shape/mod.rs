@@ -22,7 +22,7 @@ impl BasicShapeVertex {
 
     pub const fn buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
         debug_assert!(
-            size_of::<Self>() % wgpu::VERTEX_ALIGNMENT as usize == 0,
+            size_of::<Self>().is_multiple_of(wgpu::VERTEX_ALIGNMENT as usize),
             "vertex alignment is not aligned to wgpu::VERTEX_ALIGNMENT bytes",
         );
         wgpu::VertexBufferLayout {

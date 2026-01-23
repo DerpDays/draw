@@ -27,7 +27,10 @@ use crate::{
 };
 
 pub mod prelude {
-    pub use crate::events::{EventContext, EventPhase, *};
+    pub use crate::{
+        events::{EventContext, EventPhase, *},
+        zindex::ZIndexProperties,
+    };
     pub use color;
     pub use graphics_v2;
     pub use sycamore_reactive::*;

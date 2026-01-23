@@ -14,7 +14,11 @@ use crate::{
     GraphicsContext,
     Mesh,
     PrimitiveCache,
-    shaders::{basic_shape::BasicShapeVertex, text::TextVertex},
+    shaders::{
+        basic_shape::BasicShapeVertex,
+        text::TextVertex,
+        texture::{TexturePrimitive, TextureVertex},
+    },
 };
 
 #[derive(Copy, Clone, PartialEq)]
@@ -29,7 +33,7 @@ pub enum PrimitiveMesh {
     BasicShape(Mesh<BasicShapeVertex>),
     BasicShapeMultisample(Mesh<BasicShapeVertex>),
     Text(Mesh<TextVertex>),
-    Texture(Mesh<TextVertex>),
+    Texture(([crate::shaders::texture::TextureVertex; 4], wgpu::BindGroup)),
 }
 pub trait ToDrawType {
     fn to_draw_type(&self) -> DrawType;
@@ -41,7 +45,7 @@ impl ToDrawType for Primitive {
             Primitive::Svg(_) => DrawType::BasicShapeMultisample,
             Primitive::Text(_) => DrawType::Text,
             Primitive::Custom(custom) => {
-                if let Some(_) = custom.as_any().downcast_ref::<wgpu::Texture>() {
+                if let Some(_) = custom.as_any().downcast_ref::<TexturePrimitive>() {
                     DrawType::Texture
                 } else {
                     panic!("tried to draw custom primitive that is not part of wgpu_renderer");
@@ -78,7 +82,19 @@ impl PrimitiveToMesh for Primitive {
             Primitive::Text(text) => PrimitiveMesh::Text(render_text(ctx, text, cache)),
             Primitive::Text(text) => todo!(),
             Primitive::Triangle(triangle) => todo!(),
-            Primitive::Custom(custom_primitive) => todo!(),
+            Primitive::Custom(custom) => {
+                let Some(primitive) = custom.as_any().downcast_ref::<TexturePrimitive>() else {
+                    panic!("tried to draw custom primitive that is not part of wgpu_renderer");
+                };
+                PrimitiveMesh::Texture((
+                    TextureVertex::new_strip_quad(
+                        primitive.area.min.to_array(),
+                        primitive.area.max.to_array(),
+                    ),
+                    primitive.bind_group.clone().into(),
+                ))
+                // let Some(bind_group) =
+            }
         }
     }
 }

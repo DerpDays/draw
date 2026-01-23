@@ -2,13 +2,14 @@
 use std::collections::HashMap;
 
 use graphics_v2::Primitive;
+#[cfg(feature = "gui")]
 use gui_v2::{ElementId, GuiRenderer, MeasureCtx};
 
 use crate::{
     GraphicsContext,
     arena::Key,
     primitives::{DrawType, PrimitiveMesh, PrimitiveToMesh, ToDrawType},
-    shaders::{basic_shape::BasicShapeState, text::TextState},
+    shaders::{basic_shape::BasicShapeState, text::TextState, texture::TextureState},
 };
 
 pub use viewport::{ViewportBinds, ViewportTransform};
@@ -17,7 +18,7 @@ mod viewport;
 
 pub mod basic_shape;
 pub mod text;
-mod texture;
+pub mod texture;
 
 struct CacheEntry {
     previous_elem: graphics_v2::Primitive,
@@ -34,6 +35,7 @@ pub enum Alloc {
     BasicShape(AllocMesh<basic_shape::VertexArenaMarker, basic_shape::IndexArenaMarker>),
     BasicShapeMultisample(AllocMesh<basic_shape::VertexArenaMarker, basic_shape::IndexArenaMarker>),
     Text(AllocMesh<text::VertexArenaMarker, text::IndexArenaMarker>),
+    Texture((Key<texture::VertexArenaMarker>, wgpu::BindGroup)),
     Empty,
 }
 
@@ -42,12 +44,13 @@ pub struct WgpuRenderer {
     // #[cfg(feature = "gui")]
     // pub gui_cache: GuiCache<ElementId>,
     #[cfg(feature = "gui")]
-    gui_cache: HashMap<ElementId, CacheEntry>,
+    pub gui_cache: HashMap<ElementId, CacheEntry>,
 
     pub viewport: ViewportBinds,
 
-    basic_shapes: basic_shape::BasicShapeState,
-    text_state: text::TextState,
+    pub basic_shapes: BasicShapeState,
+    pub text_state: TextState,
+    pub texture_state: TextureState,
     // text: crate::arena::Arena<TextVertexArena>,
     // texture: HashMap<wgpu::Texture, wgpu::BindGroup>,
 }
@@ -57,6 +60,7 @@ impl WgpuRenderer {
         let viewport = ViewportBinds::new(&ctx, ViewportTransform::new(1920., 1080.));
         let basic_shapes = BasicShapeState::new(&ctx, &viewport, render_targets);
         let text_state = TextState::new(&ctx, &viewport, render_targets);
+        let texture_state = TextureState::new(&ctx, &viewport, render_targets);
         Self {
             ctx,
             #[cfg(feature = "gui")]
@@ -65,6 +69,7 @@ impl WgpuRenderer {
 
             basic_shapes,
             text_state,
+            texture_state,
             // text,
             // texture: HashMap::default(),
         }
@@ -121,7 +126,11 @@ impl RendererPass<'_> {
                         .text_state
                         .swap_pipeline(&mut self.render_pass, &renderer.viewport);
                 }
-                DrawType::Texture => todo!(),
+                DrawType::Texture => {
+                    renderer
+                        .texture_state
+                        .swap_pipeline(&mut self.render_pass, &renderer.viewport);
+                }
             }
             self.last_draw_type = Some(draw_type);
         };
@@ -155,6 +164,12 @@ impl RendererPass<'_> {
                 renderer
                     .text_state
                     .render_mesh_alloc(&mut self.render_pass, alloc);
+            }
+            Alloc::Texture((key, bind_group)) => {
+                self.swap_pipeline(renderer, DrawType::Texture);
+                renderer
+                    .texture_state
+                    .render_bind_group(&mut self.render_pass, key, bind_group);
             }
             Alloc::Empty => {
                 log::warn!("tried to render an empty element");
@@ -224,7 +239,22 @@ impl GuiRenderer for WgpuRenderer {
                                     Alloc::Text(self.text_state.insert_mesh(&self.ctx, mesh));
                             }
                         }
-                        PrimitiveMesh::Texture(_) => todo!(),
+                        PrimitiveMesh::Texture((vertices, bind_group)) => {
+                            log::info!("mesh updating texture primitive");
+                            let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
+
+                            // If the previous allocation was not empty, update the exisiting
+                            // allocation
+                            if let Alloc::Texture((key, ..)) = previous_alloc {
+                                entry.alloc = Alloc::Texture((
+                                    self.texture_state.update_vertices(&self.ctx, key, vertices),
+                                    bind_group,
+                                ));
+                            // Otherwise if it was previously empty, create a new allocation
+                            } else {
+                                panic!("we cannot have an empty texture primitive cache entry")
+                            }
+                        }
                     }
                 }
 
@@ -248,7 +278,10 @@ impl GuiRenderer for WgpuRenderer {
                     PrimitiveMesh::Text(mesh) => {
                         Alloc::Text(self.text_state.insert_mesh(&self.ctx, mesh))
                     }
-                    PrimitiveMesh::Texture(mesh) => todo!(),
+                    PrimitiveMesh::Texture((vertices, bind_group)) => Alloc::Texture((
+                        self.texture_state.insert_vertices(&self.ctx, vertices),
+                        bind_group,
+                    )),
                 },
             };
             self.gui_cache.insert(elem_id, entry);
@@ -265,6 +298,9 @@ impl GuiRenderer for WgpuRenderer {
                     self.basic_shapes.remove_mesh(alloc);
                 }
                 Alloc::Text(alloc) => self.text_state.remove_mesh(alloc),
+                Alloc::Texture((vertices, ..)) => {
+                    self.texture_state.remove_vertices(vertices);
+                }
                 Alloc::Empty => {}
             }
         }

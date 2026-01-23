@@ -16,4 +16,5 @@ pub mod reactive {
         }
     }
 }
+pub use input;
 pub use taffy;
