@@ -4,7 +4,7 @@ use thiserror::Error;
 use atlas::{AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture};
 use color::{AlphaColor, LinearSrgb, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D};
-use graphics_v2::{
+use graphics::{
     make_positive_box,
     primitives::{Text, TextLayoutOptions},
 };

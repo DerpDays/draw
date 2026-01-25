@@ -1,6 +1,6 @@
 use color::LinearSrgb;
 use euclid::default::{Box2D, SideOffsets2D};
-use graphics_v2::{BasicColor, make_positive_box, primitives::Rectangle};
+use graphics::{BasicColor, make_positive_box, primitives::Rectangle};
 use lyon::{
     path::{Path, Winding},
     tessellation::{

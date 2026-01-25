@@ -4,8 +4,8 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-gui_v2 = { workspace = true, optional = true }
-graphics_v2 = { workspace = true, features = ["parley", "lyon"] }
+gui = { workspace = true, optional = true }
+graphics = { workspace = true, features = ["parley", "lyon"] }
 atlas = { workspace = true }
 
 euclid = { workspace = true }
@@ -28,4 +28,3 @@ profiling = { workspace = true }
 
 [features]
 default = ["gui"]
-gui = ["gui_v2"]

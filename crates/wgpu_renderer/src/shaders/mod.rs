@@ -1,9 +1,9 @@
 #[cfg(feature = "gui")]
 use std::collections::HashMap;
 
-use graphics_v2::Primitive;
+use graphics::Primitive;
 #[cfg(feature = "gui")]
-use gui_v2::{ElementId, GuiRenderer, MeasureCtx};
+use gui::{ElementId, GuiRenderer, MeasureCtx};
 
 use crate::{
     GraphicsContext,
@@ -20,8 +20,8 @@ pub mod basic_shape;
 pub mod text;
 pub mod texture;
 
-struct CacheEntry {
-    previous_elem: graphics_v2::Primitive,
+pub struct CacheEntry {
+    previous_elem: graphics::Primitive,
     cache: Option<crate::PrimitiveCache>,
     alloc: Alloc,
 }
@@ -183,7 +183,7 @@ impl RendererPass<'_> {
 impl GuiRenderer for WgpuRenderer {
     type Renderer = GraphicsContext;
 
-    fn update_cached(&mut self, elem_id: ElementId, primitive: graphics_v2::Primitive) {
+    fn update_cached(&mut self, elem_id: ElementId, primitive: graphics::Primitive) {
         log::info!("updating primitive: {primitive:?}");
         // if already existing
         if let Some(entry) = self.gui_cache.get_mut(&elem_id) {
@@ -202,7 +202,7 @@ impl GuiRenderer for WgpuRenderer {
                                 }
                                 break 'a;
                             }
-                            // If the previous allocation was not empty, update the exisiting
+                            // If the previous allocation was not empty, update the existing
                             // allocation
                             if let Alloc::BasicShape(alloc) = previous_alloc {
                                 entry.alloc = Alloc::BasicShape(
@@ -227,7 +227,7 @@ impl GuiRenderer for WgpuRenderer {
                                 }
                                 break 'a;
                             }
-                            // If the previous allocation was not empty, update the exisiting
+                            // If the previous allocation was not empty, update the existing
                             // allocation
                             if let Alloc::Text(alloc) = previous_alloc {
                                 entry.alloc = Alloc::Text(
@@ -243,7 +243,7 @@ impl GuiRenderer for WgpuRenderer {
                             log::info!("mesh updating texture primitive");
                             let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
 
-                            // If the previous allocation was not empty, update the exisiting
+                            // If the previous allocation was not empty, update the existing
                             // allocation
                             if let Alloc::Texture((key, ..)) = previous_alloc {
                                 entry.alloc = Alloc::Texture((
@@ -311,28 +311,28 @@ impl GuiRenderer for WgpuRenderer {
 impl MeasureCtx for WgpuRenderer {
     fn measure_text(
         &mut self,
-        text: graphics_v2::primitives::TextMeasure,
-    ) -> gui_v2::reexports::taffy::Size<f32> {
+        text: graphics::primitives::TextMeasure,
+    ) -> gui::reexports::taffy::Size<f32> {
         let layout = crate::primitives::prepare_text_layout(
             &mut self.ctx,
             &text.text,
             color::AlphaColor::BLACK,
             &text.text_layout,
             text.max_width.or(match text.available_space_width {
-                graphics_v2::primitives::AvailableSpace::Definite(x) => Some(x),
+                graphics::primitives::AvailableSpace::Definite(x) => Some(x),
                 _ => None,
             }),
         );
         let width = match text.available_space_width {
-            graphics_v2::primitives::AvailableSpace::Definite(_) => layout.width(),
-            graphics_v2::primitives::AvailableSpace::MinContent => {
+            graphics::primitives::AvailableSpace::Definite(_) => layout.width(),
+            graphics::primitives::AvailableSpace::MinContent => {
                 layout.calculate_content_widths().min + 1.
             }
-            graphics_v2::primitives::AvailableSpace::MaxContent => {
+            graphics::primitives::AvailableSpace::MaxContent => {
                 layout.calculate_content_widths().max + 1.
             }
         };
-        gui_v2::reexports::taffy::Size {
+        gui::reexports::taffy::Size {
             width,
             height: layout.height(),
         }

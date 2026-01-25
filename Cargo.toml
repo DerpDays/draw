@@ -11,35 +11,33 @@ resolver = "2"
 members = [
   "platform/wl",
 
-  "crates/renderer",
+  "crates/_renderer_old",
+  "crates/_graphics_old",
+
+  "crates/canvas",
+  "platform/wl",
+
+  "crates/gui",
+  "crates/input",
   "crates/graphics",
 
   "crates/atlas",
-  "crates/canvas",
-  "crates/input",
-  "crates/gui_v2",
-  "crates/gui_reactive",
-  # "crates/gui_reactive_static",
-  "platform/wl",
-
-  "crates/graphics_v2",
   "crates/wgpu_renderer",
 ]
 default-members = ["platform/wl"]
 
 [workspace.dependencies]
-renderer = { path = "./crates/renderer" }
-atlas = { path = "./crates/atlas" }
-canvas = { path = "./crates/canvas" }
-
-graphics = { path = "./crates/graphics" }
-
-graphics_v2 = { path = "./crates/graphics_v2", features = ["parley"] }
-wgpu_renderer = { path = "./crates/wgpu_renderer" }
-gui_v2 = { path = "./crates/gui_v2" }
+graphics_old = { path = "./crates/graphics_old" }
+renderer_old = { path = "./crates/_renderer_old/" }
 
 input = { path = "./crates/input", default-features = false }
-gui_reactive = { path = "./crates/gui_reactive" }
+graphics = { path = "./crates/graphics", features = ["parley"] }
+gui = { path = "./crates/gui" }
+
+atlas = { path = "./crates/atlas" }
+wgpu_renderer = { path = "./crates/wgpu_renderer" }
+
+canvas = { path = "./crates/canvas" }
 
 anyhow = "1.0.100"
 clap = { version = "4.5.54", features = ["derive"] }

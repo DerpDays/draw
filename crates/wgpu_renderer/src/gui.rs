@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use graphics_v2::Primitive;
+use graphics::Primitive;
 
 use crate::{
     GraphicsContext,
@@ -11,7 +11,7 @@ use crate::{
 };
 
 struct CacheEntry {
-    previous_elem: graphics_v2::Primitive,
+    previous_elem: graphics::Primitive,
     cache: Option<PrimitiveCache>,
     alloc: Alloc,
 }
@@ -102,7 +102,7 @@ pub use crate::shaders::WgpuRenderer;
 // impl GuiRenderer for WgpuRenderer {
 //     type Renderer = GraphicsContext;
 //
-//     fn update_cached(&mut self, elem_id: ElementId, primitive: graphics_v2::Primitive) {
+//     fn update_cached(&mut self, elem_id: ElementId, primitive: graphics::Primitive) {
 //         self.cache.update(&mut self.ctx, elem_id, primitive);
 //     }
 //
@@ -113,28 +113,28 @@ pub use crate::shaders::WgpuRenderer;
 // impl MeasureCtx for WgpuRenderer {
 //     fn measure_text(
 //         &mut self,
-//         text: graphics_v2::primitives::TextMeasure,
-//     ) -> gui_v2::reexports::taffy::Size<f32> {
+//         text: graphics::primitives::TextMeasure,
+//     ) -> gui::reexports::taffy::Size<f32> {
 //         let layout = crate::primitives::prepare_text_layout(
 //             &mut self.ctx,
 //             &text.text,
 //             AlphaColor::BLACK,
 //             &text.text_layout,
 //             text.max_width.or(match text.available_space_width {
-//                 graphics_v2::primitives::AvailableSpace::Definite(x) => Some(x),
+//                 graphics::primitives::AvailableSpace::Definite(x) => Some(x),
 //                 _ => None,
 //             }),
 //         );
 //         let width = match text.available_space_width {
-//             graphics_v2::primitives::AvailableSpace::Definite(_) => layout.width(),
-//             graphics_v2::primitives::AvailableSpace::MinContent => {
+//             graphics::primitives::AvailableSpace::Definite(_) => layout.width(),
+//             graphics::primitives::AvailableSpace::MinContent => {
 //                 layout.calculate_content_widths().min + 1.
 //             }
-//             graphics_v2::primitives::AvailableSpace::MaxContent => {
+//             graphics::primitives::AvailableSpace::MaxContent => {
 //                 layout.calculate_content_widths().max + 1.
 //             }
 //         };
-//         gui_v2::reexports::taffy::Size {
+//         gui::reexports::taffy::Size {
 //             width,
 //             height: layout.height(),
 //         }

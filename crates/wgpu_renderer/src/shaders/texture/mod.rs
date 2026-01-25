@@ -1,5 +1,5 @@
 use euclid::default::Box2D;
-use graphics_v2::primitives::CustomPrimitiveImpl;
+use graphics::primitives::CustomPrimitiveImpl;
 
 pub mod gui_element;
 

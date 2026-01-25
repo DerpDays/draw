@@ -147,7 +147,6 @@ impl<M> Arena<M> {
                 self.freelist.remove(index + 1);
             }
         }
-        self.shrink_to_fit()
     }
 
     pub fn update(
@@ -166,8 +165,14 @@ impl<M> Arena<M> {
         }
     }
 
-    pub fn shrink_to_fit(&mut self) {
-        todo!()
+    pub fn shrink_to_fit(&mut self, queue: &wgpu::Queue) {
+        if let Some(alloc) = self.allocations.last()
+            && let Some(free) = self.freelist.last()
+            && free.byte_index() >= alloc.byte_index() + alloc.len()
+        {
+            self.freelist.pop();
+            todo!()
+        }
     }
 }
 

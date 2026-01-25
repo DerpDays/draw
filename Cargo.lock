@@ -409,10 +409,10 @@ dependencies = [
  "color",
  "euclid",
  "graphics",
- "gui_reactive",
+ "gui",
  "input",
  "lyon",
- "renderer",
+ "renderer_old",
  "serde",
  "strum",
  "tracing",
@@ -982,6 +982,18 @@ dependencies = [
 name = "graphics"
 version = "0.1.0"
 dependencies = [
+ "color",
+ "euclid",
+ "log",
+ "lyon",
+ "parley",
+ "serde",
+]
+
+[[package]]
+name = "graphics_old"
+version = "0.1.0"
+dependencies = [
  "atlas",
  "bytemuck",
  "color",
@@ -997,47 +1009,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "graphics_v2"
-version = "0.1.0"
-dependencies = [
- "color",
- "euclid",
- "log",
- "lyon",
- "parley",
- "serde",
-]
-
-[[package]]
 name = "grid"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9e2d4c0a8296178d8802098410ca05d86b17a10bb5ab559b3fb404c1f948220"
 
 [[package]]
-name = "gui_reactive"
+name = "gui"
 version = "0.1.0"
 dependencies = [
  "accesskit",
  "color",
  "euclid",
  "graphics",
- "input",
- "slotmap",
- "sycamore-reactive",
- "taffy",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "gui_v2"
-version = "0.1.0"
-dependencies = [
- "accesskit",
- "color",
- "euclid",
- "graphics_v2",
  "input",
  "log",
  "profiling",
@@ -2140,7 +2124,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
-name = "renderer"
+name = "renderer_old"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
@@ -3356,8 +3340,8 @@ dependencies = [
  "bytemuck",
  "color",
  "euclid",
- "graphics_v2",
- "gui_v2",
+ "graphics",
+ "gui",
  "log",
  "lyon",
  "parley",
@@ -3863,7 +3847,7 @@ dependencies = [
  "euclid",
  "futures-lite",
  "input",
- "renderer",
+ "renderer_old",
  "rkyv",
  "smithay-client-toolkit 0.20.0",
  "thiserror 2.0.17",

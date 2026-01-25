@@ -6,7 +6,7 @@ edition = { workspace = true }
 [dependencies]
 # Internal dependencies
 canvas = { workspace = true }
-renderer = { workspace = true }
+renderer_old = { workspace = true }
 input = { workspace = true, features = ["sctk", "serde"] }
 
 # Math types

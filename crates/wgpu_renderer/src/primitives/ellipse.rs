@@ -1,4 +1,4 @@
-use graphics_v2::primitives::Ellipse;
+use graphics::primitives::Ellipse;
 // use lyon::tessellation::{BuffersBuilder, FillVertex, VertexBuffers};
 
 use crate::{Mesh, Vertex};

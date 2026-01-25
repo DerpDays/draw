@@ -1,88 +1,221 @@
-mod ellipse;
-mod line;
-mod pen;
-mod quad;
-mod rectangle;
-mod svg;
-mod text;
-mod triangle;
+use std::{any::Any, fmt::Debug, sync::Arc};
 
-use serde::{Deserialize, Serialize};
+use color::{AlphaColor, Srgb};
+use euclid::default::{Point2D, Size2D, Vector2D};
 
-use crate::{ApplyCoordinates, Drawable, Vertex};
+use crate::{BasicColor, LineCap, Rounding};
+pub mod text;
 
-pub use ellipse::{Ellipse, Options as EllipseOptions};
-pub use line::{Line, Options as LineOptions};
-pub use pen::{Options as PenOptions, Pen};
-pub use quad::{Options as QuadOptions, Quad, QuadPoints};
-pub use rectangle::{Options as RectangleOptions, Rectangle};
-pub use svg::{Options as SvgOptions, Svg};
-pub use text::{Options as TextOptions, Text};
-pub use triangle::{Options as TriangleOptions, Triangle};
+#[derive(Debug)]
+pub enum Primitive {
+    Ellipse(Ellipse),
+    Line(Line),
+    CubicBezier(CubicBezier),
+    Pen(Pen),
+    Quad(Quad),
+    Rectangle(Rectangle),
+    Svg(Svg),
+    Text(Text),
+    Triangle(Triangle),
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum Primitive<C: ApplyCoordinates + Clone> {
-    Ellipse(Ellipse<C>),
-    Line(Line<C>),
-    Pen(Pen<C>),
-    Quad(Quad<C>),
-    Rectangle(Rectangle<C>),
-    Svg(Svg<C>),
-    Text(Text<C>),
-    Triangle(Triangle<C>),
+    Custom(Box<dyn CustomPrimitive>),
 }
-
-macro_rules! delegate_primitive {
-    (
-        $( $variant:ident ),*
-    ) => {
-        fn render(&mut self, systems: &mut $crate::Systems) -> &$crate::Mesh<Vertex> {
-            match self {
-                $( Primitive::$variant(w) => w.render(systems), )*
-            }
-        }
-        fn is_dirty(&self) -> bool {
-            match self {
-                $( Primitive::$variant(w) => w.is_dirty(), )*
-            }
-        }
-        fn bounding_box(&self) -> euclid::default::Box2D<f32> {
-            match self {
-                $( Primitive::$variant(w) => w.bounding_box(), )*
-            }
-        }
-    };
-}
-
-impl<C: ApplyCoordinates + Clone> Drawable<Vertex> for Primitive<C> {
-    delegate_primitive!(Ellipse, Line, Pen, Quad, Rectangle, Svg, Text, Triangle);
-}
-
-#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Rounding {
-    pub top_left: f32,
-    pub top_right: f32,
-    pub bottom_left: f32,
-    pub bottom_right: f32,
-}
-impl Rounding {
-    pub fn all(value: f32) -> Self {
-        Self {
-            top_left: value,
-            top_right: value,
-            bottom_left: value,
-            bottom_right: value,
+impl Clone for Primitive {
+    fn clone(&self) -> Self {
+        match self {
+            Primitive::Custom(c) => Primitive::Custom(c.clone_box()),
+            other => other.clone(), // works for the concrete variants
         }
     }
 }
 
-impl From<Rounding> for lyon::path::builder::BorderRadii {
-    fn from(value: Rounding) -> Self {
-        Self {
-            top_left: value.top_left,
-            top_right: value.top_right,
-            bottom_left: value.bottom_left,
-            bottom_right: value.bottom_right,
+impl PartialEq for Primitive {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Primitive::Custom(a), Primitive::Custom(b)) => a.eq_box(&**b),
+            _ => {
+                std::mem::discriminant(self) == std::mem::discriminant(other)
+                    && format!("{:?}", self) == format!("{:?}", other)
+            }
         }
     }
+}
+
+pub trait CustomPrimitiveImpl {}
+pub trait CustomPrimitive: Any + std::fmt::Debug {
+    fn as_any(&self) -> &dyn Any;
+    fn clone_box(&self) -> Box<dyn CustomPrimitive>;
+    fn eq_box(&self, other: &dyn CustomPrimitive) -> bool;
+}
+impl<T> CustomPrimitive for T
+where
+    T: CustomPrimitiveImpl + Any + Clone + Debug + PartialEq + 'static,
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn CustomPrimitive> {
+        Box::new(self.clone())
+    }
+
+    fn eq_box(&self, other: &dyn CustomPrimitive) -> bool {
+        other.as_any().downcast_ref::<T>() == Some(self)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Ellipse {
+    pub center: Point2D<f32>,
+    pub radius: Vector2D<f32>,
+
+    pub color: BasicColor,
+
+    pub stroke_color: BasicColor,
+    pub stroke_width: f32,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Line {
+    pub origin: Point2D<f32>,
+    pub destination: Point2D<f32>,
+
+    pub cap: LineCap,
+
+    pub color: BasicColor,
+    pub width: f32,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CubicBezier {
+    pub p0: Point2D<f32>,
+    pub p1: Point2D<f32>,
+    pub p2: Point2D<f32>,
+    pub p3: Point2D<f32>,
+
+    pub cap: LineCap,
+
+    pub color: BasicColor,
+    pub width: BasicColor,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Pen {
+    pub points: Vec<Point2D<f32>>,
+
+    pub cap: LineCap,
+
+    pub color: BasicColor,
+    pub width: BasicColor,
+}
+
+/// A non-regular 4 point quadrilateral
+///
+/// p0 --- p1
+/// |      |
+/// p2 --- p3
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Quad {
+    pub p0: Point2D<f32>,
+    pub p1: Point2D<f32>,
+    pub p2: Point2D<f32>,
+    pub p3: Point2D<f32>,
+
+    pub rounding: Rounding,
+
+    pub color: BasicColor,
+
+    pub stroke_color: BasicColor,
+    pub stroke_width: f32,
+}
+
+/// A basic rectangle.
+///
+/// Size is includes the stroke width (like border-box), meaning that the stroke is included in the given size of the
+/// rectangle. If the stroke width is greater than the size, only the visible part of the stroke
+/// will be rendered.
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Rectangle {
+    pub origin: Point2D<f32>,
+    pub size: Size2D<f32>,
+
+    pub rounding: Rounding,
+
+    pub color: BasicColor,
+
+    pub stroke_color: BasicColor,
+    pub stroke_width: f32,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Triangle {
+    pub p0: Point2D<f32>,
+    pub p1: Point2D<f32>,
+    pub p2: Point2D<f32>,
+
+    pub color: BasicColor,
+
+    pub stroke_color: BasicColor,
+    pub stroke_width: f32,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Svg {
+    pub origin: Point2D<f32>,
+    pub size: Size2D<f32>,
+
+    pub data: Arc<[u8]>,
+
+    pub fill_color: Option<BasicColor>,
+    pub stroke_color: Option<BasicColor>,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Text {
+    pub origin: Point2D<f32>,
+    pub size: Size2D<f32>,
+
+    pub text: String,
+    pub color: AlphaColor<Srgb>,
+    pub text_layout: TextLayoutOptions,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TextLayoutOptions {
+    pub font_family: text::FontFamily,
+    pub font_size: f32,
+    pub font_style: text::FontStyle,
+    pub font_weight: text::FontWeight,
+    pub font_width: text::FontWidth,
+    pub line_height: text::LineHeight,
+    pub overflow_wrap: text::OverflowWrap,
+    pub whitespace_collapse: text::WhiteSpaceCollapse,
+    pub word_break_strength: text::WordBreakStrength,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum AvailableSpace {
+    Definite(f32),
+    MinContent,
+    MaxContent,
+}
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TextMeasure {
+    pub max_width: Option<f32>,
+    pub available_space_width: AvailableSpace,
+
+    pub text: String,
+    pub text_layout: TextLayoutOptions,
 }

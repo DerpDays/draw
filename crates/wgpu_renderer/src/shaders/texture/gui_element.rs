@@ -1,6 +1,6 @@
 use euclid::default::{Box2D, Point2D, Size2D};
-use graphics_v2::{Primitive, primitives::CustomPrimitive};
-use gui_v2::{
+use graphics::{Primitive, primitives::CustomPrimitive};
+use gui::{
     MeasureCtx,
     TreeManager,
     prelude::{AvailableSpace, Layout, MaybeDyn, Size, Style, create_effect},

@@ -8,7 +8,7 @@ pub use ellipse::render_ellipse;
 mod text;
 pub use text::{prepare_text_layout, render_text};
 
-use graphics_v2::Primitive;
+use graphics::Primitive;
 
 use crate::{
     GraphicsContext,

@@ -1,6 +1,6 @@
 use color::{LinearSrgb, PremulColor};
 use euclid::default::Point2D;
-use graphics_v2::{BasicLinearGradient, Primitive};
+use graphics::BasicLinearGradient;
 
 use crate::{
     GraphicsContext,

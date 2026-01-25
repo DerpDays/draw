@@ -2,7 +2,7 @@ use atlas::TextureVertex;
 use bytemuck::{Pod, Zeroable};
 use color::{LinearSrgb, PremulColor};
 use euclid::default::Point2D;
-use graphics_v2::BasicLinearGradient;
+use graphics::BasicLinearGradient;
 
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

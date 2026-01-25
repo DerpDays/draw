@@ -5,19 +5,16 @@ edition = { workspace = true }
 
 
 [dependencies]
-atlas = { workspace = true }
+parley = { workspace = true, optional = true }
+lyon = { workspace = true, optional = true }
+serde = { workspace = true, optional = true, features = ["rc"] }
 
-bytemuck = { workspace = true }
-thiserror = { workspace = true }
-lyon = { workspace = true }
-serde = { workspace = true }
-
-tracing = { workspace = true }
-
-parley = { workspace = true }
-swash = { workspace = true }
+log = { workspace = true }
 
 euclid = { workspace = true }
 color = { workspace = true }
-wgpu = { workspace = true }
-usvg = { workspace = true }
+
+[features]
+parley = ["dep:parley"]
+lyon = ["dep:lyon"]
+serde = ["dep:serde"]

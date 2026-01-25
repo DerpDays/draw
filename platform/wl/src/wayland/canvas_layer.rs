@@ -3,7 +3,7 @@ use std::ptr::NonNull;
 use color_eyre::eyre::{Context, OptionExt, Result};
 use euclid::default::{Point2D, Size2D};
 use input::{CursorIcon, MouseEvent, MouseEventKind, sctk::KeyEventKind};
-use renderer::reexports::wgpu;
+use renderer_old::reexports::wgpu;
 use smithay_client_toolkit::{
     compositor::Region,
     reexports::client::{

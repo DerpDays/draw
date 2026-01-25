@@ -1,23 +1,23 @@
 [package]
-name = "canvas"
+name = "graphics_old"
 version = { workspace = true }
 edition = { workspace = true }
 
 
 [dependencies]
-graphics = { workspace = true }
-gui = { workspace = true }
-input = { workspace = true, features = ["serde"] }
-renderer_old = { workspace = true }
+atlas = { workspace = true }
 
-anyhow = { workspace = true }
 bytemuck = { workspace = true }
+thiserror = { workspace = true }
 lyon = { workspace = true }
 serde = { workspace = true }
-strum = { workspace = true }
 
 tracing = { workspace = true }
 
+parley = { workspace = true }
+swash = { workspace = true }
+
+euclid = { workspace = true }
 color = { workspace = true }
 wgpu = { workspace = true }
-euclid = { workspace = true }
+usvg = { workspace = true }

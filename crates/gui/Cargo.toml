@@ -1,0 +1,25 @@
+[package]
+name = "gui"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+graphics = { workspace = true }
+input = { workspace = true }
+
+log = { workspace = true }
+
+accesskit = { workspace = true, optional = true }
+slotmap = "1.0.7"
+sycamore-reactive = "0.9.2"
+taffy = { workspace = true }
+
+color = { workspace = true }
+euclid = { workspace = true }
+
+profiling = { workspace = true }
+
+
+[features]
+default = ["accesskit"]
+accesskit = ["dep:accesskit"]
