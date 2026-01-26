@@ -1,4 +1,4 @@
-use color::ColorSpace;
+use color::{ColorSpace, LinearSrgb};
 use euclid::default::{Box2D, SideOffsets2D};
 use graphics::{BasicColor, make_positive_box, primitives::Rectangle};
 use lyon::{
@@ -17,9 +17,9 @@ use lyon::{
 
 use crate::{Mesh, shaders::basic_shape::BasicShapeVertex};
 
-pub fn render_rectangle<CS: ColorSpace>(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
+pub fn render_rectangle(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
     if !rect.rounding.is_zero() {
-        return render_rounded_rectangle::<CS>(rect);
+        return render_rounded_rectangle(rect);
     }
 
     let area = make_positive_box(Box2D::from_origin_and_size(rect.origin, rect.size));
@@ -29,9 +29,9 @@ pub fn render_rectangle<CS: ColorSpace>(rect: &Rectangle) -> Mesh<BasicShapeVert
     if rect.stroke_width != 0. {
         let mut vertices = Vec::with_capacity(8);
         let mut indices = Vec::with_capacity(12);
-        basic_quad::<CS>(area, &rect.stroke_color, &mut vertices);
+        basic_quad(area, &rect.stroke_color, &mut vertices);
         indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
-        basic_quad::<CS>(
+        basic_quad(
             area.inner_box(SideOffsets2D::new_all_same(rect.stroke_width)),
             &rect.color,
             &mut vertices,
@@ -41,34 +41,28 @@ pub fn render_rectangle<CS: ColorSpace>(rect: &Rectangle) -> Mesh<BasicShapeVert
     } else {
         let mut vertices = Vec::with_capacity(4);
         let mut indices = Vec::with_capacity(6);
-        basic_quad::<CS>(area, &rect.color, &mut vertices);
+        basic_quad(area, &rect.color, &mut vertices);
         indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
         Mesh { vertices, indices }
     }
 }
 
 #[inline(always)]
-fn basic_quad<CS: ColorSpace>(
-    area: Box2D<f32>,
-    color: &BasicColor,
-    vertices: &mut Vec<BasicShapeVertex>,
-) {
+fn basic_quad(area: Box2D<f32>, color: &BasicColor, vertices: &mut Vec<BasicShapeVertex>) {
     vertices.extend_from_slice(&match color {
-        BasicColor::Solid(color) => BasicShapeVertex::new_solid_rect::<CS>(
+        BasicColor::Solid(color) => BasicShapeVertex::new_solid_rect(
             area.min.to_array(),
             area.max.to_array(),
             color.convert().premultiply(),
         ),
-        BasicColor::LinearGradient(gradient) => BasicShapeVertex::new_gradient_rect::<CS>(
-            area.min.to_array(),
-            area.max.to_array(),
-            gradient,
-        ),
+        BasicColor::LinearGradient(gradient) => {
+            BasicShapeVertex::new_gradient_rect(area.min.to_array(), area.max.to_array(), gradient)
+        }
     });
 }
 
 #[inline(always)]
-fn render_rounded_rectangle<CS: ColorSpace>(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
+fn render_rounded_rectangle(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
     // We can receive negative areas in Box2D since size can also be negative,
     // therefore we need to change ensure each axis are their actual minimum/maximum.
     let area = make_positive_box(Box2D::from_origin_and_size(rect.origin, rect.size));
@@ -88,7 +82,7 @@ fn render_rounded_rectangle<CS: ColorSpace>(rect: &Rectangle) -> Mesh<BasicShape
     {
         let fill_opts = FillOptions::default();
         let mut tess = FillTessellator::new();
-        let mut builder = BuffersBuilder::new(&mut buffers, as_vertex_fn::<CS>(rect.color));
+        let mut builder = BuffersBuilder::new(&mut buffers, as_vertex_fn(rect.color));
 
         _ = tess.tessellate_path(&fill_path.build(), &fill_opts, &mut builder);
     }
@@ -107,7 +101,7 @@ fn render_rounded_rectangle<CS: ColorSpace>(rect: &Rectangle) -> Mesh<BasicShape
             .with_line_cap(lyon::tessellation::LineCap::Round);
 
         let mut builder =
-            BuffersBuilder::new(&mut buffers2, as_stroke_vertex_fn::<CS>(rect.stroke_color));
+            BuffersBuilder::new(&mut buffers2, as_stroke_vertex_fn(rect.stroke_color));
 
         _ = tess.tessellate_path(&stroke_path.build(), &stroke_opts, &mut builder);
     }
@@ -127,15 +121,15 @@ fn render_rounded_rectangle<CS: ColorSpace>(rect: &Rectangle) -> Mesh<BasicShape
 }
 
 #[inline(always)]
-fn as_vertex_fn<CS: ColorSpace>(color: BasicColor) -> impl Fn(FillVertex<'_>) -> BasicShapeVertex {
+fn as_vertex_fn(color: BasicColor) -> impl Fn(FillVertex<'_>) -> BasicShapeVertex {
     move |vertex: FillVertex<'_>| BasicShapeVertex {
         position: vertex.position().to_array(),
         color: match color {
-            BasicColor::Solid(color) => color.convert::<CS>().premultiply().components,
+            BasicColor::Solid(color) => color.convert::<LinearSrgb>().premultiply().components,
             BasicColor::LinearGradient(gradient) => {
                 gradient
                     .get_point(vertex.position())
-                    .convert::<CS>()
+                    .convert::<LinearSrgb>()
                     .premultiply()
                     .components
             }
@@ -143,17 +137,15 @@ fn as_vertex_fn<CS: ColorSpace>(color: BasicColor) -> impl Fn(FillVertex<'_>) ->
     }
 }
 #[inline(always)]
-fn as_stroke_vertex_fn<CS: ColorSpace>(
-    color: BasicColor,
-) -> impl Fn(StrokeVertex<'_, '_>) -> BasicShapeVertex {
+fn as_stroke_vertex_fn(color: BasicColor) -> impl Fn(StrokeVertex<'_, '_>) -> BasicShapeVertex {
     move |vertex: StrokeVertex<'_, '_>| BasicShapeVertex {
         position: vertex.position().to_array(),
         color: match color {
-            BasicColor::Solid(color) => color.convert::<CS>().premultiply().components,
+            BasicColor::Solid(color) => color.convert::<LinearSrgb>().premultiply().components,
             BasicColor::LinearGradient(gradient) => {
                 gradient
                     .get_point(vertex.position())
-                    .convert::<CS>()
+                    .convert::<LinearSrgb>()
                     .premultiply()
                     .components
             }

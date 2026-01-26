@@ -1,6 +1,5 @@
 #[cfg(feature = "gui")]
 use std::collections::HashMap;
-use std::marker::PhantomData;
 
 use color::LinearSrgb;
 use graphics::Primitive;
@@ -9,7 +8,6 @@ use gui::{ElementId, GuiRenderer, MeasureCtx};
 
 use crate::{
     GraphicsContext,
-    RenderColorspace,
     arena::Key,
     primitives::{DrawType, PrimitiveMesh, PrimitiveToMesh, ToDrawType},
     shaders::{basic_shape::BasicShapeState, text::TextState, texture::TextureState},
@@ -42,28 +40,20 @@ pub enum Alloc {
     Empty,
 }
 
-pub struct WgpuRenderer<CS: RenderColorspace = LinearSrgb> {
-    pub ctx: GraphicsContext<CS>,
-    // #[cfg(feature = "gui")]
-    // pub gui_cache: GuiCache<ElementId>,
+pub struct WgpuRenderer {
+    pub ctx: GraphicsContext,
     #[cfg(feature = "gui")]
     pub gui_cache: HashMap<ElementId, CacheEntry>,
 
     pub viewport: ViewportBinds,
 
-    pub basic_shapes: BasicShapeState<CS>,
-    pub text_state: TextState<CS>,
-    pub texture_state: TextureState<CS>,
-    // text: crate::arena::Arena<TextVertexArena>,
-    // texture: HashMap<wgpu::Texture, wgpu::BindGroup>,
-    _marker: PhantomData<CS>,
+    pub basic_shapes: BasicShapeState,
+    pub text_state: TextState,
+    pub texture_state: TextureState,
 }
 
-impl<CS: RenderColorspace> WgpuRenderer<CS> {
-    pub fn new(
-        ctx: GraphicsContext<CS>,
-        render_targets: &[Option<wgpu::ColorTargetState>],
-    ) -> Self {
+impl WgpuRenderer {
+    pub fn new(ctx: GraphicsContext, render_targets: &[Option<wgpu::ColorTargetState>]) -> Self {
         let viewport = ViewportBinds::new(&ctx, ViewportTransform::new(1920., 1080.));
         let basic_shapes = BasicShapeState::new(&ctx, &viewport, render_targets);
         let text_state = TextState::new(&ctx, &viewport, render_targets);
@@ -77,8 +67,6 @@ impl<CS: RenderColorspace> WgpuRenderer<CS> {
             basic_shapes,
             text_state,
             texture_state,
-
-            _marker: Default::default(),
         }
     }
 
@@ -187,8 +175,8 @@ impl RendererPass<'_> {
 }
 
 #[cfg(feature = "gui")]
-impl<CS: RenderColorspace> GuiRenderer for WgpuRenderer<CS> {
-    type Renderer = GraphicsContext<CS>;
+impl GuiRenderer for WgpuRenderer {
+    type Renderer = GraphicsContext;
 
     #[inline(always)]
     #[profiling::function]
@@ -197,7 +185,7 @@ impl<CS: RenderColorspace> GuiRenderer for WgpuRenderer<CS> {
         if let Some(entry) = self.gui_cache.get_mut(&elem_id) {
             if entry.previous_elem != primitive {
                 log::info!("updating primitive: {primitive:?}");
-                let mesh = primitive.to_mesh::<CS>(&mut self.ctx, &mut entry.cache);
+                let mesh = primitive.to_mesh(&mut self.ctx, &mut entry.cache);
                 'a: {
                     match mesh {
                         PrimitiveMesh::BasicShape(mesh) => {
@@ -272,7 +260,7 @@ impl<CS: RenderColorspace> GuiRenderer for WgpuRenderer<CS> {
         } else {
             log::info!("inserting primitive into cache: {primitive:?}");
             let mut cache = None;
-            let mesh = primitive.to_mesh::<CS>(&mut self.ctx, &mut cache);
+            let mesh = primitive.to_mesh(&mut self.ctx, &mut cache);
             // log::info!("mesh is: {:?} for primitive {primitive:?}", mesh.vertices);
             let entry = CacheEntry {
                 previous_elem: primitive,

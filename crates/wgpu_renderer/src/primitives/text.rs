@@ -2,7 +2,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use atlas::{AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture};
-use color::{AlphaColor, PremulColor, Srgb};
+use color::{AlphaColor, LinearSrgb, PremulColor, Srgb};
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics::{
     make_positive_box,
@@ -31,15 +31,14 @@ use crate::{
     GraphicsContext,
     Mesh,
     PrimitiveCache,
-    RenderColorspace,
     TextData,
     TextureData,
     TextureState,
     shaders::text::{TextVertex, VertexKind},
 };
 
-pub fn render_text<CS: RenderColorspace>(
-    ctx: &mut GraphicsContext<CS>,
+pub fn render_text(
+    ctx: &mut GraphicsContext,
     text: &Text,
     cache: &mut Option<PrimitiveCache>,
 ) -> Mesh<TextVertex> {
@@ -47,7 +46,7 @@ pub fn render_text<CS: RenderColorspace>(
 
     let start_position = area.min.round();
 
-    let layout = prepare_text_layout::<CS>(
+    let layout = prepare_text_layout(
         ctx,
         &text.text,
         text.color,
@@ -86,7 +85,7 @@ pub fn render_text<CS: RenderColorspace>(
                 }
                 PositionedLayoutItem::InlineBox(inline_box) => {
                     mesh.append(
-                        &TextVertex::new_solid_rect::<CS>(
+                        &TextVertex::new_solid_rect(
                             [
                                 start_position.x + inline_box.x,
                                 start_position.y + inline_box.y,
@@ -108,13 +107,13 @@ pub fn render_text<CS: RenderColorspace>(
     mesh
 }
 
-pub fn prepare_text_layout<CS: RenderColorspace>(
-    ctx: &mut GraphicsContext<CS>,
+pub fn prepare_text_layout(
+    ctx: &mut GraphicsContext,
     text: &String,
     color: AlphaColor<Srgb>,
     options: &TextLayoutOptions,
     max_width: Option<f32>,
-) -> Layout<ColorBrush<CS>> {
+) -> Layout<ColorBrush> {
     let mut builder =
         ctx.text_state
             .layout_ctx
@@ -133,7 +132,7 @@ pub fn prepare_text_layout<CS: RenderColorspace>(
     builder.push_default(StyleProperty::FontWeight(options.font_weight.into()));
     builder.push_default(StyleProperty::OverflowWrap(options.overflow_wrap.into()));
 
-    let mut layout: Layout<ColorBrush<CS>> = builder.build(text);
+    let mut layout: Layout<ColorBrush> = builder.build(text);
     layout.break_all_lines(max_width);
     layout.align(max_width, Alignment::Start, AlignmentOptions::default());
     layout
@@ -147,7 +146,7 @@ pub enum GlyphRunError {
     AtlasAllocationFailure(String),
 }
 
-struct GlyphRunRenderer<'a, CS: RenderColorspace> {
+struct GlyphRunRenderer<'a> {
     mesh: &'a mut Mesh<TextVertex>,
     cache: &'a mut PrimitiveCache,
 
@@ -156,21 +155,21 @@ struct GlyphRunRenderer<'a, CS: RenderColorspace> {
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
 
-    glyph_run: &'a GlyphRun<'a, ColorBrush<CS>>,
+    glyph_run: &'a GlyphRun<'a, ColorBrush>,
     start_position: Point2D<f32>,
 
     font_index: u32,
     font_size: f32,
 }
 
-impl<'a, CS: RenderColorspace> GlyphRunRenderer<'a, CS> {
+impl<'a> GlyphRunRenderer<'a> {
     pub fn new(
         mesh: &'a mut Mesh<TextVertex>,
         cache: &'a mut PrimitiveCache,
-        ctx: &'a mut GraphicsContext<CS>,
+        ctx: &'a mut GraphicsContext,
         // scale_ctx: &'a mut ScaleContext,
         // texture_state: &'a mut ScaleContext,
-        glyph_run: &'a GlyphRun<'a, ColorBrush<CS>>,
+        glyph_run: &'a GlyphRun<'a, ColorBrush>,
         start_position: Point2D<f32>,
     ) -> Self {
         let &mut GraphicsContext {
@@ -179,7 +178,7 @@ impl<'a, CS: RenderColorspace> GlyphRunRenderer<'a, CS> {
             ref mut texture_state,
             ref mut text_state,
             ..
-        }: &mut GraphicsContext<CS> = ctx;
+        }: &mut GraphicsContext = ctx;
         // Get the "Run" from the "GlyphRun"
         let run = glyph_run.run();
 
@@ -258,7 +257,7 @@ impl<'a, CS: RenderColorspace> GlyphRunRenderer<'a, CS> {
         area: Box2D<f32>,
         glyph: &Arc<AllocatedTexture<T, TextureData>>,
         atlas: &LayeredAtlas<T, CacheKey, TextureData>,
-        fill: PremulColor<CS>,
+        fill: PremulColor<LinearSrgb>,
         kind: VertexKind,
     ) -> Mesh<TextVertex> {
         let texture_mesh = glyph.to_mesh(area, atlas);
@@ -278,7 +277,7 @@ impl<'a, CS: RenderColorspace> GlyphRunRenderer<'a, CS> {
         atlas: &mut LayeredAtlas<F, CacheKey, TextureData>,
         atlas_keys: &mut Vec<Arc<AllocatedTexture<F, TextureData>>>,
         position: Point2D<f32>,
-        fill: PremulColor<CS>,
+        fill: PremulColor<LinearSrgb>,
         vertex_kind: VertexKind,
     ) -> Option<()> {
         let glyph = atlas.is_allocated(cache_key)?;

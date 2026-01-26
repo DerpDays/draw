@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use euclid::default::Box2D;
 use graphics::primitives::CustomPrimitiveImpl;
 
@@ -22,7 +20,6 @@ impl CustomPrimitiveImpl for TexturePrimitive {}
 
 use crate::{
     GraphicsContext,
-    RenderColorspace,
     arena::{Arena, Key},
     shaders::ViewportBinds,
 };
@@ -80,7 +77,7 @@ impl TextureVertex {
 }
 
 pub struct VertexArenaMarker;
-pub struct TextureState<CS: RenderColorspace> {
+pub struct TextureState {
     pub pipeline: wgpu::RenderPipeline,
     pub sampler_bind_group_layout: wgpu::BindGroupLayout,
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -88,9 +85,8 @@ pub struct TextureState<CS: RenderColorspace> {
     pub sampler_bind_group: wgpu::BindGroup,
 
     pub vertices_arena: Arena<VertexArenaMarker>,
-    _marker: PhantomData<CS>,
 }
-impl<CS: RenderColorspace> TextureState<CS> {
+impl TextureState {
     fn create_sampler_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("texture - sampler"),
@@ -189,9 +185,9 @@ impl<CS: RenderColorspace> TextureState<CS> {
         })
     }
 }
-impl<CS: RenderColorspace> TextureState<CS> {
+impl TextureState {
     pub fn new(
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         viewport_binds: &ViewportBinds,
         render_targets: &[Option<wgpu::ColorTargetState>],
     ) -> Self {
@@ -214,13 +210,12 @@ impl<CS: RenderColorspace> TextureState<CS> {
             sampler_bind_group,
 
             vertices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::VERTEX),
-            _marker: Default::default(),
         }
     }
 
     pub fn create_texture_bind_group(
         &self,
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         texture: wgpu::TextureView,
     ) -> TextureBindGroup {
         // self.self.texture_bind_group_layout
@@ -235,11 +230,11 @@ impl<CS: RenderColorspace> TextureState<CS> {
     }
 }
 
-impl<CS: RenderColorspace> TextureState<CS> {
+impl TextureState {
     #[inline(always)]
     pub fn insert_vertices(
         &mut self,
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         vertices: [TextureVertex; 4],
     ) -> Key<VertexArenaMarker> {
         self.vertices_arena
@@ -249,7 +244,7 @@ impl<CS: RenderColorspace> TextureState<CS> {
     #[inline(always)]
     pub fn update_vertices(
         &mut self,
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         key: Key<VertexArenaMarker>,
         vertices: [TextureVertex; 4],
     ) -> Key<VertexArenaMarker> {
@@ -267,7 +262,7 @@ impl<CS: RenderColorspace> TextureState<CS> {
     }
 }
 
-impl<CS: RenderColorspace> TextureState<CS> {
+impl TextureState {
     #[inline(always)]
     #[profiling::function]
     pub fn swap_pipeline(

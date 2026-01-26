@@ -5,21 +5,18 @@ use atlas::{
     LayeredAtlas,
     formats::{Mask, Rgba8},
 };
-use color::{ColorSpace, PremulColor};
+use color::{LinearSrgb, PremulColor};
 use parley::{
     FontContext,
     LayoutContext,
     swash::scale::{ScaleContext, image::Image},
 };
-// use wgpu::BufferUsages;
 
 use crate::buffer::GrowableBuffer;
 
 pub mod arena;
 pub mod buffer;
 pub mod primitives;
-// mod vertex;
-// pub use vertex::{Vertex, VertexKind};
 
 #[cfg(feature = "gui")]
 pub mod shaders;
@@ -65,114 +62,42 @@ slotmap::new_key_type! {
 
 pub struct VertexArenaMarker;
 
-pub trait RenderColorspace: ColorSpace + core::fmt::Debug {}
-impl<T: ColorSpace + core::fmt::Debug> RenderColorspace for T {}
-
-pub struct GraphicsContext<CS: RenderColorspace> {
+pub struct GraphicsContext {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 
     pub texture_state: TextureState,
-    pub text_state: TextState<CS>,
-    // vertex_arena: Arena<VertexArenaMarker>,
-    // index_buf: GrowableBuffer,
-    // vertex_type: PhantomData<V>,
+    pub text_state: TextState,
 }
 
-impl<CS: RenderColorspace> GraphicsContext<CS> {
+impl GraphicsContext {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
             device: device.clone(),
             queue: queue.clone(),
 
-            // vertex_arena: Arena::new(device, BufferUsages::VERTEX),
-            // index_buf: GrowableBuffer::new(device, BufferUsages::INDEX, None),
             texture_state: TextureState::new(device),
             text_state: TextState::default(),
-            // vertex_type: PhantomData,
         }
     }
-    // pub fn with_capacity(
-    //     device: &wgpu::Device,
-    //     queue: &wgpu::Queue,
-    //     vertex_capacity: usize,
-    //     index_capacity: usize,
-    // ) -> Self {
-    //     Self {
-    //         device: device.clone(),
-    //         queue: queue.clone(),
-    //
-    //         vertex_arena: Arena::with_capacity(device, BufferUsages::VERTEX, vertex_capacity),
-    //         index_buf: GrowableBuffer::with_capacity(
-    //             device,
-    //             BufferUsages::INDEX,
-    //             index_capacity,
-    //             None,
-    //         ),
-    //
-    //         texture_state: TextureState::new(device),
-    //         text_state: TextState::default(),
-    //
-    //         vertex_type: PhantomData,
-    //     }
-    // }
 }
 
-// impl<V> GraphicsContext<V> {
-//     pub fn insert(&mut self, data: &[u8]) -> Key<VertexArenaMarker> {
-//         debug_assert!(
-//             data.len().is_multiple_of(size_of::<V>()),
-//             "inserted data does not align to the given vertex size"
-//         );
-//         self.vertex_arena.insert(&self.device, &self.queue, data)
-//     }
-//
-//     pub fn update(&mut self, key: Key<VertexArenaMarker>, data: &[u8]) -> Key<VertexArenaMarker> {
-//         debug_assert!(
-//             data.len().is_multiple_of(size_of::<V>()),
-//             "inserted data does not align to the given vertex size"
-//         );
-//         self.vertex_arena
-//             .update(&self.device, &self.queue, key, data)
-//     }
-// }
-// impl<V> GraphicsContext<V> {
-//     pub fn vertex_buf(&self) -> &wgpu::Buffer {
-//         self.vertex_arena.inner_buffer()
-//     }
-//     pub fn indices_buf(&self) -> &wgpu::Buffer {
-//         &self.index_buf.buf
-//     }
-//     pub fn replace_indices(&mut self, indices: &[u32]) {
-//         self.index_buf
-//             .replace(&self.device, &self.queue, bytemuck::cast_slice(indices));
-//     }
-// }
-
-#[derive(Copy, Clone, Debug)]
-pub struct ColorBrush<CS: RenderColorspace>
-where
-    PremulColor<CS>: PartialEq,
-{
-    pub color: PremulColor<CS>,
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct ColorBrush {
+    pub color: PremulColor<LinearSrgb>,
 }
 
-impl<CS: RenderColorspace> Default for ColorBrush<CS> {
+impl Default for ColorBrush {
     fn default() -> Self {
         Self {
             color: color::AlphaColor::WHITE.premultiply(),
         }
     }
 }
-impl<CS: RenderColorspace> PartialEq for ColorBrush<CS> {
-    fn eq(&self, other: &Self) -> bool {
-        self.color == other.color
-    }
-}
 
-pub struct TextState<CS: RenderColorspace> {
+pub struct TextState {
     pub font_ctx: FontContext,
-    pub layout_ctx: LayoutContext<ColorBrush<CS>>,
+    pub layout_ctx: LayoutContext<ColorBrush>,
     pub scale_ctx: ScaleContext,
 }
 
@@ -223,7 +148,7 @@ impl TextData {
     }
 }
 
-impl<CS: RenderColorspace> Default for TextState<CS> {
+impl Default for TextState {
     fn default() -> Self {
         #[cfg(not(target_family = "wasm"))]
         let font_ctx = FontContext::new();

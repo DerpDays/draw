@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::{GraphicsContext, RenderColorspace};
+use crate::GraphicsContext;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -26,10 +26,7 @@ pub struct ViewportBinds {
 impl ViewportBinds {
     const VIEWPORT_BINDS_SIZE: std::num::NonZero<u64> =
         std::num::NonZero::new(size_of::<ViewportTransform>() as u64).unwrap();
-    pub fn new<CS: RenderColorspace>(
-        ctx: &GraphicsContext<CS>,
-        viewport: ViewportTransform,
-    ) -> Self {
+    pub fn new(ctx: &GraphicsContext, viewport: ViewportTransform) -> Self {
         let layout = ctx
             .device
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

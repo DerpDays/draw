@@ -1,13 +1,10 @@
-use std::marker::PhantomData;
-
 use atlas::TextureVertex;
 use bytemuck::{Pod, Zeroable};
-use color::{ColorSpace, PremulColor};
+use color::{LinearSrgb, PremulColor};
 
 use crate::{
     GraphicsContext,
     Mesh,
-    RenderColorspace,
     arena::Arena,
     shaders::{AllocMesh, ViewportBinds},
 };
@@ -49,7 +46,7 @@ pub enum VertexKind {
 
 impl TextVertex {
     #[inline(always)]
-    pub const fn new_color<CS: ColorSpace>(position: [f32; 2], color: PremulColor<CS>) -> Self {
+    pub const fn new_color(position: [f32; 2], color: PremulColor<LinearSrgb>) -> Self {
         Self {
             position,
             color: color.components,
@@ -61,10 +58,10 @@ impl TextVertex {
     /// Create the vertices needed for a solid single color rectangle with min/max coordinates in
     /// CCW order. indices: 0,1,2 0,2,3
     #[inline(always)]
-    pub const fn new_solid_rect<CS: ColorSpace>(
+    pub const fn new_solid_rect(
         min: [f32; 2],
         max: [f32; 2],
-        color: PremulColor<CS>,
+        color: PremulColor<LinearSrgb>,
     ) -> [Self; 4] {
         [
             Self::new_color([max[0], min[1]], color),
@@ -74,9 +71,9 @@ impl TextVertex {
         ]
     }
     #[inline(always)]
-    pub const fn from_texture_vertex<CS: ColorSpace>(
+    pub const fn from_texture_vertex(
         vertex: TextureVertex,
-        color: PremulColor<CS>,
+        color: PremulColor<LinearSrgb>,
         kind: VertexKind,
     ) -> Self {
         Self {
@@ -91,15 +88,14 @@ impl TextVertex {
 
 pub struct VertexArenaMarker;
 pub struct IndexArenaMarker;
-pub struct TextState<CS: RenderColorspace> {
+pub struct TextState {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group: wgpu::BindGroup,
 
     pub vertices_arena: Arena<VertexArenaMarker>,
     pub indices_arena: Arena<IndexArenaMarker>,
-    _marker: PhantomData<CS>,
 }
-impl<CS: RenderColorspace> TextState<CS> {
+impl TextState {
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("text"),
@@ -136,10 +132,7 @@ impl<CS: RenderColorspace> TextState<CS> {
             ],
         })
     }
-    fn create_bind_group(
-        ctx: &GraphicsContext<CS>,
-        layout: &wgpu::BindGroupLayout,
-    ) -> wgpu::BindGroup {
+    fn create_bind_group(ctx: &GraphicsContext, layout: &wgpu::BindGroupLayout) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("text"),
             layout,
@@ -211,9 +204,9 @@ impl<CS: RenderColorspace> TextState<CS> {
         })
     }
 }
-impl<CS: RenderColorspace> TextState<CS> {
+impl TextState {
     pub fn new(
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         viewport_binds: &ViewportBinds,
         render_targets: &[Option<wgpu::ColorTargetState>],
     ) -> Self {
@@ -228,16 +221,15 @@ impl<CS: RenderColorspace> TextState<CS> {
             bind_group: Self::create_bind_group(ctx, &bind_group_layout),
             vertices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::VERTEX),
             indices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::INDEX),
-            _marker: Default::default(),
         }
     }
 }
 
-impl<CS: RenderColorspace> TextState<CS> {
+impl TextState {
     #[inline(always)]
     pub fn insert_mesh(
         &mut self,
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         mesh: Mesh<TextVertex>,
     ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
         AllocMesh {
@@ -257,7 +249,7 @@ impl<CS: RenderColorspace> TextState<CS> {
     #[inline(always)]
     pub fn update_mesh(
         &mut self,
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         alloc: AllocMesh<VertexArenaMarker, IndexArenaMarker>,
         new: Mesh<TextVertex>,
     ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
@@ -284,7 +276,7 @@ impl<CS: RenderColorspace> TextState<CS> {
     }
 }
 
-impl<CS: RenderColorspace> TextState<CS> {
+impl TextState {
     #[inline(always)]
     #[profiling::function]
     pub fn swap_pipeline(

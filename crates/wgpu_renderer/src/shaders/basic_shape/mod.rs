@@ -1,13 +1,12 @@
 use std::marker::PhantomData;
 
-use color::{ColorSpace, PremulColor};
+use color::{LinearSrgb, PremulColor};
 use euclid::default::Point2D;
 use graphics::BasicLinearGradient;
 
 use crate::{
     GraphicsContext,
     Mesh,
-    RenderColorspace,
     arena::Arena,
     shaders::{AllocMesh, ViewportBinds},
 };
@@ -38,7 +37,7 @@ impl BasicShapeVertex {
 
 impl BasicShapeVertex {
     #[inline(always)]
-    pub const fn new_color<CS: ColorSpace>(position: [f32; 2], color: PremulColor<CS>) -> Self {
+    pub const fn new_color(position: [f32; 2], color: PremulColor<LinearSrgb>) -> Self {
         Self {
             position,
             color: color.components,
@@ -47,10 +46,10 @@ impl BasicShapeVertex {
     /// Create the vertices needed for a solid single color rectangle with min/max coordinates in
     /// CCW order. indices: 0,1,2 0,2,3
     #[inline(always)]
-    pub const fn new_solid_rect<CS: ColorSpace>(
+    pub const fn new_solid_rect(
         min: [f32; 2],
         max: [f32; 2],
-        color: PremulColor<CS>,
+        color: PremulColor<LinearSrgb>,
     ) -> [Self; 4] {
         [
             Self::new_color([max[0], min[1]], color),
@@ -63,22 +62,22 @@ impl BasicShapeVertex {
     /// Create the vertices needed for a linear gradient rectangle with min/max coordinates in
     /// CCW order. indices: 0,1,2 0,2,3
     #[inline(always)]
-    pub fn new_gradient_rect<CS: ColorSpace>(
+    pub fn new_gradient_rect(
         min: [f32; 2],
         max: [f32; 2],
         color: &BasicLinearGradient,
     ) -> [Self; 4] {
         [
-            Self::new_color::<CS>(
+            Self::new_color(
                 [max[0], min[1]],
                 color.get_point_premul_cs(Point2D::new(max[0], min[1])),
             ),
-            Self::new_color::<CS>(min, color.get_point_premul_cs(Point2D::new(min[0], min[1]))),
-            Self::new_color::<CS>(
+            Self::new_color(min, color.get_point_premul_cs(Point2D::new(min[0], min[1]))),
+            Self::new_color(
                 [min[0], max[1]],
                 color.get_point_premul_cs(Point2D::new(min[0], min[1])),
             ),
-            Self::new_color::<CS>(max, color.get_point_premul_cs(Point2D::new(max[0], max[1]))),
+            Self::new_color(max, color.get_point_premul_cs(Point2D::new(max[0], max[1]))),
         ]
     }
 }
@@ -86,16 +85,15 @@ impl BasicShapeVertex {
 pub struct VertexArenaMarker;
 pub struct IndexArenaMarker;
 
-pub struct BasicShapeState<CS: RenderColorspace> {
+pub struct BasicShapeState {
     pub pipeline: wgpu::RenderPipeline,
     pub msaa_pipeline: wgpu::RenderPipeline,
 
     pub vertices_arena: Arena<VertexArenaMarker>,
     pub indices_arena: Arena<IndexArenaMarker>,
-    _marker: PhantomData<CS>,
 }
 
-impl<CS: RenderColorspace> BasicShapeState<CS> {
+impl BasicShapeState {
     fn create_pipeline(
         device: &wgpu::Device,
         viewport: &ViewportBinds,
@@ -140,9 +138,9 @@ impl<CS: RenderColorspace> BasicShapeState<CS> {
     }
 }
 
-impl<CS: RenderColorspace> BasicShapeState<CS> {
+impl BasicShapeState {
     pub fn new(
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         viewport_binds: &ViewportBinds,
         render_targets: &[Option<wgpu::ColorTargetState>],
     ) -> Self {
@@ -165,15 +163,13 @@ impl<CS: RenderColorspace> BasicShapeState<CS> {
             ),
             vertices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::VERTEX),
             indices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::INDEX),
-
-            _marker: Default::default(),
         }
     }
 
     #[inline(always)]
     pub fn insert_mesh(
         &mut self,
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         mesh: Mesh<BasicShapeVertex>,
     ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
         AllocMesh {
@@ -193,7 +189,7 @@ impl<CS: RenderColorspace> BasicShapeState<CS> {
     #[inline(always)]
     pub fn update_mesh(
         &mut self,
-        ctx: &GraphicsContext<CS>,
+        ctx: &GraphicsContext,
         alloc: AllocMesh<VertexArenaMarker, IndexArenaMarker>,
         new: Mesh<BasicShapeVertex>,
     ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {

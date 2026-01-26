@@ -14,7 +14,6 @@ use crate::{
     GraphicsContext,
     Mesh,
     PrimitiveCache,
-    RenderColorspace,
     shaders::{
         basic_shape::BasicShapeVertex,
         text::TextVertex,
@@ -59,17 +58,17 @@ impl ToDrawType for Primitive {
 }
 
 pub trait PrimitiveToMesh {
-    fn to_mesh<CS: RenderColorspace>(
+    fn to_mesh(
         &self,
-        ctx: &mut GraphicsContext<CS>,
+        ctx: &mut GraphicsContext,
         cache: &mut Option<PrimitiveCache>,
     ) -> PrimitiveMesh;
 }
 impl PrimitiveToMesh for Primitive {
     #[profiling::function]
-    fn to_mesh<CS: RenderColorspace>(
+    fn to_mesh(
         &self,
-        ctx: &mut GraphicsContext<CS>,
+        ctx: &mut GraphicsContext,
         cache: &mut Option<PrimitiveCache>,
     ) -> PrimitiveMesh {
         match self {
@@ -79,10 +78,10 @@ impl PrimitiveToMesh for Primitive {
             Primitive::Pen(pen) => todo!(),
             Primitive::Quad(quad) => todo!(),
             Primitive::Rectangle(rectangle) => {
-                PrimitiveMesh::BasicShape(render_rectangle::<CS>(rectangle))
+                PrimitiveMesh::BasicShape(render_rectangle(rectangle))
             }
             Primitive::Svg(svg) => todo!(),
-            Primitive::Text(text) => PrimitiveMesh::Text(render_text::<CS>(ctx, text, cache)),
+            Primitive::Text(text) => PrimitiveMesh::Text(render_text(ctx, text, cache)),
             Primitive::Text(text) => todo!(),
             Primitive::Triangle(triangle) => todo!(),
             Primitive::Custom(custom) => {
