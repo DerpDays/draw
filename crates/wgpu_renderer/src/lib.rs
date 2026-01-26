@@ -1,11 +1,11 @@
-use std::{/* marker::PhantomData, */ sync::Arc};
+use std::sync::Arc;
 
 use atlas::{
     AllocatedTexture,
     LayeredAtlas,
     formats::{Mask, Rgba8},
 };
-use color::{LinearSrgb, PremulColor};
+use color::{ColorSpace, PremulColor};
 use parley::{
     FontContext,
     LayoutContext,
@@ -13,19 +13,13 @@ use parley::{
 };
 // use wgpu::BufferUsages;
 
-use crate::{
-    // arena::{Arena, Key},
-    buffer::GrowableBuffer,
-};
+use crate::buffer::GrowableBuffer;
 
 pub mod arena;
 pub mod buffer;
 pub mod primitives;
-mod vertex;
-pub use vertex::{Vertex, VertexKind};
-
-// #[cfg(feature = "gui")]
-// pub mod gui;
+// mod vertex;
+// pub use vertex::{Vertex, VertexKind};
 
 #[cfg(feature = "gui")]
 pub mod shaders;
@@ -71,18 +65,21 @@ slotmap::new_key_type! {
 
 pub struct VertexArenaMarker;
 
-pub struct GraphicsContext {
+pub trait RenderColorspace: ColorSpace + core::fmt::Debug {}
+impl<T: ColorSpace + core::fmt::Debug> RenderColorspace for T {}
+
+pub struct GraphicsContext<CS: RenderColorspace> {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 
     pub texture_state: TextureState,
-    pub text_state: TextState,
+    pub text_state: TextState<CS>,
     // vertex_arena: Arena<VertexArenaMarker>,
     // index_buf: GrowableBuffer,
     // vertex_type: PhantomData<V>,
 }
 
-impl GraphicsContext {
+impl<CS: RenderColorspace> GraphicsContext<CS> {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
             device: device.clone(),
@@ -152,21 +149,30 @@ impl GraphicsContext {
 //     }
 // }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct ColorBrush {
-    pub color: PremulColor<LinearSrgb>,
+#[derive(Copy, Clone, Debug)]
+pub struct ColorBrush<CS: RenderColorspace>
+where
+    PremulColor<CS>: PartialEq,
+{
+    pub color: PremulColor<CS>,
 }
 
-impl Default for ColorBrush {
+impl<CS: RenderColorspace> Default for ColorBrush<CS> {
     fn default() -> Self {
         Self {
-            color: PremulColor::new([1., 1., 1., 1.]),
+            color: color::AlphaColor::WHITE.premultiply(),
         }
     }
 }
-pub struct TextState {
+impl<CS: RenderColorspace> PartialEq for ColorBrush<CS> {
+    fn eq(&self, other: &Self) -> bool {
+        self.color == other.color
+    }
+}
+
+pub struct TextState<CS: RenderColorspace> {
     pub font_ctx: FontContext,
-    pub layout_ctx: LayoutContext<ColorBrush>,
+    pub layout_ctx: LayoutContext<ColorBrush<CS>>,
     pub scale_ctx: ScaleContext,
 }
 
@@ -217,7 +223,7 @@ impl TextData {
     }
 }
 
-impl Default for TextState {
+impl<CS: RenderColorspace> Default for TextState<CS> {
     fn default() -> Self {
         #[cfg(not(target_family = "wasm"))]
         let font_ctx = FontContext::new();

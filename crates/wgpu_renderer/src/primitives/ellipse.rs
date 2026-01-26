@@ -1,9 +1,9 @@
 use graphics::primitives::Ellipse;
 // use lyon::tessellation::{BuffersBuilder, FillVertex, VertexBuffers};
 
-use crate::{Mesh, Vertex};
+use crate::Mesh;
 
-pub fn render_ellipse(_ellipse: &Ellipse) -> Mesh<Vertex> {
+pub fn render_ellipse(_ellipse: &Ellipse) -> Mesh<()> {
     // let mut buffers = VertexBuffers::<Vertex, u32>::new();
     // let mut builder = BuffersBuilder::new(&mut buffers, |vertex: FillVertex<'_>| {
     //     // Vertex::with_color(

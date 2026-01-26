@@ -14,6 +14,7 @@ use crate::{
     GraphicsContext,
     Mesh,
     PrimitiveCache,
+    RenderColorspace,
     shaders::{
         basic_shape::BasicShapeVertex,
         text::TextVertex,
@@ -40,6 +41,7 @@ pub trait ToDrawType {
 }
 impl ToDrawType for Primitive {
     #[inline(always)]
+    #[profiling::function]
     fn to_draw_type(&self) -> DrawType {
         match self {
             Primitive::Svg(_) => DrawType::BasicShapeMultisample,
@@ -57,16 +59,17 @@ impl ToDrawType for Primitive {
 }
 
 pub trait PrimitiveToMesh {
-    fn to_mesh(
+    fn to_mesh<CS: RenderColorspace>(
         &self,
-        ctx: &mut GraphicsContext,
+        ctx: &mut GraphicsContext<CS>,
         cache: &mut Option<PrimitiveCache>,
     ) -> PrimitiveMesh;
 }
 impl PrimitiveToMesh for Primitive {
-    fn to_mesh(
+    #[profiling::function]
+    fn to_mesh<CS: RenderColorspace>(
         &self,
-        ctx: &mut GraphicsContext,
+        ctx: &mut GraphicsContext<CS>,
         cache: &mut Option<PrimitiveCache>,
     ) -> PrimitiveMesh {
         match self {
@@ -76,10 +79,10 @@ impl PrimitiveToMesh for Primitive {
             Primitive::Pen(pen) => todo!(),
             Primitive::Quad(quad) => todo!(),
             Primitive::Rectangle(rectangle) => {
-                PrimitiveMesh::BasicShape(render_rectangle(rectangle))
+                PrimitiveMesh::BasicShape(render_rectangle::<CS>(rectangle))
             }
             Primitive::Svg(svg) => todo!(),
-            Primitive::Text(text) => PrimitiveMesh::Text(render_text(ctx, text, cache)),
+            Primitive::Text(text) => PrimitiveMesh::Text(render_text::<CS>(ctx, text, cache)),
             Primitive::Text(text) => todo!(),
             Primitive::Triangle(triangle) => todo!(),
             Primitive::Custom(custom) => {

@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use euclid::default::Box2D;
 use graphics::primitives::CustomPrimitiveImpl;
 
@@ -20,6 +22,7 @@ impl CustomPrimitiveImpl for TexturePrimitive {}
 
 use crate::{
     GraphicsContext,
+    RenderColorspace,
     arena::{Arena, Key},
     shaders::ViewportBinds,
 };
@@ -77,7 +80,7 @@ impl TextureVertex {
 }
 
 pub struct VertexArenaMarker;
-pub struct TextureState {
+pub struct TextureState<CS: RenderColorspace> {
     pub pipeline: wgpu::RenderPipeline,
     pub sampler_bind_group_layout: wgpu::BindGroupLayout,
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -85,8 +88,9 @@ pub struct TextureState {
     pub sampler_bind_group: wgpu::BindGroup,
 
     pub vertices_arena: Arena<VertexArenaMarker>,
+    _marker: PhantomData<CS>,
 }
-impl TextureState {
+impl<CS: RenderColorspace> TextureState<CS> {
     fn create_sampler_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("texture - sampler"),
@@ -120,15 +124,15 @@ impl TextureState {
         })
     }
     fn create_sampler_bind_group(
-        ctx: &GraphicsContext,
+        device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
     ) -> wgpu::BindGroup {
-        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture - sampler"),
             layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Sampler(&ctx.device.create_sampler(
+                resource: wgpu::BindingResource::Sampler(&device.create_sampler(
                     &wgpu::SamplerDescriptor {
                         label: Some("texture"),
                         ..Default::default()
@@ -138,71 +142,67 @@ impl TextureState {
         })
     }
     fn create_pipeline(
-        ctx: &GraphicsContext,
+        device: &wgpu::Device,
         viewport: &ViewportBinds,
         sampler_bind_group_layout: &wgpu::BindGroupLayout,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
         render_targets: &[Option<wgpu::ColorTargetState>],
     ) -> wgpu::RenderPipeline {
-        let module = ctx
-            .device
-            .create_shader_module(wgpu::include_wgsl!("./shader.wgsl"));
-        let pipeline_layout = ctx
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("text"),
-                bind_group_layouts: &[
-                    viewport.bind_group_layout(),
-                    sampler_bind_group_layout,
-                    texture_bind_group_layout,
-                ],
-                immediate_size: 0,
-            });
-        ctx.device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("text"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &module,
-                    entry_point: None,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[TextureVertex::buffer_layout()],
-                },
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleStrip,
-                    strip_index_format: None,
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: None,
-                    unclipped_depth: false,
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    conservative: false,
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &module,
-                    entry_point: None,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: render_targets,
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
+        let module = device.create_shader_module(wgpu::include_wgsl!("./shader.wgsl"));
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("text"),
+            bind_group_layouts: &[
+                viewport.bind_group_layout(),
+                sampler_bind_group_layout,
+                texture_bind_group_layout,
+            ],
+            immediate_size: 0,
+        });
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("text"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: None,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[TextureVertex::buffer_layout()],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                entry_point: None,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: render_targets,
+            }),
+            multiview_mask: None,
+            cache: None,
+        })
     }
 }
-impl TextureState {
+impl<CS: RenderColorspace> TextureState<CS> {
     pub fn new(
-        ctx: &GraphicsContext,
+        ctx: &GraphicsContext<CS>,
         viewport_binds: &ViewportBinds,
         render_targets: &[Option<wgpu::ColorTargetState>],
     ) -> Self {
         let sampler_bind_group_layout = Self::create_sampler_bind_group_layout(&ctx.device);
         let texture_bind_group_layout = Self::create_texture_bind_group_layout(&ctx.device);
 
-        let sampler_bind_group = Self::create_sampler_bind_group(ctx, &sampler_bind_group_layout);
+        let sampler_bind_group =
+            Self::create_sampler_bind_group(&ctx.device, &sampler_bind_group_layout);
         Self {
             pipeline: Self::create_pipeline(
-                ctx,
+                &ctx.device,
                 viewport_binds,
                 &sampler_bind_group_layout,
                 &texture_bind_group_layout,
@@ -214,12 +214,13 @@ impl TextureState {
             sampler_bind_group,
 
             vertices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::VERTEX),
+            _marker: Default::default(),
         }
     }
 
     pub fn create_texture_bind_group(
         &self,
-        ctx: &GraphicsContext,
+        ctx: &GraphicsContext<CS>,
         texture: wgpu::TextureView,
     ) -> TextureBindGroup {
         // self.self.texture_bind_group_layout
@@ -234,11 +235,11 @@ impl TextureState {
     }
 }
 
-impl TextureState {
+impl<CS: RenderColorspace> TextureState<CS> {
     #[inline(always)]
     pub fn insert_vertices(
         &mut self,
-        ctx: &GraphicsContext,
+        ctx: &GraphicsContext<CS>,
         vertices: [TextureVertex; 4],
     ) -> Key<VertexArenaMarker> {
         self.vertices_arena
@@ -248,7 +249,7 @@ impl TextureState {
     #[inline(always)]
     pub fn update_vertices(
         &mut self,
-        ctx: &GraphicsContext,
+        ctx: &GraphicsContext<CS>,
         key: Key<VertexArenaMarker>,
         vertices: [TextureVertex; 4],
     ) -> Key<VertexArenaMarker> {
@@ -266,7 +267,7 @@ impl TextureState {
     }
 }
 
-impl TextureState {
+impl<CS: RenderColorspace> TextureState<CS> {
     #[inline(always)]
     #[profiling::function]
     pub fn swap_pipeline(

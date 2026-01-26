@@ -1,71 +1,11 @@
-use std::collections::HashMap;
-
-use euclid::default::{Box2D, Point2D};
-
-use taffy::Layout;
-
 use crate::{ElementId, Tree, tree::Node};
-
-#[derive(Debug, Default)]
-pub struct Linear {
-    bounding_boxes: Vec<(ElementId, Box2D<f32>)>,
-}
+use euclid::default::{Box2D, Point2D};
+use std::collections::HashMap;
+use taffy::Layout;
 
 #[derive(Debug, Default)]
 pub struct LayoutTree {
     map: HashMap<ElementId, LayoutNode>,
-    bounding: Linear,
-}
-
-impl LayoutTree {
-    pub fn get_layout(&self, node: ElementId) -> Option<LayoutNode> {
-        self.map.get(&node).cloned()
-    }
-}
-
-impl LayoutTree {
-    pub fn new(tree: &Tree) -> Self {
-        let mut map = HashMap::new();
-        let mut stack = vec![(tree.root_node(), taffy::Point::ZERO)];
-        let mut bounding_boxes: Vec<(ElementId, Box2D<f32>)> = Vec::with_capacity(1000);
-        while let Some((node, parent_origin)) = stack.pop() {
-            let mut layout = *tree
-                .alloc
-                .get(node)
-                .expect("elements in tree children are also in the tree")
-                .get_final_layout();
-            layout.location = layout.location + parent_origin;
-
-            // Push children in reverse order to process them first (top-most elements)
-            let children = tree.children(node);
-            for child in children.iter().rev() {
-                stack.push((*child, layout.location));
-            }
-            map.insert(
-                node,
-                LayoutNode {
-                    node,
-                    abs_layout: layout,
-                },
-            );
-        }
-        for node in tree.render_order.render_order() {
-            bounding_boxes.push((*node, box_from_layout(map.get(node).unwrap().abs_layout)));
-        }
-        Self {
-            map,
-            bounding: Linear { bounding_boxes },
-        }
-    }
-    pub fn hit(&self, point: Point2D<f32>) -> impl Iterator<Item = ElementId> {
-        self.bounding
-            .bounding_boxes
-            .iter()
-            .rev()
-            .filter_map(move |(node, bounding_box)| {
-                bounding_box.contains_inclusive(point).then_some(*node)
-            })
-    }
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -83,4 +23,68 @@ pub fn box_from_layout(layout: Layout) -> Box2D<f32> {
             layout.location.y + layout.size.height,
         ),
     )
+}
+
+impl Tree {
+    pub fn get_abs_layout(&self, node: ElementId) -> Option<LayoutNode> {
+        self.layout_tree.map.get(&node).cloned()
+    }
+
+    /// Updates absolute positions starting from a specific node.
+    /// This should be called after we recompute the relative layout e.g.
+    /// using [`Tree::compute_root_layout`] or similar.
+    pub fn update_abs_subtree(
+        &mut self,
+        node_id: ElementId,
+        parent_abs_location: taffy::Point<f32>,
+    ) {
+        let mut stack = vec![(node_id, parent_abs_location)];
+        while let Some((node_id, parent_abs_location)) = stack.pop() {
+            let elem = self.get(node_id);
+            let relative_layout = elem.get_final_layout();
+
+            let abs_location = parent_abs_location
+                + taffy::Point::<f32> {
+                    x: relative_layout.location.x,
+                    y: relative_layout.location.y,
+                };
+
+            self.layout_tree.map.insert(
+                node_id,
+                LayoutNode {
+                    node: node_id,
+                    abs_layout: Layout {
+                        location: abs_location,
+                        ..*relative_layout
+                    },
+                },
+            );
+
+            // Add children to the stack
+            for child in self.children(node_id).to_vec() {
+                stack.push((child, abs_location));
+            }
+        }
+    }
+
+    // clean up removed nodes
+    pub fn remove_abs_layout(&mut self, node: ElementId) {
+        self.layout_tree.map.remove(&node);
+    }
+
+    // Returns an iterator of the hitboxes that the given point is inside, based on render order.
+    pub fn hit_layout<'a>(&'a self, point: Point2D<f32>) -> impl Iterator<Item = ElementId> + 'a {
+        self.render_order
+            .render_order()
+            .iter()
+            .rev()
+            .filter_map(move |id| {
+                if let Some(layout_node) = self.layout_tree.map.get(id)
+                    && box_from_layout(layout_node.abs_layout).contains_inclusive(point)
+                {
+                    return Some(*id);
+                }
+                None
+            })
+    }
 }

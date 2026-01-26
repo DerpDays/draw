@@ -130,7 +130,7 @@ pub fn text(text: ReadSignal<String>) -> ElementBuilder<Text> {
 
             create_effect(move || {
                 text.track();
-                mgr.relayout(elem_id);
+                mgr.mark_layout_dirty(elem_id);
                 mgr.now();
             });
         },

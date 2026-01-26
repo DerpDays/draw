@@ -32,11 +32,17 @@ impl Clone for Primitive {
 impl PartialEq for Primitive {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Primitive::Ellipse(a), Primitive::Ellipse(b)) => a == b,
+            (Primitive::Line(a), Primitive::Line(b)) => a == b,
+            (Primitive::CubicBezier(a), Primitive::CubicBezier(b)) => a == b,
+            (Primitive::Pen(a), Primitive::Pen(b)) => a == b,
+            (Primitive::Quad(a), Primitive::Quad(b)) => a == b,
+            (Primitive::Rectangle(a), Primitive::Rectangle(b)) => a == b,
+            (Primitive::Svg(a), Primitive::Svg(b)) => a == b,
+            (Primitive::Text(a), Primitive::Text(b)) => a == b,
+            (Primitive::Triangle(a), Primitive::Triangle(b)) => a == b,
             (Primitive::Custom(a), Primitive::Custom(b)) => a.eq_box(&**b),
-            _ => {
-                std::mem::discriminant(self) == std::mem::discriminant(other)
-                    && format!("{:?}", self) == format!("{:?}", other)
-            }
+            _ => false,
         }
     }
 }

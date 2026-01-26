@@ -256,28 +256,41 @@ impl<W: Widget + 'static> ElementBuilder<W> {
         }
 
         // effect hooks
-        let first_run = Cell::new(true);
-        let mgr = TreeManager::global();
-        let style = arena[key].style.clone();
-        create_effect(move || {
-            style.track();
-            if !first_run.get() {
-                log::trace!("node style changed: relayouting {key:?}");
-                mgr.relayout(key);
-                mgr.now();
-            } else {
-                first_run.set(false);
+        create_effect({
+            let first_run = Cell::new(true);
+            let mgr = TreeManager::global();
+            let style = arena[key].style.clone();
+
+            let mut last_display = style.get_clone().0.display;
+            move || {
+                let new_display = style.get_clone().0.display;
+                if !first_run.get() {
+                    log::trace!("node style changed: relayouting {key:?}");
+                    if new_display != last_display {
+                        // Display changes alter the render hierarchy (hiding/showing subtrees).
+                        // We must rebuild the render order.
+                        mgr.mark_structure_dirty();
+                        last_display = new_display;
+                    }
+                    mgr.mark_layout_dirty(key);
+                    mgr.now();
+                } else {
+                    first_run.set(false);
+                }
             }
         });
-        let first_run = Cell::new(true);
-        let mgr = TreeManager::global();
-        let zindex = arena[key].zindex.clone();
-        create_effect(move || {
-            zindex.track();
-            if !first_run.get() {
-                mgr.now();
-            } else {
-                first_run.set(false);
+        create_effect({
+            let first_run = Cell::new(true);
+            let mgr = TreeManager::global();
+            let zindex = arena[key].zindex.clone();
+            move || {
+                zindex.track();
+                if !first_run.get() {
+                    mgr.mark_structure_dirty();
+                    mgr.now();
+                } else {
+                    first_run.set(false);
+                }
             }
         });
 

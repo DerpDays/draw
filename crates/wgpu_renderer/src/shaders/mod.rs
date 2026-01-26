@@ -1,12 +1,15 @@
 #[cfg(feature = "gui")]
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
+use color::LinearSrgb;
 use graphics::Primitive;
 #[cfg(feature = "gui")]
 use gui::{ElementId, GuiRenderer, MeasureCtx};
 
 use crate::{
     GraphicsContext,
+    RenderColorspace,
     arena::Key,
     primitives::{DrawType, PrimitiveMesh, PrimitiveToMesh, ToDrawType},
     shaders::{basic_shape::BasicShapeState, text::TextState, texture::TextureState},
@@ -39,8 +42,8 @@ pub enum Alloc {
     Empty,
 }
 
-pub struct WgpuRenderer {
-    pub ctx: GraphicsContext,
+pub struct WgpuRenderer<CS: RenderColorspace = LinearSrgb> {
+    pub ctx: GraphicsContext<CS>,
     // #[cfg(feature = "gui")]
     // pub gui_cache: GuiCache<ElementId>,
     #[cfg(feature = "gui")]
@@ -48,15 +51,19 @@ pub struct WgpuRenderer {
 
     pub viewport: ViewportBinds,
 
-    pub basic_shapes: BasicShapeState,
-    pub text_state: TextState,
-    pub texture_state: TextureState,
+    pub basic_shapes: BasicShapeState<CS>,
+    pub text_state: TextState<CS>,
+    pub texture_state: TextureState<CS>,
     // text: crate::arena::Arena<TextVertexArena>,
     // texture: HashMap<wgpu::Texture, wgpu::BindGroup>,
+    _marker: PhantomData<CS>,
 }
 
-impl WgpuRenderer {
-    pub fn new(ctx: GraphicsContext, render_targets: &[Option<wgpu::ColorTargetState>]) -> Self {
+impl<CS: RenderColorspace> WgpuRenderer<CS> {
+    pub fn new(
+        ctx: GraphicsContext<CS>,
+        render_targets: &[Option<wgpu::ColorTargetState>],
+    ) -> Self {
         let viewport = ViewportBinds::new(&ctx, ViewportTransform::new(1920., 1080.));
         let basic_shapes = BasicShapeState::new(&ctx, &viewport, render_targets);
         let text_state = TextState::new(&ctx, &viewport, render_targets);
@@ -70,8 +77,8 @@ impl WgpuRenderer {
             basic_shapes,
             text_state,
             texture_state,
-            // text,
-            // texture: HashMap::default(),
+
+            _marker: Default::default(),
         }
     }
 
@@ -180,15 +187,17 @@ impl RendererPass<'_> {
 }
 
 #[cfg(feature = "gui")]
-impl GuiRenderer for WgpuRenderer {
-    type Renderer = GraphicsContext;
+impl<CS: RenderColorspace> GuiRenderer for WgpuRenderer<CS> {
+    type Renderer = GraphicsContext<CS>;
 
+    #[inline(always)]
+    #[profiling::function]
     fn update_cached(&mut self, elem_id: ElementId, primitive: graphics::Primitive) {
-        log::info!("updating primitive: {primitive:?}");
         // if already existing
         if let Some(entry) = self.gui_cache.get_mut(&elem_id) {
             if entry.previous_elem != primitive {
-                let mesh = primitive.to_mesh(&mut self.ctx, &mut entry.cache);
+                log::info!("updating primitive: {primitive:?}");
+                let mesh = primitive.to_mesh::<CS>(&mut self.ctx, &mut entry.cache);
                 'a: {
                     match mesh {
                         PrimitiveMesh::BasicShape(mesh) => {
@@ -263,7 +272,7 @@ impl GuiRenderer for WgpuRenderer {
         } else {
             log::info!("inserting primitive into cache: {primitive:?}");
             let mut cache = None;
-            let mesh = primitive.to_mesh(&mut self.ctx, &mut cache);
+            let mesh = primitive.to_mesh::<CS>(&mut self.ctx, &mut cache);
             // log::info!("mesh is: {:?} for primitive {primitive:?}", mesh.vertices);
             let entry = CacheEntry {
                 previous_elem: primitive,
@@ -276,7 +285,11 @@ impl GuiRenderer for WgpuRenderer {
                         Alloc::BasicShapeMultisample(self.basic_shapes.insert_mesh(&self.ctx, mesh))
                     }
                     PrimitiveMesh::Text(mesh) => {
-                        Alloc::Text(self.text_state.insert_mesh(&self.ctx, mesh))
+                        if mesh.vertices.is_empty() {
+                            Alloc::Empty
+                        } else {
+                            Alloc::Text(self.text_state.insert_mesh(&self.ctx, mesh))
+                        }
                     }
                     PrimitiveMesh::Texture((vertices, bind_group)) => Alloc::Texture((
                         self.texture_state.insert_vertices(&self.ctx, vertices),

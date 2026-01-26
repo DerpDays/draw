@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use sycamore_reactive::MaybeDyn;
 
 use crate::{ElementId, Tree, tree::Node};
@@ -39,8 +37,6 @@ impl ZIndexProperties {
 
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct ZIndexOrdering {
-    map: HashMap<ElementId, usize>,
-    // TODO: incorporate hitboxes and deal with hidden elements.
     render_order: Vec<ElementId>,
 }
 
@@ -51,12 +47,8 @@ enum NodeGrouping {
 
 impl ZIndexOrdering {
     pub fn new(tree: &Tree) -> Self {
-        let mut map = HashMap::new();
         let render_order = Self::sort_stacking_context(tree, tree.root_node());
-        for (idx, node) in render_order.iter().enumerate() {
-            map.insert(*node, idx);
-        }
-        Self { map, render_order }
+        Self { render_order }
     }
 
     #[inline]

@@ -192,7 +192,8 @@ impl Tree {
 
     pub fn compute_root_layout(&mut self, measure_ctx: &mut dyn MeasureCtx) {
         self.compute_layout(self.root_node(), self.size, measure_ctx);
-        self.layout_tree = LayoutTree::new(self);
+        let root_node = self.root_node;
+        self.update_abs_subtree(root_node, taffy::Point::ZERO);
     }
 
     #[profiling::function]
@@ -221,17 +222,30 @@ impl Tree {
     }
 
     #[profiling::function]
-    fn clear_tree_layout(&mut self, measure_ctx: &mut dyn MeasureCtx, node: ElementId) {
-        // Clear layout cache for this node and all ancestors
-        let mut current = Some(node);
-        while let Some(node_id) = current {
-            self.clear_node_layout(measure_ctx, node_id);
-            current = self.parent(node_id);
-            self.manager.relayout(node);
+    fn clear_node_layout_upwards(
+        &mut self,
+        measure_ctx: &mut dyn MeasureCtx,
+        start_node: ElementId,
+    ) {
+        let mut current = Some(start_node);
+        while let Some(node) = current {
+            self.clear_node_layout(measure_ctx, node);
+            current = self.parent(node);
         }
-        // Mark render order as needing recomputation
-        self.manager.recompute_render_order();
     }
+
+    // #[profiling::function]
+    // fn clear_tree_layout(&mut self, measure_ctx: &mut dyn MeasureCtx, node: ElementId) {
+    //     // Clear layout cache for this node and all ancestors
+    //     let mut current = Some(node);
+    //     while let Some(node_id) = current {
+    //         self.clear_node_layout(measure_ctx, node_id);
+    //         current = self.parent(node_id);
+    //         self.manager.relayout(node);
+    //     }
+    //     // Mark render order as needing recomputation
+    //     self.manager.recompute_render_order();
+    // }
 }
 impl Tree {
     #[profiling::function]
@@ -271,7 +285,7 @@ impl Tree {
                     return Some(());
                 }
 
-                let node = self.layout_tree.hit(event.position).next()?;
+                let node = self.hit_layout(event.position).next()?;
                 log::trace!("got hit for {node:?}");
 
                 // If we previously hit a node in our last mouse event, check if the new hit is the same,
@@ -499,62 +513,81 @@ impl Tree {
 
     #[profiling::function]
     pub fn process_changes<R: GuiRenderer + MeasureCtx>(&mut self, renderer: &mut R) -> Option<()> {
-        // Process child operations first
+        let mut structure_changed = false;
+        let mut layout_changed = false;
+
+        // 1. Handle Structure Changes (Add/Remove)
         let mut child_ops = self.manager.take_child_operations();
-        let child_ops_empty = child_ops.is_empty();
-        for op in child_ops.drain(..) {
-            match op {
-                ChildOperation::AddChild {
-                    parent,
-                    builder,
-                    callback,
-                } => {
-                    let child_id = self.add_child_direct(renderer, parent, builder);
-                    log::debug!("added child: {child_id:?}");
-                    if let Some(cb) = callback {
-                        cb(child_id);
+        if !child_ops.is_empty() {
+            structure_changed = true;
+            layout_changed = true; // Adding/removing usually shifts layout
+
+            for op in child_ops.drain(..) {
+                match op {
+                    ChildOperation::AddChild {
+                        parent,
+                        builder,
+                        callback,
+                    } => {
+                        let child = self.add_child_direct(renderer, parent, builder);
+                        // Add to LayoutTree map immediately (with dummy pos) or wait for full pass
+                        if let Some(cb) = callback {
+                            cb(child);
+                        }
                     }
-                }
-                ChildOperation::RemoveChild {
-                    parent,
-                    child,
-                    scope_dispose,
-                } => {
-                    // Dispose scope first if provided
-                    if let Some(dispose) = scope_dispose {
-                        dispose();
+                    ChildOperation::RemoveChild {
+                        parent,
+                        child,
+                        scope_dispose,
+                    } => {
+                        if let Some(dispose) = scope_dispose {
+                            dispose();
+                        }
+                        self.remove_child_direct(renderer, parent, child);
+                        // Remove from LayoutTree map
+                        self.remove_abs_layout(child);
                     }
-                    self.remove_child_direct(renderer, parent, child);
-                    log::debug!("removed child: {child:?}");
                 }
             }
         }
 
-        if !child_ops_empty {
-            self.manager.recompute_render_order()
+        // 2. Check if Z-Order explicit flag was set (e.g. style change on z-index prop)
+        if self.manager.take_structure_dirty() {
+            structure_changed = true;
         }
 
-        let nodes = self.manager.take_relayout_nodes();
-        if nodes.is_empty() && child_ops.is_empty() {
-            return None;
+        // 3. Recompute Render Order only if structure changed
+        if structure_changed {
+            // This is still O(N) but only runs on add/remove or z-index change
+            self.render_order = ZIndexOrdering::new(self);
         }
 
-        for node in nodes.clone() {
-            let mut current = Some(node);
-
-            while let Some(current_node) = current {
-                self.clear_node_layout(renderer, current_node);
-                current = self.parent(current_node);
+        // 4. Handle Layout Changes
+        let dirty_nodes = self.manager.take_dirty_layout_nodes();
+        if layout_changed || !dirty_nodes.is_empty() {
+            // A. Clear Taffy Cache for dirty nodes
+            for node in &dirty_nodes {
+                // Optimization: Only clear up to the point where layout boundaries stop propagating
+                // For now, clearing ancestor chain is safe.
+                self.clear_node_layout_upwards(renderer, *node);
             }
+
+            // B. Run Taffy Layout Algo
+            // This updates the 'relative' layout in self.alloc
+            self.compute_root_layout(renderer);
+
+            // C. Update Absolute Positions in LayoutTree
+            // Optimization: If we knew exactly which subtree changed, we could pass that.
+            // For now, updating the whole absolute tree is still much faster than re-allocating it.
+            // A better approach: find common ancestor of dirty nodes, but Root is safest fallback.
+            self.update_abs_subtree(self.root_node(), taffy::Point::ZERO);
         }
 
-        if self.manager.take_compute_render_order() {
-            self.render_order = ZIndexOrdering::new(self)
+        if structure_changed || layout_changed || !dirty_nodes.is_empty() {
+            Some(())
+        } else {
+            None
         }
-        // TODO: Don't recompute the entire layout tree every time.
-        self.compute_root_layout(renderer);
-
-        Some(())
     }
 
     #[profiling::function]
@@ -578,7 +611,7 @@ impl Tree {
         }
 
         // Invalidate parent's layout cache and trigger relayout
-        self.clear_tree_layout(measure_ctx, parent);
+        self.clear_node_layout_upwards(measure_ctx, parent);
 
         child_id
     }
@@ -646,33 +679,31 @@ impl Tree {
         for node_id in &to_remove {
             renderer.remove_cached(*node_id);
             self.alloc.remove(*node_id);
+            self.remove_abs_layout(*node_id);
         }
 
         // Invalidate parent's layout
-        self.clear_tree_layout(renderer, parent);
+        self.clear_node_layout_upwards(renderer, parent);
     }
 
     #[profiling::function]
     pub fn render_order<R: GuiRenderer>(&mut self, renderer: &mut R) -> Vec<ElementId> {
         self.owner.clone().run_in(|| {
             self.manager.clone().with(|| {
-                let mut actual_order = Vec::with_capacity(self.render_order.render_order().len());
-                for node in self.render_order.render_order() {
-                    let layout = self.layout_tree.get_layout(*node).unwrap().abs_layout;
+                let render_order = self.render_order.render_order().to_vec();
+                for node in &render_order {
+                    let layout = self.get_abs_layout(*node).unwrap().abs_layout;
                     let elem = self
                         .alloc
                         .get_mut(*node)
                         .expect("tried to render a node not in the tree");
 
                     // TODO: do not re-render everything
-                    if elem.get_style().display != taffy::Display::None
-                        && let Some(primitive) = elem.render(&layout)
-                    {
+                    if let Some(primitive) = elem.render(&layout) {
                         renderer.update_cached(*node, primitive);
-                        actual_order.push(*node);
                     }
                 }
-                actual_order
+                render_order
             })
         })
     }
@@ -701,9 +732,12 @@ pub(crate) enum ChildOperation {
 struct TreeManagerInner {
     redraw_now_fn: Arc<dyn Fn() + Send + Sync>,
     new_handle_fn: Arc<dyn Fn() -> AnimationHandle + Send + Sync>,
-    relayout_nodes: Vec<ElementId>,
-    compute_render_order: bool,
     child_operations: Vec<ChildOperation>,
+
+    layout_dirty_nodes: Vec<ElementId>,
+    /// Whether the z-index has changed, or a node has been added/removed,
+    /// fundamentally changing the UI structure.
+    structure_dirty: bool,
 }
 
 impl TreeManager {
@@ -717,9 +751,10 @@ impl TreeManager {
             redraw_now_fn: Arc::new(redraw_now_fn),
             new_handle_fn: Arc::new(new_handle_fn),
 
-            relayout_nodes: vec![],
-            compute_render_order: false,
             child_operations: vec![],
+
+            layout_dirty_nodes: vec![],
+            structure_dirty: false,
         })))
     }
     /// Set the global handler for the entire process.
@@ -764,21 +799,20 @@ impl TreeManager {
 }
 
 impl TreeManager {
-    pub fn relayout(&self, elem_id: ElementId) {
-        let nodes = &mut self.get_unwrap().relayout_nodes;
-        nodes.push(elem_id);
+    pub fn mark_layout_dirty(&self, elem_id: ElementId) {
+        self.get_unwrap().layout_dirty_nodes.push(elem_id);
     }
 
-    pub fn take_relayout_nodes(&self) -> Vec<ElementId> {
-        let nodes = &mut self.get_unwrap().relayout_nodes;
+    pub fn mark_structure_dirty(&self) {
+        self.get_unwrap().structure_dirty = true;
+    }
+
+    pub fn take_dirty_layout_nodes(&self) -> Vec<ElementId> {
+        let nodes = &mut self.get_unwrap().layout_dirty_nodes;
         std::mem::take(nodes)
     }
-    pub fn recompute_render_order(&self) {
-        self.get_unwrap().compute_render_order = true
-    }
-
-    pub fn take_compute_render_order(&self) -> bool {
-        std::mem::replace(&mut self.get_unwrap().compute_render_order, false)
+    pub fn take_structure_dirty(&mut self) -> bool {
+        std::mem::take(&mut self.get_unwrap().structure_dirty)
     }
 
     pub fn now(&self) {

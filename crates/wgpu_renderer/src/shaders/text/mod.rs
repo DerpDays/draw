@@ -1,10 +1,13 @@
+use std::marker::PhantomData;
+
 use atlas::TextureVertex;
 use bytemuck::{Pod, Zeroable};
-use color::{LinearSrgb, PremulColor};
+use color::{ColorSpace, PremulColor};
 
 use crate::{
     GraphicsContext,
     Mesh,
+    RenderColorspace,
     arena::Arena,
     shaders::{AllocMesh, ViewportBinds},
 };
@@ -46,7 +49,7 @@ pub enum VertexKind {
 
 impl TextVertex {
     #[inline(always)]
-    pub const fn new_color(position: [f32; 2], color: PremulColor<LinearSrgb>) -> Self {
+    pub const fn new_color<CS: ColorSpace>(position: [f32; 2], color: PremulColor<CS>) -> Self {
         Self {
             position,
             color: color.components,
@@ -58,10 +61,10 @@ impl TextVertex {
     /// Create the vertices needed for a solid single color rectangle with min/max coordinates in
     /// CCW order. indices: 0,1,2 0,2,3
     #[inline(always)]
-    pub const fn new_solid_rect(
+    pub const fn new_solid_rect<CS: ColorSpace>(
         min: [f32; 2],
         max: [f32; 2],
-        color: PremulColor<LinearSrgb>,
+        color: PremulColor<CS>,
     ) -> [Self; 4] {
         [
             Self::new_color([max[0], min[1]], color),
@@ -71,9 +74,9 @@ impl TextVertex {
         ]
     }
     #[inline(always)]
-    pub const fn from_texture_vertex(
+    pub const fn from_texture_vertex<CS: ColorSpace>(
         vertex: TextureVertex,
-        color: PremulColor<LinearSrgb>,
+        color: PremulColor<CS>,
         kind: VertexKind,
     ) -> Self {
         Self {
@@ -88,14 +91,15 @@ impl TextVertex {
 
 pub struct VertexArenaMarker;
 pub struct IndexArenaMarker;
-pub struct TextState {
+pub struct TextState<CS: RenderColorspace> {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group: wgpu::BindGroup,
 
     pub vertices_arena: Arena<VertexArenaMarker>,
     pub indices_arena: Arena<IndexArenaMarker>,
+    _marker: PhantomData<CS>,
 }
-impl TextState {
+impl<CS: RenderColorspace> TextState<CS> {
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("text"),
@@ -132,7 +136,10 @@ impl TextState {
             ],
         })
     }
-    fn create_bind_group(ctx: &GraphicsContext, layout: &wgpu::BindGroupLayout) -> wgpu::BindGroup {
+    fn create_bind_group(
+        ctx: &GraphicsContext<CS>,
+        layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("text"),
             layout,
@@ -162,79 +169,75 @@ impl TextState {
         })
     }
     fn create_pipeline(
-        ctx: &GraphicsContext,
+        device: &wgpu::Device,
         viewport: &ViewportBinds,
         bind_group_layout: &wgpu::BindGroupLayout,
         render_targets: &[Option<wgpu::ColorTargetState>],
     ) -> wgpu::RenderPipeline {
-        let module = ctx
-            .device
-            .create_shader_module(wgpu::include_wgsl!("./shader.wgsl"));
-        let pipeline_layout = ctx
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("text"),
-                bind_group_layouts: &[viewport.bind_group_layout(), &bind_group_layout],
-                immediate_size: 0,
-            });
-        ctx.device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("text"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &module,
-                    entry_point: None,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[TextVertex::buffer_layout()],
-                },
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    strip_index_format: None,
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: None,
-                    unclipped_depth: false,
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    conservative: false,
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &module,
-                    entry_point: None,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: render_targets,
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
+        let module = device.create_shader_module(wgpu::include_wgsl!("./shader.wgsl"));
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("text"),
+            bind_group_layouts: &[viewport.bind_group_layout(), &bind_group_layout],
+            immediate_size: 0,
+        });
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("text"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: None,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[TextVertex::buffer_layout()],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                entry_point: None,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: render_targets,
+            }),
+            multiview_mask: None,
+            cache: None,
+        })
     }
 }
-impl TextState {
+impl<CS: RenderColorspace> TextState<CS> {
     pub fn new(
-        ctx: &GraphicsContext,
+        ctx: &GraphicsContext<CS>,
         viewport_binds: &ViewportBinds,
         render_targets: &[Option<wgpu::ColorTargetState>],
     ) -> Self {
         let bind_group_layout = Self::create_bind_group_layout(&ctx.device);
         Self {
             pipeline: Self::create_pipeline(
-                ctx,
+                &ctx.device,
                 viewport_binds,
                 &bind_group_layout,
                 render_targets,
             ),
-            bind_group: Self::create_bind_group(&ctx, &bind_group_layout),
+            bind_group: Self::create_bind_group(ctx, &bind_group_layout),
             vertices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::VERTEX),
             indices_arena: Arena::new(&ctx.device, wgpu::BufferUsages::INDEX),
+            _marker: Default::default(),
         }
     }
 }
 
-impl TextState {
+impl<CS: RenderColorspace> TextState<CS> {
     #[inline(always)]
     pub fn insert_mesh(
         &mut self,
-        ctx: &GraphicsContext,
+        ctx: &GraphicsContext<CS>,
         mesh: Mesh<TextVertex>,
     ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
         AllocMesh {
@@ -254,7 +257,7 @@ impl TextState {
     #[inline(always)]
     pub fn update_mesh(
         &mut self,
-        ctx: &GraphicsContext,
+        ctx: &GraphicsContext<CS>,
         alloc: AllocMesh<VertexArenaMarker, IndexArenaMarker>,
         new: Mesh<TextVertex>,
     ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
@@ -281,7 +284,7 @@ impl TextState {
     }
 }
 
-impl TextState {
+impl<CS: RenderColorspace> TextState<CS> {
     #[inline(always)]
     #[profiling::function]
     pub fn swap_pipeline(
