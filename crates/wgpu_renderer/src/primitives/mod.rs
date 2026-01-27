@@ -8,6 +8,11 @@ pub use ellipse::render_ellipse;
 mod text;
 pub use text::{prepare_text_layout, render_text};
 
+// mod svg;
+// pub use svg::render_svg;
+mod svg_resvg;
+pub use svg_resvg::render_svg;
+
 use graphics::Primitive;
 
 use crate::{
@@ -15,46 +20,24 @@ use crate::{
     Mesh,
     PrimitiveCache,
     shaders::{
-        basic_shape::BasicShapeVertex,
-        text::TextVertex,
+        // basic_shape::BasicShapeVertex,
+        generic,
+        // text::TextVertex,
         texture::{TexturePrimitive, TextureVertex},
     },
 };
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum DrawType {
-    BasicShape,
-    BasicShapeMultisample,
-    Text,
+    Generic,
     Texture,
 }
 
 pub enum PrimitiveMesh {
-    BasicShape(Mesh<BasicShapeVertex>),
-    BasicShapeMultisample(Mesh<BasicShapeVertex>),
-    Text(Mesh<TextVertex>),
+    /// mesh, msaa
+    Generic(Mesh<generic::Vertex>),
+    // Text(Mesh<TextVertex>),
     Texture(([crate::shaders::texture::TextureVertex; 4], wgpu::BindGroup)),
-}
-pub trait ToDrawType {
-    fn to_draw_type(&self) -> DrawType;
-}
-impl ToDrawType for Primitive {
-    #[inline(always)]
-    #[profiling::function]
-    fn to_draw_type(&self) -> DrawType {
-        match self {
-            Primitive::Svg(_) => DrawType::BasicShapeMultisample,
-            Primitive::Text(_) => DrawType::Text,
-            Primitive::Custom(custom) => {
-                if let Some(_) = custom.as_any().downcast_ref::<TexturePrimitive>() {
-                    DrawType::Texture
-                } else {
-                    panic!("tried to draw custom primitive that is not part of wgpu_renderer");
-                }
-            }
-            _ => DrawType::BasicShape,
-        }
-    }
 }
 
 pub trait PrimitiveToMesh {
@@ -77,11 +60,9 @@ impl PrimitiveToMesh for Primitive {
             Primitive::CubicBezier(cubic_bezier) => todo!(),
             Primitive::Pen(pen) => todo!(),
             Primitive::Quad(quad) => todo!(),
-            Primitive::Rectangle(rectangle) => {
-                PrimitiveMesh::BasicShape(render_rectangle(rectangle))
-            }
-            Primitive::Svg(svg) => todo!(),
-            Primitive::Text(text) => PrimitiveMesh::Text(render_text(ctx, text, cache)),
+            Primitive::Rectangle(rectangle) => PrimitiveMesh::Generic(render_rectangle(rectangle)),
+            Primitive::Svg(svg) => PrimitiveMesh::Generic(render_svg(ctx, svg, cache)),
+            Primitive::Text(text) => PrimitiveMesh::Generic(render_text(ctx, text, cache)),
             Primitive::Text(text) => todo!(),
             Primitive::Triangle(triangle) => todo!(),
             Primitive::Custom(custom) => {

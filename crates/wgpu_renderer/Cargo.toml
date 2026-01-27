@@ -18,6 +18,8 @@ thiserror = { workspace = true }
 parley = { workspace = true }
 swash = { workspace = true }
 serde = { workspace = true, optional = true, features = ["rc"] }
+usvg = { workspace = true }
+resvg = { workspace = true }
 
 color = { workspace = true }
 wgpu = { workspace = true }

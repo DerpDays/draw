@@ -1,4 +1,4 @@
-use color::{ColorSpace, LinearSrgb};
+use color::LinearSrgb;
 use euclid::default::{Box2D, SideOffsets2D};
 use graphics::{BasicColor, make_positive_box, primitives::Rectangle};
 use lyon::{
@@ -15,9 +15,12 @@ use lyon::{
     },
 };
 
-use crate::{Mesh, shaders::basic_shape::BasicShapeVertex};
+use crate::{
+    Mesh,
+    shaders::generic::{Vertex, VertexKind},
+};
 
-pub fn render_rectangle(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
+pub fn render_rectangle(rect: &Rectangle) -> Mesh<Vertex> {
     if !rect.rounding.is_zero() {
         return render_rounded_rectangle(rect);
     }
@@ -48,21 +51,21 @@ pub fn render_rectangle(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
 }
 
 #[inline(always)]
-fn basic_quad(area: Box2D<f32>, color: &BasicColor, vertices: &mut Vec<BasicShapeVertex>) {
+fn basic_quad(area: Box2D<f32>, color: &BasicColor, vertices: &mut Vec<Vertex>) {
     vertices.extend_from_slice(&match color {
-        BasicColor::Solid(color) => BasicShapeVertex::new_solid_rect(
+        BasicColor::Solid(color) => Vertex::new_solid_rect(
             area.min.to_array(),
             area.max.to_array(),
             color.convert().premultiply(),
         ),
         BasicColor::LinearGradient(gradient) => {
-            BasicShapeVertex::new_gradient_rect(area.min.to_array(), area.max.to_array(), gradient)
+            Vertex::new_gradient_rect(area.min.to_array(), area.max.to_array(), gradient)
         }
     });
 }
 
 #[inline(always)]
-fn render_rounded_rectangle(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
+fn render_rounded_rectangle(rect: &Rectangle) -> Mesh<Vertex> {
     // We can receive negative areas in Box2D since size can also be negative,
     // therefore we need to change ensure each axis are their actual minimum/maximum.
     let area = make_positive_box(Box2D::from_origin_and_size(rect.origin, rect.size));
@@ -77,7 +80,7 @@ fn render_rounded_rectangle(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
     let stroke_rect = area.inner_box(SideOffsets2D::new_all_same(rect.stroke_width / 2.));
     stroke_path.add_rounded_rectangle(&stroke_rect, &rect.rounding.to_lyon(), Winding::Positive);
 
-    let mut buffers = VertexBuffers::<BasicShapeVertex, u32>::new();
+    let mut buffers = VertexBuffers::<Vertex, u32>::new();
 
     {
         let fill_opts = FillOptions::default();
@@ -87,7 +90,7 @@ fn render_rounded_rectangle(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
         _ = tess.tessellate_path(&fill_path.build(), &fill_opts, &mut builder);
     }
 
-    let mut buffers2 = VertexBuffers::<BasicShapeVertex, u32>::new();
+    let mut buffers2 = VertexBuffers::<Vertex, u32>::new();
 
     // ---- STROKE ----
     if rect.stroke_width > 0.0 {
@@ -121,8 +124,8 @@ fn render_rounded_rectangle(rect: &Rectangle) -> Mesh<BasicShapeVertex> {
 }
 
 #[inline(always)]
-fn as_vertex_fn(color: BasicColor) -> impl Fn(FillVertex<'_>) -> BasicShapeVertex {
-    move |vertex: FillVertex<'_>| BasicShapeVertex {
+fn as_vertex_fn(color: BasicColor) -> impl Fn(FillVertex<'_>) -> Vertex {
+    move |vertex: FillVertex<'_>| Vertex {
         position: vertex.position().to_array(),
         color: match color {
             BasicColor::Solid(color) => color.convert::<LinearSrgb>().premultiply().components,
@@ -134,11 +137,14 @@ fn as_vertex_fn(color: BasicColor) -> impl Fn(FillVertex<'_>) -> BasicShapeVerte
                     .components
             }
         },
+        kind: VertexKind::Color as u32,
+        texture: 0,
+        tex_coords: [0., 0.],
     }
 }
 #[inline(always)]
-fn as_stroke_vertex_fn(color: BasicColor) -> impl Fn(StrokeVertex<'_, '_>) -> BasicShapeVertex {
-    move |vertex: StrokeVertex<'_, '_>| BasicShapeVertex {
+fn as_stroke_vertex_fn(color: BasicColor) -> impl Fn(StrokeVertex<'_, '_>) -> Vertex {
+    move |vertex: StrokeVertex<'_, '_>| Vertex {
         position: vertex.position().to_array(),
         color: match color {
             BasicColor::Solid(color) => color.convert::<LinearSrgb>().premultiply().components,
@@ -150,5 +156,8 @@ fn as_stroke_vertex_fn(color: BasicColor) -> impl Fn(StrokeVertex<'_, '_>) -> Ba
                     .components
             }
         },
+        kind: VertexKind::Color as u32,
+        texture: 0,
+        tex_coords: [0., 0.],
     }
 }

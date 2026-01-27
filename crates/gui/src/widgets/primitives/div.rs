@@ -200,7 +200,7 @@ impl ElementBuilder<Div> {
         let inner = Div {
             background: Some(bg_div),
         };
-        ElementBuilder::set_inner(self, inner).append_after_build(move |_| {
+        self.set_inner(inner).append_after_build(move |_| {
             let mgr = TreeManager::global();
             let options = options.clone();
 

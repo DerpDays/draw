@@ -1,24 +1,23 @@
 #[cfg(feature = "gui")]
 use std::collections::HashMap;
 
-use color::LinearSrgb;
-use graphics::Primitive;
+#[cfg(feature = "gui")]
+use euclid::default::Box2D;
 #[cfg(feature = "gui")]
 use gui::{ElementId, GuiRenderer, MeasureCtx};
 
 use crate::{
     GraphicsContext,
     arena::Key,
-    primitives::{DrawType, PrimitiveMesh, PrimitiveToMesh, ToDrawType},
-    shaders::{basic_shape::BasicShapeState, text::TextState, texture::TextureState},
+    primitives::{DrawType, PrimitiveMesh, PrimitiveToMesh},
+    shaders::{generic::GenericRenderer, texture::TextureState},
 };
 
 pub use viewport::{ViewportBinds, ViewportTransform};
 
 mod viewport;
 
-pub mod basic_shape;
-pub mod text;
+pub mod generic;
 pub mod texture;
 
 pub struct CacheEntry {
@@ -33,9 +32,7 @@ pub struct AllocMesh<K, I> {
 }
 
 pub enum Alloc {
-    BasicShape(AllocMesh<basic_shape::VertexArenaMarker, basic_shape::IndexArenaMarker>),
-    BasicShapeMultisample(AllocMesh<basic_shape::VertexArenaMarker, basic_shape::IndexArenaMarker>),
-    Text(AllocMesh<text::VertexArenaMarker, text::IndexArenaMarker>),
+    Generic(AllocMesh<generic::VertexArenaMarker, generic::IndexArenaMarker>),
     Texture((Key<texture::VertexArenaMarker>, wgpu::BindGroup)),
     Empty,
 }
@@ -47,16 +44,18 @@ pub struct WgpuRenderer {
 
     pub viewport: ViewportBinds,
 
-    pub basic_shapes: BasicShapeState,
-    pub text_state: TextState,
+    pub generic_renderer: GenericRenderer,
+    // pub basic_shapes: BasicShapeState,
+    // pub text_state: TextState,
     pub texture_state: TextureState,
 }
 
 impl WgpuRenderer {
     pub fn new(ctx: GraphicsContext, render_targets: &[Option<wgpu::ColorTargetState>]) -> Self {
         let viewport = ViewportBinds::new(&ctx, ViewportTransform::new(1920., 1080.));
-        let basic_shapes = BasicShapeState::new(&ctx, &viewport, render_targets);
-        let text_state = TextState::new(&ctx, &viewport, render_targets);
+        // let basic_shapes = BasicShapeState::new(&ctx, &viewport, render_targets);
+        // let text_state = TextState::new(&ctx, &viewport, render_targets);
+        let generic_renderer = GenericRenderer::new(&ctx, &viewport, render_targets);
         let texture_state = TextureState::new(&ctx, &viewport, render_targets);
         Self {
             ctx,
@@ -64,8 +63,9 @@ impl WgpuRenderer {
             gui_cache: Default::default(),
             viewport,
 
-            basic_shapes,
-            text_state,
+            generic_renderer,
+            // basic_shapes,
+            // text_state,
             texture_state,
         }
     }
@@ -106,62 +106,48 @@ pub struct RendererPass<'a> {
 }
 
 impl RendererPass<'_> {
-    #[profiling::function]
-    fn swap_pipeline(&mut self, renderer: &WgpuRenderer, draw_type: DrawType) -> DrawType {
-        if Some(draw_type) != self.last_draw_type {
-            match draw_type {
-                DrawType::BasicShape => {
-                    renderer
-                        .basic_shapes
-                        .swap_pipeline(&mut self.render_pass, &renderer.viewport);
-                }
-                DrawType::BasicShapeMultisample => todo!(),
-                DrawType::Text => {
-                    renderer
-                        .text_state
-                        .swap_pipeline(&mut self.render_pass, &renderer.viewport);
-                }
-                DrawType::Texture => {
-                    renderer
-                        .texture_state
-                        .swap_pipeline(&mut self.render_pass, &renderer.viewport);
-                }
-            }
-            self.last_draw_type = Some(draw_type);
-        };
-        draw_type
-    }
-}
-impl RendererPass<'_> {
-    pub fn draw_primitive(&mut self, renderer: &WgpuRenderer, primitive: Primitive) {
-        self.swap_pipeline(renderer, primitive.to_draw_type());
-    }
     #[cfg(feature = "gui")]
     #[profiling::function]
-    pub fn draw_element(&mut self, renderer: &WgpuRenderer, elem: ElementId) {
+    pub fn draw_element(
+        &mut self,
+        renderer: &WgpuRenderer,
+        elem: ElementId,
+        scissor_rect: Box2D<u32>,
+    ) {
         let Some(elem) = renderer.gui_cache.get(&elem) else {
             log::warn!("tried to draw a gui element without a cache entry");
             return;
         };
 
         match &elem.alloc {
-            Alloc::BasicShape(alloc) => {
-                self.swap_pipeline(renderer, DrawType::BasicShape);
+            Alloc::Generic(alloc) => {
                 renderer
-                    .basic_shapes
-                    .render_mesh_alloc(&mut self.render_pass, alloc);
-            }
-            Alloc::BasicShapeMultisample(alloc) => {
-                self.swap_pipeline(renderer, DrawType::BasicShapeMultisample);
-            }
-            Alloc::Text(alloc) => {
-                self.swap_pipeline(renderer, DrawType::Text);
+                    .generic_renderer
+                    .swap_pipeline(&mut self.render_pass, &renderer.viewport);
+                self.last_draw_type = Some(DrawType::Generic);
+
+                self.render_pass.set_scissor_rect(
+                    scissor_rect.min.x,
+                    scissor_rect.min.y,
+                    scissor_rect.width(),
+                    scissor_rect.height(),
+                );
                 renderer
-                    .text_state
+                    .generic_renderer
                     .render_mesh_alloc(&mut self.render_pass, alloc);
             }
             Alloc::Texture((key, bind_group)) => {
-                self.swap_pipeline(renderer, DrawType::Texture);
+                renderer
+                    .texture_state
+                    .swap_pipeline(&mut self.render_pass, &renderer.viewport);
+                self.last_draw_type = Some(DrawType::Texture);
+
+                self.render_pass.set_scissor_rect(
+                    scissor_rect.min.x,
+                    scissor_rect.min.y,
+                    scissor_rect.width(),
+                    scissor_rect.height(),
+                );
                 renderer
                     .texture_state
                     .render_bind_group(&mut self.render_pass, key, bind_group);
@@ -170,7 +156,6 @@ impl RendererPass<'_> {
                 log::warn!("tried to render an empty element");
             }
         }
-        // renderer.gui_cache.get()
     }
 }
 
@@ -186,71 +171,45 @@ impl GuiRenderer for WgpuRenderer {
             if entry.previous_elem != primitive {
                 log::info!("updating primitive: {primitive:?}");
                 let mesh = primitive.to_mesh(&mut self.ctx, &mut entry.cache);
-                'a: {
-                    match mesh {
-                        PrimitiveMesh::BasicShape(mesh) => {
-                            log::info!("mesh is: {:?} for basicshape {primitive:?}", mesh.vertices);
-                            let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
+                match mesh {
+                    PrimitiveMesh::Generic(mesh) => {
+                        log::info!("mesh is: {:?} for basicshape {primitive:?}", mesh.vertices);
+                        let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
 
-                            if mesh.vertices.is_empty() {
-                                // if we are converting to an empty allocation, clear the keys from the
-                                if let Alloc::BasicShape(alloc) = previous_alloc {
-                                    self.basic_shapes.remove_mesh(alloc);
-                                }
-                                break 'a;
+                        if mesh.vertices.is_empty() {
+                            // if we are converting to an empty allocation, clear the keys from the
+                            if let Alloc::Generic(alloc) = previous_alloc {
+                                self.generic_renderer.remove_mesh(alloc);
                             }
+                        } else {
                             // If the previous allocation was not empty, update the existing
                             // allocation
-                            if let Alloc::BasicShape(alloc) = previous_alloc {
-                                entry.alloc = Alloc::BasicShape(
-                                    self.basic_shapes.update_mesh(&self.ctx, alloc, mesh),
+                            if let Alloc::Generic(alloc) = previous_alloc {
+                                entry.alloc = Alloc::Generic(
+                                    self.generic_renderer.update_mesh(&self.ctx, alloc, mesh),
                                 );
                             // Otherwise if it was previously empty, create a new allocation
                             } else {
-                                entry.alloc = Alloc::BasicShape(
-                                    self.basic_shapes.insert_mesh(&self.ctx, mesh),
+                                entry.alloc = Alloc::Generic(
+                                    self.generic_renderer.insert_mesh(&self.ctx, mesh),
                                 );
                             }
                         }
-                        PrimitiveMesh::BasicShapeMultisample(_) => todo!(),
-                        PrimitiveMesh::Text(mesh) => {
-                            log::info!("mesh is: {:?} for text {primitive:?}", mesh.vertices);
-                            let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
+                    }
+                    PrimitiveMesh::Texture((vertices, bind_group)) => {
+                        log::info!("mesh updating texture primitive");
+                        let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
 
-                            if mesh.vertices.is_empty() {
-                                // if we are converting to an empty allocation, clear the keys from the
-                                if let Alloc::Text(alloc) = previous_alloc {
-                                    self.text_state.remove_mesh(alloc);
-                                }
-                                break 'a;
-                            }
-                            // If the previous allocation was not empty, update the existing
-                            // allocation
-                            if let Alloc::Text(alloc) = previous_alloc {
-                                entry.alloc = Alloc::Text(
-                                    self.text_state.update_mesh(&self.ctx, alloc, mesh),
-                                );
-                            // Otherwise if it was previously empty, create a new allocation
-                            } else {
-                                entry.alloc =
-                                    Alloc::Text(self.text_state.insert_mesh(&self.ctx, mesh));
-                            }
-                        }
-                        PrimitiveMesh::Texture((vertices, bind_group)) => {
-                            log::info!("mesh updating texture primitive");
-                            let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
-
-                            // If the previous allocation was not empty, update the existing
-                            // allocation
-                            if let Alloc::Texture((key, ..)) = previous_alloc {
-                                entry.alloc = Alloc::Texture((
-                                    self.texture_state.update_vertices(&self.ctx, key, vertices),
-                                    bind_group,
-                                ));
-                            // Otherwise if it was previously empty, create a new allocation
-                            } else {
-                                panic!("we cannot have an empty texture primitive cache entry")
-                            }
+                        // If the previous allocation was not empty, update the existing
+                        // allocation
+                        if let Alloc::Texture((key, ..)) = previous_alloc {
+                            entry.alloc = Alloc::Texture((
+                                self.texture_state.update_vertices(&self.ctx, key, vertices),
+                                bind_group,
+                            ));
+                        // Otherwise if it was previously empty, create a new allocation
+                        } else {
+                            panic!("we cannot have an empty texture primitive cache entry")
                         }
                     }
                 }
@@ -266,17 +225,11 @@ impl GuiRenderer for WgpuRenderer {
                 previous_elem: primitive,
                 cache,
                 alloc: match mesh {
-                    PrimitiveMesh::BasicShape(mesh) => {
-                        Alloc::BasicShape(self.basic_shapes.insert_mesh(&self.ctx, mesh))
-                    }
-                    PrimitiveMesh::BasicShapeMultisample(mesh) => {
-                        Alloc::BasicShapeMultisample(self.basic_shapes.insert_mesh(&self.ctx, mesh))
-                    }
-                    PrimitiveMesh::Text(mesh) => {
+                    PrimitiveMesh::Generic(mesh) => {
                         if mesh.vertices.is_empty() {
                             Alloc::Empty
                         } else {
-                            Alloc::Text(self.text_state.insert_mesh(&self.ctx, mesh))
+                            Alloc::Generic(self.generic_renderer.insert_mesh(&self.ctx, mesh))
                         }
                     }
                     PrimitiveMesh::Texture((vertices, bind_group)) => Alloc::Texture((
@@ -292,13 +245,9 @@ impl GuiRenderer for WgpuRenderer {
     fn remove_cached(&mut self, elem_id: ElementId) {
         if let Some(entry) = self.gui_cache.remove(&elem_id) {
             match entry.alloc {
-                Alloc::BasicShape(alloc) => {
-                    self.basic_shapes.remove_mesh(alloc);
+                Alloc::Generic(alloc) => {
+                    self.generic_renderer.remove_mesh(alloc);
                 }
-                Alloc::BasicShapeMultisample(alloc) => {
-                    self.basic_shapes.remove_mesh(alloc);
-                }
-                Alloc::Text(alloc) => self.text_state.remove_mesh(alloc),
                 Alloc::Texture((vertices, ..)) => {
                     self.texture_state.remove_vertices(vertices);
                 }

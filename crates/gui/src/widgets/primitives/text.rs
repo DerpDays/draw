@@ -144,7 +144,7 @@ impl ElementBuilder<Text> {
             text: self.inner().text,
             options: options.clone(),
         };
-        ElementBuilder::set_inner(self, inner).append_after_build(move |_| {
+        self.set_inner(inner).append_after_build(move |_| {
             let mgr = TreeManager::global();
             let options = options.clone();
 
@@ -152,7 +152,7 @@ impl ElementBuilder<Text> {
             create_effect(move || {
                 options.track();
                 if !first_run.get() {
-                    log::debug!("updating div options");
+                    log::debug!("updating text options");
                     mgr.now();
                 } else {
                     first_run.set(false);

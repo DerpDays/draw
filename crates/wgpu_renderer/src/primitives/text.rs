@@ -34,14 +34,14 @@ use crate::{
     TextData,
     TextureData,
     TextureState,
-    shaders::text::{TextVertex, VertexKind},
+    shaders::generic::{Vertex, VertexKind},
 };
 
 pub fn render_text(
     ctx: &mut GraphicsContext,
     text: &Text,
     cache: &mut Option<PrimitiveCache>,
-) -> Mesh<TextVertex> {
+) -> Mesh<Vertex> {
     let area = make_positive_box(Box2D::from_origin_and_size(text.origin, text.size));
 
     let start_position = area.min.round();
@@ -56,7 +56,7 @@ pub fn render_text(
 
     // let cursor = Cursor::from_byte_index(&layout, 3, parley::Affinity::Downstream);
 
-    let mut mesh: Mesh<TextVertex> = Mesh::empty();
+    let mut mesh: Mesh<Vertex> = Mesh::empty();
 
     // Reset the atlas keys
     let mut new_cache = PrimitiveCache {
@@ -85,7 +85,7 @@ pub fn render_text(
                 }
                 PositionedLayoutItem::InlineBox(inline_box) => {
                     mesh.append(
-                        &TextVertex::new_solid_rect(
+                        &Vertex::new_solid_rect(
                             [
                                 start_position.x + inline_box.x,
                                 start_position.y + inline_box.y,
@@ -147,7 +147,7 @@ pub enum GlyphRunError {
 }
 
 struct GlyphRunRenderer<'a> {
-    mesh: &'a mut Mesh<TextVertex>,
+    mesh: &'a mut Mesh<Vertex>,
     cache: &'a mut PrimitiveCache,
 
     scaler: Scaler<'a>,
@@ -164,7 +164,7 @@ struct GlyphRunRenderer<'a> {
 
 impl<'a> GlyphRunRenderer<'a> {
     pub fn new(
-        mesh: &'a mut Mesh<TextVertex>,
+        mesh: &'a mut Mesh<Vertex>,
         cache: &'a mut PrimitiveCache,
         ctx: &'a mut GraphicsContext,
         // scale_ctx: &'a mut ScaleContext,
@@ -259,20 +259,20 @@ impl<'a> GlyphRunRenderer<'a> {
         atlas: &LayeredAtlas<T, CacheKey, TextureData>,
         fill: PremulColor<LinearSrgb>,
         kind: VertexKind,
-    ) -> Mesh<TextVertex> {
+    ) -> Mesh<Vertex> {
         let texture_mesh = glyph.to_mesh(area, atlas);
         Mesh {
             vertices: texture_mesh
                 .vertices
                 .into_iter()
-                .map(|vert| TextVertex::from_texture_vertex(vert, fill, kind))
+                .map(|vert| Vertex::from_texture_vertex(vert, fill, kind))
                 .collect(),
             indices: texture_mesh.indices,
         }
     }
 
     fn try_generic_glyph_cache<F: AtlasFormat>(
-        mesh: &mut Mesh<TextVertex>,
+        mesh: &mut Mesh<Vertex>,
         cache_key: CacheKey,
         atlas: &mut LayeredAtlas<F, CacheKey, TextureData>,
         atlas_keys: &mut Vec<Arc<AllocatedTexture<F, TextureData>>>,
@@ -431,7 +431,7 @@ impl<'a> GlyphRunRenderer<'a> {
         let y = self.glyph_run.baseline() - offset;
 
         self.mesh.append(
-            &TextVertex::new_solid_rect(
+            &Vertex::new_solid_rect(
                 [
                     self.start_position.x + self.glyph_run.offset(),
                     self.start_position.y + y,

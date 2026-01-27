@@ -1,7 +1,3 @@
-use atlas::TextureVertex;
-use bytemuck::{Pod, Zeroable};
-use color::{LinearSrgb, PremulColor};
-
 use crate::{
     GraphicsContext,
     Mesh,
@@ -9,96 +5,25 @@ use crate::{
     shaders::{AllocMesh, ViewportBinds},
 };
 
-#[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct TextVertex {
-    pub position: [f32; 2],
-    pub color: [f32; 4],
-    pub kind: u32,
-    pub texture: u32,
-    pub tex_coords: [f32; 2],
-}
-impl TextVertex {
-    const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![0 => Float32x2, 1=> Float32x4, 2=> Uint32, 3=> Uint32, 4=> Float32x2];
-
-    pub const fn buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
-        debug_assert!(
-            size_of::<Self>().is_multiple_of(wgpu::VERTEX_ALIGNMENT as usize),
-            "vertex alignment is not aligned to wgpu::VERTEX_ALIGNMENT bytes",
-        );
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &Self::VERTEX_ATTRIBUTES,
-        }
-    }
-}
-
-#[repr(u32)]
-#[derive(Copy, Clone, PartialEq, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum VertexKind {
-    Color = 0,
-    MaskTexture = 1,
-    ColorTexture = 2,
-}
-
-impl TextVertex {
-    #[inline(always)]
-    pub const fn new_color(position: [f32; 2], color: PremulColor<LinearSrgb>) -> Self {
-        Self {
-            position,
-            color: color.components,
-            kind: VertexKind::Color as u32,
-            texture: 0,
-            tex_coords: [0., 0.],
-        }
-    }
-    /// Create the vertices needed for a solid single color rectangle with min/max coordinates in
-    /// CCW order. indices: 0,1,2 0,2,3
-    #[inline(always)]
-    pub const fn new_solid_rect(
-        min: [f32; 2],
-        max: [f32; 2],
-        color: PremulColor<LinearSrgb>,
-    ) -> [Self; 4] {
-        [
-            Self::new_color([max[0], min[1]], color),
-            Self::new_color(min, color),
-            Self::new_color([min[0], max[1]], color),
-            Self::new_color(max, color),
-        ]
-    }
-    #[inline(always)]
-    pub const fn from_texture_vertex(
-        vertex: TextureVertex,
-        color: PremulColor<LinearSrgb>,
-        kind: VertexKind,
-    ) -> Self {
-        Self {
-            position: vertex.position,
-            color: color.components,
-            kind: kind as u32,
-            texture: vertex.texture_layer,
-            tex_coords: vertex.texture_coords,
-        }
-    }
-}
+mod vertex;
+use euclid::default::Box2D;
+pub use vertex::{Vertex, VertexKind};
 
 pub struct VertexArenaMarker;
 pub struct IndexArenaMarker;
-pub struct TextState {
+
+pub struct GenericRenderer {
     pub pipeline: wgpu::RenderPipeline,
+
     pub bind_group: wgpu::BindGroup,
 
     pub vertices_arena: Arena<VertexArenaMarker>,
     pub indices_arena: Arena<IndexArenaMarker>,
 }
-impl TextState {
+impl GenericRenderer {
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("text"),
+            label: Some("generic"),
             entries: &[
                 // Mask texture atlas
                 wgpu::BindGroupLayoutEntry {
@@ -134,7 +59,7 @@ impl TextState {
     }
     fn create_bind_group(ctx: &GraphicsContext, layout: &wgpu::BindGroupLayout) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("text"),
+            label: Some("generic"),
             layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -153,7 +78,7 @@ impl TextState {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&ctx.device.create_sampler(
                         &wgpu::SamplerDescriptor {
-                            label: Some("text"),
+                            label: Some("generic"),
                             ..Default::default()
                         },
                     )),
@@ -170,7 +95,7 @@ impl TextState {
         let module = device.create_shader_module(wgpu::include_wgsl!("./shader.wgsl"));
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("text"),
-            bind_group_layouts: &[viewport.bind_group_layout(), &bind_group_layout],
+            bind_group_layouts: &[viewport.bind_group_layout(), bind_group_layout],
             immediate_size: 0,
         });
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -180,7 +105,7 @@ impl TextState {
                 module: &module,
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[TextVertex::buffer_layout()],
+                buffers: &[Vertex::buffer_layout()],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -204,7 +129,7 @@ impl TextState {
         })
     }
 }
-impl TextState {
+impl GenericRenderer {
     pub fn new(
         ctx: &GraphicsContext,
         viewport_binds: &ViewportBinds,
@@ -225,12 +150,12 @@ impl TextState {
     }
 }
 
-impl TextState {
+impl GenericRenderer {
     #[inline(always)]
     pub fn insert_mesh(
         &mut self,
         ctx: &GraphicsContext,
-        mesh: Mesh<TextVertex>,
+        mesh: Mesh<Vertex>,
     ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
         AllocMesh {
             vertices: self.vertices_arena.insert(
@@ -251,7 +176,7 @@ impl TextState {
         &mut self,
         ctx: &GraphicsContext,
         alloc: AllocMesh<VertexArenaMarker, IndexArenaMarker>,
-        new: Mesh<TextVertex>,
+        new: Mesh<Vertex>,
     ) -> AllocMesh<VertexArenaMarker, IndexArenaMarker> {
         AllocMesh {
             vertices: self.vertices_arena.update(
@@ -276,7 +201,7 @@ impl TextState {
     }
 }
 
-impl TextState {
+impl GenericRenderer {
     #[inline(always)]
     #[profiling::function]
     pub fn swap_pipeline(
@@ -308,7 +233,7 @@ impl TextState {
         render_pass.draw_indexed(
             (alloc.indices.byte_index() / 4) as u32
                 ..((alloc.indices.byte_index() + alloc.indices.len()) / 4) as u32,
-            (alloc.vertices.byte_index() / size_of::<TextVertex>()) as i32,
+            (alloc.vertices.byte_index() / size_of::<Vertex>()) as i32,
             0..1,
         );
     }
