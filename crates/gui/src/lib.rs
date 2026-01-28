@@ -30,6 +30,7 @@ use crate::{
 pub mod prelude {
     pub use crate::{
         events::{EventContext, EventPhase, *},
+        tree::builder::ErasedBuilder,
         zindex::ZIndexProperties,
     };
     pub use color;

@@ -65,6 +65,76 @@ impl<'a> TraversePartialTree for TaffyTree<'a> {
 
 impl<'a> TraverseTree for TaffyTree<'a> {}
 
+impl<'a> TaffyTree<'a> {
+    #[inline(always)]
+    /// Unified implementation that both `LayoutPartialTree::compute_child_layout`
+    /// and `LayoutBlockContainer::compute_block_child_layout` delegate to.
+    fn compute_child_layout_impl(
+        &mut self,
+        node: NodeId,
+        inputs: taffy::LayoutInput,
+        block_ctx: Option<&mut taffy::BlockContext<'_>>,
+    ) -> taffy::LayoutOutput {
+        // If RunMode is PerformHiddenLayout then this indicates that an ancestor node is `Display::None`
+        // and thus that we should lay out this node using hidden layout regardless of it's own display style.
+        if inputs.run_mode == taffy::RunMode::PerformHiddenLayout {
+            return taffy::compute_hidden_layout(self, node);
+        }
+
+        // We run the following wrapped in "compute_cached_layout", which will check the cache for an entry matching the node and inputs and:
+        //   - Return that entry if exists
+        //   - Else call the passed closure (below) to compute the result
+        //
+        // If there was no cache match and a new result needs to be computed then that result will be added to the cache
+        taffy::compute_cached_layout(self, node, inputs, |tree, node, inputs| {
+            let style = tree
+                .alloc
+                .get(node.into())
+                .expect("tried to get the style for a node not in the tree")
+                .get_style();
+
+            let display_mode = style.display;
+            let has_children = tree.child_count(node) > 0;
+
+            // Dispatch to a layout algorithm based on the node's display style and whether the node has children or not.
+            match (display_mode, has_children) {
+                (taffy::Display::None, _) => taffy::compute_hidden_layout(tree, node),
+                (taffy::Display::Block, true) => {
+                    taffy::compute_block_layout(tree, node, inputs, block_ctx)
+                }
+                (taffy::Display::Flex, true) => taffy::compute_flexbox_layout(tree, node, inputs),
+                (taffy::Display::Grid, true) => taffy::compute_grid_layout(tree, node, inputs),
+                (_, false) => {
+                    let style_clone = style.clone();
+
+                    {
+                        // // SAFETY:
+                        // // The renderer is borrowed only while computing a leaf layout.
+                        // // `compute_leaf_layout` calls the measure closure synchronously, and leaf
+                        // // measurement does not have access to the tree, and hence can't re-borrow.
+                        // let mut renderer = tree.renderer.borrow_mut();
+                        // let measure_ctx: &mut dyn MeasureCtx = &mut *renderer;
+                        let measure_function = |known_dimensions, available_space| {
+                            tree.alloc
+                                .get_mut(node.into())
+                                .expect("tried to measure a node not in the tree")
+                                .measure(
+                                    tree.measure_ctx,
+                                    known_dimensions,
+                                    available_space,
+                                    &style_clone,
+                                )
+                        };
+                        // INFO: we do not use the calc (hence why style can be send), hence we return
+                        // zero for the calc fn.
+                        taffy::compute_leaf_layout(inputs, &style, |_, _| 0.0, measure_function)
+                    }
+                }
+            }
+        })
+    }
+}
+
 impl<'a> LayoutPartialTree for TaffyTree<'a> {
     type CoreContainerStyle<'b>
         = Style
@@ -97,61 +167,7 @@ impl<'a> LayoutPartialTree for TaffyTree<'a> {
         node: NodeId,
         inputs: taffy::LayoutInput,
     ) -> taffy::LayoutOutput {
-        // If RunMode is PerformHiddenLayout then this indicates that an ancestor node is `Display::None`
-        // and thus that we should lay out this node using hidden layout regardless of it's own display style.
-        if inputs.run_mode == taffy::RunMode::PerformHiddenLayout {
-            return taffy::compute_hidden_layout(self, node);
-        }
-
-        // We run the following wrapped in "compute_cached_layout", which will check the cache for an entry matching the node and inputs and:
-        //   - Return that entry if exists
-        //   - Else call the passed closure (below) to compute the result
-        //
-        // If there was no cache match and a new result needs to be computed then that result will be added to the cache
-        taffy::compute_cached_layout(self, node, inputs, |tree, node, inputs| {
-            let style = tree
-                .alloc
-                .get(node.into())
-                .expect("tried to get the style for a node not in the tree")
-                .get_style();
-
-            let display_mode = style.display;
-            let has_children = tree.child_count(node) > 0;
-
-            // Dispatch to a layout algorithm based on the node's display style and whether the node has children or not.
-            match (display_mode, has_children) {
-                (taffy::Display::None, _) => taffy::compute_hidden_layout(tree, node),
-                (taffy::Display::Block, true) => taffy::compute_block_layout(tree, node, inputs),
-                (taffy::Display::Flex, true) => taffy::compute_flexbox_layout(tree, node, inputs),
-                (taffy::Display::Grid, true) => taffy::compute_grid_layout(tree, node, inputs),
-                (_, false) => {
-                    let style_clone = style.clone();
-
-                    {
-                        // // SAFETY:
-                        // // The renderer is borrowed only while computing a leaf layout.
-                        // // `compute_leaf_layout` calls the measure closure synchronously, and leaf
-                        // // measurement does not have access to the tree, and hence can't re-borrow.
-                        // let mut renderer = tree.renderer.borrow_mut();
-                        // let measure_ctx: &mut dyn MeasureCtx = &mut *renderer;
-                        let measure_function = |known_dimensions, available_space| {
-                            tree.alloc
-                                .get_mut(node.into())
-                                .expect("tried to measure a node not in the tree")
-                                .measure(
-                                    tree.measure_ctx,
-                                    known_dimensions,
-                                    available_space,
-                                    &style_clone,
-                                )
-                        };
-                        // INFO: we do not use the calc (hence why style can be send), hence we return
-                        // zero for the calc fn.
-                        taffy::compute_leaf_layout(inputs, &style, |_, _| 0.0, measure_function)
-                    }
-                }
-            }
-        })
+        self.compute_child_layout_impl(node, inputs, None)
     }
 }
 
@@ -218,6 +234,15 @@ impl<'a> LayoutBlockContainer for TaffyTree<'a> {
             .get(child_node_id.into())
             .expect("called get_block_child_style for a node not in the tree")
             .get_style()
+    }
+
+    fn compute_block_child_layout(
+        &mut self,
+        node_id: NodeId,
+        inputs: taffy::LayoutInput,
+        block_ctx: Option<&mut taffy::BlockContext<'_>>,
+    ) -> taffy::LayoutOutput {
+        self.compute_child_layout_impl(node_id, inputs, block_ctx)
     }
 }
 
