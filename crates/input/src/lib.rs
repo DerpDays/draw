@@ -9,6 +9,8 @@ pub mod sctk;
 #[cfg(feature = "winit")]
 pub mod winit;
 
+// TODO: It might be good to rely on some of the [`keyboard-types`] crate definitions
+
 /// A unique identifier for a pointer.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

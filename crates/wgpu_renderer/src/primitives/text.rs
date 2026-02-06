@@ -20,7 +20,7 @@ use parley::{
 };
 use swash::{
     FontRef,
-    scale::{Render, Scaler, Source, StrikeWith, image::Content},
+    scale::{Render, ScaleContext, Scaler, Source, StrikeWith, image::Content},
     zeno::{Format, Vector},
 };
 
@@ -37,6 +37,7 @@ use crate::{
     shaders::generic::{Vertex, VertexKind},
 };
 
+#[profiling::function]
 pub fn render_text(
     ctx: &mut GraphicsContext,
     text: &Text,
@@ -52,6 +53,7 @@ pub fn render_text(
         text.color,
         &text.text_layout,
         Some(text.size.width),
+        1.25,
     );
 
     // let cursor = Cursor::from_byte_index(&layout, 3, parley::Affinity::Downstream);
@@ -65,23 +67,29 @@ pub fn render_text(
         color_textures: Vec::new(),
     };
 
-    log::info!("rendering text");
+    let &mut GraphicsContext {
+        ref device,
+        ref queue,
+        ref mut texture_state,
+        ref mut text_state,
+        ..
+    }: &mut GraphicsContext = ctx;
+
+    log::trace!("rendering text primitive");
     for line in layout.lines() {
-        log::info!("rendering line {:?}", line.is_empty());
         for item in line.items() {
-            log::info!("rendering item");
             match item {
                 PositionedLayoutItem::GlyphRun(glyph_run) => {
-                    // renderer.render_glyph_run(&glyph_run, start_position);
-
-                    GlyphRunRenderer::new(
+                    let mut renderer = GlyphRunRenderer::new(
                         &mut mesh,
                         &mut new_cache,
-                        ctx,
+                        device,
+                        queue,
+                        texture_state,
                         &glyph_run,
                         start_position,
-                    )
-                    .render();
+                    );
+                    renderer.render(&mut text_state.scale_ctx);
                 }
                 PositionedLayoutItem::InlineBox(inline_box) => {
                     mesh.append(
@@ -107,32 +115,37 @@ pub fn render_text(
     mesh
 }
 
+#[profiling::function]
 pub fn prepare_text_layout(
     ctx: &mut GraphicsContext,
-    text: &String,
+    text: &str,
     color: AlphaColor<Srgb>,
     options: &TextLayoutOptions,
     max_width: Option<f32>,
+    scale: f32,
 ) -> Layout<ColorBrush> {
+    let style = parley::TextStyle {
+        font_stack: FontStack::Single(options.font_family.clone().into()),
+        font_size: options.font_size,
+        font_width: options.font_width.into(),
+        font_style: options.font_style.into(),
+        font_weight: options.font_weight.into(),
+        brush: ColorBrush {
+            color: color.convert().premultiply(),
+        },
+        line_height: options.line_height.into(),
+        word_break: options.word_break_strength.into(),
+        overflow_wrap: options.overflow_wrap.into(),
+        ..Default::default()
+    };
     let mut builder =
         ctx.text_state
             .layout_ctx
-            .ranged_builder(&mut ctx.text_state.font_ctx, text, 1.25, true);
+            .tree_builder(&mut ctx.text_state.font_ctx, scale, true, &style);
+    builder.set_white_space_mode(options.whitespace_collapse.into());
+    builder.push_text(text);
 
-    // Set default text colour styles (set foreground text color)
-    let color_brush = ColorBrush {
-        color: color.convert().premultiply(),
-    };
-    let brush_style = StyleProperty::Brush(color_brush);
-    let font_stack = FontStack::Single(options.font_family.clone().into());
-    builder.push_default(brush_style);
-    builder.push_default(font_stack);
-    builder.push_default(StyleProperty::LineHeight(options.line_height.into()));
-    builder.push_default(StyleProperty::FontSize(options.font_size));
-    builder.push_default(StyleProperty::FontWeight(options.font_weight.into()));
-    builder.push_default(StyleProperty::OverflowWrap(options.overflow_wrap.into()));
-
-    let mut layout: Layout<ColorBrush> = builder.build(text);
+    let mut layout: Layout<ColorBrush> = builder.build().0;
     layout.break_all_lines(max_width);
     layout.align(max_width, Alignment::Start, AlignmentOptions::default());
     layout
@@ -150,7 +163,7 @@ struct GlyphRunRenderer<'a> {
     mesh: &'a mut Mesh<Vertex>,
     cache: &'a mut PrimitiveCache,
 
-    scaler: Scaler<'a>,
+    // scale_ctx: &'a mut ScaleContext,
     texture_state: &'a mut TextureState,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
@@ -162,48 +175,79 @@ struct GlyphRunRenderer<'a> {
     font_size: f32,
 }
 
+// 1. Define this helper enum
+enum LazyScaler<'a> {
+    // We have the context, ready to build a scaler if needed
+    Uninitialized {
+        ctx: &'a mut swash::scale::ScaleContext,
+        font_ref: FontRef<'a>,
+        font_size: f32,
+        normalized_coords: &'a [i16],
+    },
+    // We have built the scaler
+    Initialized(Box<Scaler<'a>>),
+    // A temporary state required for safe memory swapping
+    Poisoned,
+}
+
+impl<'a> LazyScaler<'a> {
+    // Helper to get the scaler, transitioning state if necessary
+    #[profiling::function]
+    fn get(&mut self) -> &mut Scaler<'a> {
+        // If we are still Uninitialized, we must transition
+        if let LazyScaler::Uninitialized { .. } = self {
+            // 1. Take the context out, leaving "Poisoned" in its place
+            //    (This satisfies the borrow checker: we now OWN the reference temporarily)
+            let old_state = std::mem::replace(self, LazyScaler::Poisoned);
+
+            if let LazyScaler::Uninitialized {
+                ctx,
+                font_ref,
+                font_size,
+                normalized_coords,
+            } = old_state
+            {
+                profiling::scope!("building font scaler");
+                // 2. Build the scaler
+                let scaler = ctx
+                    .builder(font_ref)
+                    .size(font_size)
+                    .hint(true)
+                    .normalized_coords(normalized_coords)
+                    .build();
+
+                // 3. Put the new scaler back into self
+                *self = LazyScaler::Initialized(Box::new(scaler));
+            }
+        }
+
+        // Return a mutable reference to the scaler
+        match self {
+            LazyScaler::Initialized(scaler) => scaler,
+            _ => unreachable!("LazyScaler logic error: state should be Initialized"),
+        }
+    }
+}
+
 impl<'a> GlyphRunRenderer<'a> {
+    #[profiling::function]
     pub fn new(
         mesh: &'a mut Mesh<Vertex>,
         cache: &'a mut PrimitiveCache,
-        ctx: &'a mut GraphicsContext,
-        // scale_ctx: &'a mut ScaleContext,
-        // texture_state: &'a mut ScaleContext,
+
+        device: &'a wgpu::Device,
+        queue: &'a wgpu::Queue,
+        texture_state: &'a mut TextureState,
+
         glyph_run: &'a GlyphRun<'a, ColorBrush>,
         start_position: Point2D<f32>,
     ) -> Self {
-        let &mut GraphicsContext {
-            ref device,
-            ref queue,
-            ref mut texture_state,
-            ref mut text_state,
-            ..
-        }: &mut GraphicsContext = ctx;
-        // Get the "Run" from the "GlyphRun"
         let run = glyph_run.run();
 
-        // Resolve properties of the Run
-        let font = run.font();
-        let font_size = run.font_size();
-        let normalized_coords = run.normalized_coords();
-
-        // Convert from parley::Font to swash::FontRef
-        let font_ref = FontRef::from_index(font.data.as_ref(), font.index as usize).unwrap();
-
-        // Build a scaler. As the font properties are constant across an entire run of glyphs
-        // we can build one scaler for the run and reuse it for each glyph.
-        let scaler = text_state
-            .scale_ctx
-            .builder(font_ref)
-            .size(font_size)
-            .hint(true)
-            .normalized_coords(normalized_coords)
-            .build();
         Self {
             mesh,
             cache,
 
-            scaler,
             texture_state,
             device,
             queue,
@@ -211,40 +255,62 @@ impl<'a> GlyphRunRenderer<'a> {
             glyph_run,
             start_position,
 
-            font_index: font.index,
-            font_size,
+            font_index: run.font().index,
+            font_size: run.font_size(),
         }
     }
 
-    fn render(&mut self) {
-        let color = self.glyph_run.style().brush.color;
-        log::info!("rendering glyph run {color:?}");
-        // Resolve properties of the GlyphRun
+    #[profiling::function]
+    fn render(&mut self, scale_context: &'a mut ScaleContext) {
+        log::trace!("rendering glyph run");
         let mut run_x = self.glyph_run.offset() + self.start_position.x;
         let run_y = self.glyph_run.baseline() + self.start_position.y;
         let style = self.glyph_run.style();
 
-        // Iterates over the glyphs in the GlyphRun
+        let mut lazy_scaler = LazyScaler::Uninitialized {
+            ctx: scale_context,
+            font_ref: FontRef::from_index(
+                self.glyph_run.run().font().data.as_ref(),
+                self.font_index as usize,
+            )
+            .expect("failed to create font_ref"),
+            font_size: self.font_size,
+            normalized_coords: self.glyph_run.run().normalized_coords(),
+        };
+
         for glyph in self.glyph_run.glyphs() {
             let glyph_x = run_x + glyph.x;
             let glyph_y = run_y - glyph.y;
             run_x += glyph.advance;
 
-            if let Err(e) = self.render_glyph(glyph, glyph_x, glyph_y) {
-                log::error!("failed to render glyph in run: {e}");
-            };
+            let cache_key = CacheKey::Text(GlyphCacheKey {
+                font_index: self.font_index,
+                glyph_id: glyph.id,
+                font_size_bits: self.font_size.to_bits(),
+            });
+            let position = Point2D::new(glyph_x, glyph_y);
+
+            if self.try_glyph_cache(cache_key.clone(), position).is_some() {
+                continue;
+            }
+
+            if let Err(e) =
+                self.rasterize_glyph(glyph, glyph_x, glyph_y, cache_key, &mut lazy_scaler)
+            {
+                log::error!("failed to render glyph: {e}");
+            }
         }
 
         // Draw decorations: underline & strikethrough
         let run_metrics = self.glyph_run.run().metrics();
         if let Some(decoration) = &style.underline {
-            log::info!("decoration");
+            log::trace!("rendering glyph underline");
             let offset = decoration.offset.unwrap_or(run_metrics.underline_offset);
             let size = decoration.size.unwrap_or(run_metrics.underline_size);
             self.render_decoration(offset, size);
         }
         if let Some(decoration) = &style.strikethrough {
-            log::info!("decoration");
+            log::trace!("rendering glyph strikethrough");
             let offset = decoration
                 .offset
                 .unwrap_or(run_metrics.strikethrough_offset);
@@ -271,6 +337,7 @@ impl<'a> GlyphRunRenderer<'a> {
         }
     }
 
+    #[profiling::function]
     fn try_generic_glyph_cache<F: AtlasFormat>(
         mesh: &mut Mesh<Vertex>,
         cache_key: CacheKey,
@@ -297,6 +364,7 @@ impl<'a> GlyphRunRenderer<'a> {
         Some(())
     }
 
+    #[profiling::function]
     fn try_glyph_cache(&mut self, cache_key: CacheKey, position: Point2D<f32>) -> Option<()> {
         let fill = self.glyph_run.style().brush.color;
         if Self::try_generic_glyph_cache(
@@ -323,53 +391,34 @@ impl<'a> GlyphRunRenderer<'a> {
         Some(())
     }
 
-    fn render_glyph(
+    #[profiling::function]
+    fn rasterize_glyph(
         &mut self,
         glyph: Glyph,
         glyph_x: f32,
         glyph_y: f32,
+        cache_key: CacheKey,
+        lazy_scaler: &mut LazyScaler<'a>,
     ) -> Result<(), GlyphRunError> {
-        // TODO: try get glyphs from atlas first before rendering
-
-        let cache_key = CacheKey::Text(GlyphCacheKey {
-            font_index: self.font_index,
-            glyph_id: glyph.id,
-            font_size_bits: self.font_size.to_bits(),
-        });
-        let position = Point2D::new(glyph_x, glyph_y);
-
-        if self.try_glyph_cache(cache_key.clone(), position).is_some() {
-            return Ok(());
-        };
-
-        // Compute the fractional offset
-        // You'll likely want to quantize this in a real renderer
         let offset = Vector::new(glyph_x.fract(), glyph_y.fract());
 
-        // Render the glyph using swash
-        let rendered_glyph = Render::new(
-            // Select our source order
-            &[
-                Source::ColorOutline(0),
-                Source::ColorBitmap(StrikeWith::BestFit),
-                Source::Outline,
-            ],
-        )
-        // Select the simple alpha (non-subpixel) format
+        let rendered_glyph = Render::new(&[
+            Source::ColorOutline(0),
+            Source::ColorBitmap(StrikeWith::BestFit),
+            Source::Outline,
+        ])
         .format(Format::Alpha)
-        // Apply the fractional offset
         .offset(offset)
-        // Render the image
-        .render(&mut self.scaler, glyph.id as u16)
+        .render(lazy_scaler.get(), glyph.id as u16)
         .ok_or(GlyphRunError::FailedToRasterise)?;
 
         let glyph_width = rendered_glyph.placement.width;
         let glyph_height = rendered_glyph.placement.height;
-        let glyph_x = (glyph_x.floor() as i32 + rendered_glyph.placement.left) as u32;
-        let glyph_y = (glyph_y.floor() as i32 - rendered_glyph.placement.top) as u32;
+        let glyph_x_int = (glyph_x.floor() as i32 + rendered_glyph.placement.left) as u32;
+        let glyph_y_int = (glyph_y.floor() as i32 - rendered_glyph.placement.top) as u32;
 
         let glyph_area = Box2D::from_origin_and_size(
-            Point2D::new(glyph_x as f32, glyph_y as f32),
+            Point2D::new(glyph_x_int as f32, glyph_y_int as f32),
             Size2D::new(glyph_width as f32, glyph_height as f32),
         );
 
@@ -380,7 +429,6 @@ impl<'a> GlyphRunRenderer<'a> {
         );
 
         match rendered_glyph.content {
-            Content::SubpixelMask => unimplemented!(),
             Content::Mask => {
                 let allocated_glyph = self
                     .texture_state
@@ -393,6 +441,7 @@ impl<'a> GlyphRunRenderer<'a> {
                         TextureData::Text(TextData::from_swash(&rendered_glyph)),
                     )
                     .map_err(|e| GlyphRunError::AtlasAllocationFailure(e.to_string()))?;
+
                 self.mesh.append_mesh(Self::glyph_to_mesh(
                     glyph_area,
                     &allocated_glyph,
@@ -414,6 +463,7 @@ impl<'a> GlyphRunRenderer<'a> {
                         TextureData::Text(TextData::from_swash(&rendered_glyph)),
                     )
                     .map_err(|e| GlyphRunError::AtlasAllocationFailure(e.to_string()))?;
+
                 self.mesh.append_mesh(Self::glyph_to_mesh(
                     glyph_area,
                     &allocated_glyph,
@@ -423,7 +473,8 @@ impl<'a> GlyphRunRenderer<'a> {
                 ));
                 self.cache.color_textures.push(allocated_glyph);
             }
-        };
+            _ => unimplemented!(),
+        }
         Ok(())
     }
 

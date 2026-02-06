@@ -55,16 +55,15 @@ impl PrimitiveToMesh for Primitive {
         cache: &mut Option<PrimitiveCache>,
     ) -> PrimitiveMesh {
         match self {
-            Primitive::Ellipse(ellipse) => todo!(),
-            Primitive::Line(line) => todo!(),
-            Primitive::CubicBezier(cubic_bezier) => todo!(),
-            Primitive::Pen(pen) => todo!(),
-            Primitive::Quad(quad) => todo!(),
+            Primitive::Ellipse(_ellipse) => todo!(),
+            Primitive::Line(_line) => todo!(),
+            Primitive::CubicBezier(_cubic_bezier) => todo!(),
+            Primitive::Pen(_pen) => todo!(),
+            Primitive::Quad(_quad) => todo!(),
             Primitive::Rectangle(rectangle) => PrimitiveMesh::Generic(render_rectangle(rectangle)),
             Primitive::Svg(svg) => PrimitiveMesh::Generic(render_svg(ctx, svg, cache)),
             Primitive::Text(text) => PrimitiveMesh::Generic(render_text(ctx, text, cache)),
-            Primitive::Text(text) => todo!(),
-            Primitive::Triangle(triangle) => todo!(),
+            Primitive::Triangle(_triangle) => todo!(),
             Primitive::Custom(custom) => {
                 let Some(primitive) = custom.as_any().downcast_ref::<TexturePrimitive>() else {
                     panic!("tried to draw custom primitive that is not part of wgpu_renderer");
@@ -76,7 +75,6 @@ impl PrimitiveToMesh for Primitive {
                     ),
                     primitive.bind_group.clone().into(),
                 ))
-                // let Some(bind_group) =
             }
         }
     }

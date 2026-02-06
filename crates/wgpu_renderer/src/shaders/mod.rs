@@ -153,7 +153,7 @@ impl RendererPass<'_> {
                     .render_bind_group(&mut self.render_pass, key, bind_group);
             }
             Alloc::Empty => {
-                log::warn!("tried to render an empty element");
+                log::trace!("tried to render an empty element");
             }
         }
     }
@@ -169,11 +169,11 @@ impl GuiRenderer for WgpuRenderer {
         // if already existing
         if let Some(entry) = self.gui_cache.get_mut(&elem_id) {
             if entry.previous_elem != primitive {
-                log::info!("updating primitive: {primitive:?}");
+                log::trace!("updating primitive: {primitive:?}");
                 let mesh = primitive.to_mesh(&mut self.ctx, &mut entry.cache);
                 match mesh {
                     PrimitiveMesh::Generic(mesh) => {
-                        log::info!("mesh is: {:?} for basicshape {primitive:?}", mesh.vertices);
+                        log::trace!("mesh is: {:?} for basicshape {primitive:?}", mesh.vertices);
                         let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
 
                         if mesh.vertices.is_empty() {
@@ -197,7 +197,7 @@ impl GuiRenderer for WgpuRenderer {
                         }
                     }
                     PrimitiveMesh::Texture((vertices, bind_group)) => {
-                        log::info!("mesh updating texture primitive");
+                        log::trace!("mesh updating texture primitive");
                         let previous_alloc = std::mem::replace(&mut entry.alloc, Alloc::Empty);
 
                         // If the previous allocation was not empty, update the existing
@@ -259,21 +259,26 @@ impl GuiRenderer for WgpuRenderer {
 
 #[cfg(feature = "gui")]
 impl MeasureCtx for WgpuRenderer {
+    // FIXME: cache generated layout
     fn measure_text(
         &mut self,
-        text: graphics::primitives::TextMeasure,
+        text: String,
+        text_layout: graphics::primitives::TextLayoutOptions,
+        available_space_width: graphics::primitives::AvailableSpace,
+        max_width: Option<f32>,
     ) -> gui::reexports::taffy::Size<f32> {
         let layout = crate::primitives::prepare_text_layout(
             &mut self.ctx,
-            &text.text,
+            &text,
             color::AlphaColor::BLACK,
-            &text.text_layout,
-            text.max_width.or(match text.available_space_width {
+            &text_layout,
+            max_width.or(match available_space_width {
                 graphics::primitives::AvailableSpace::Definite(x) => Some(x),
                 _ => None,
             }),
+            1.25,
         );
-        let width = match text.available_space_width {
+        let width = match available_space_width {
             graphics::primitives::AvailableSpace::Definite(_) => layout.width(),
             graphics::primitives::AvailableSpace::MinContent => {
                 layout.calculate_content_widths().min + 1.

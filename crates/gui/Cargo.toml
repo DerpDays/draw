@@ -20,6 +20,10 @@ euclid = { workspace = true }
 profiling = { workspace = true }
 
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { workspace = true }
+
+
 [features]
 default = ["accesskit"]
 accesskit = ["dep:accesskit"]

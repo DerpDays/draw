@@ -1,109 +1,20 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::Cell, rc::Rc};
 
 use graphics::Primitive;
 use sycamore_reactive::{NodeHandle, create_child_scope, create_effect};
 use taffy::{AvailableSpace, Layout, Size};
 
 use crate::{
-    ElementId,
     MeasureCtx,
     TreeManager,
-    tree::{Widget, builder::ErasedBuilder},
+    tree::{
+        Widget,
+        builder::{BuilderList, ElementBuilder},
+    },
 };
-
-pub struct ReactiveChildren {
-    closure: Rc<dyn Fn() -> Vec<Box<dyn ErasedBuilder>>>,
-    parent_id: ElementId,
-    // Store (child_id, scope_handle) pairs
-    current_children: Rc<RefCell<Vec<(ElementId, NodeHandle)>>>,
-}
-
-impl ReactiveChildren {
-    pub fn new<F>(closure: F, parent_id: ElementId) -> Self
-    where
-        F: Fn() -> Vec<Box<dyn ErasedBuilder>> + 'static,
-    {
-        Self {
-            closure: Rc::new(closure),
-            parent_id,
-            current_children: Rc::new(RefCell::new(Vec::new())),
-        }
-    }
-
-    pub fn setup_effect(&self) {
-        let closure = self.closure.clone();
-        let parent_id = self.parent_id;
-        let current_children = self.current_children.clone();
-        let mgr = TreeManager::global();
-
-        create_effect(move || {
-            // Call the closure to get new children
-            let new_builders = closure();
-
-            let mut children_guard = current_children.borrow_mut();
-            let current_len = children_guard.len();
-            let new_len = new_builders.len();
-
-            // Simple diff: if length changed, remove all and rebuild
-            // This can be optimized later with proper key-based diffing
-            if current_len != new_len {
-                // Dispose all existing scopes and remove children
-                // We need to dispose scopes in the reactive context (here),
-                // then queue the removal
-                let child_ids_to_remove: Vec<ElementId> = children_guard
-                    .drain(..)
-                    .map(|(child_id, scope_handle)| {
-                        // Dispose the scope first to clean up effects
-                        log::trace!("disposing of reactive child {child_id:?}");
-                        scope_handle.dispose();
-                        child_id
-                    })
-                    .collect();
-
-                // Queue removal of all children (scopes already disposed)
-                for child_id in child_ids_to_remove {
-                    mgr.queue_remove_child(parent_id, child_id, None::<fn()>);
-                }
-
-                // Add new children, each with its own scope
-                for builder in new_builders {
-                    let children_for_callback = current_children.clone();
-
-                    // Create a scope for this child
-                    // The scope closure runs immediately, and any effects created
-                    // within it will be scoped to this handle
-                    let scope_handle = create_child_scope(|| {
-                        // Empty - we just need the scope to exist
-                        // The scope handle will be used to track this child's lifecycle
-                    });
-
-                    // Queue adding the child with a callback
-                    // The callback will store the child_id -> scope_handle mapping
-                    mgr.queue_add_child(
-                        parent_id,
-                        builder,
-                        Some(move |child_id| {
-                            // Callback to store the mapping when child is added
-                            let mut children = children_for_callback.borrow_mut();
-                            children.push((child_id, scope_handle));
-                        }),
-                    );
-                }
-            }
-
-            mgr.now();
-        });
-    }
-
-    pub fn add_child_mapping(&self, child_id: ElementId, scope_handle: NodeHandle) {
-        let mut children = self.current_children.borrow_mut();
-        children.push((child_id, scope_handle));
-    }
-}
 
 impl Widget for ReactiveChildren {
     fn render(&mut self, _layout: &Layout, _style: &taffy::Style) -> Option<Primitive> {
-        // ReactiveChildren is a container widget, it doesn't render itself
         None
     }
 
@@ -118,10 +29,59 @@ impl Widget for ReactiveChildren {
     }
 
     fn debug_label(&self) -> &'static str {
-        "ReactiveChildren"
+        "Reactive Children"
     }
 
     fn focusable(&self) -> bool {
         false
     }
+}
+
+pub struct ReactiveChildren {
+    scope: Rc<Cell<NodeHandle>>,
+}
+
+/// Add reactive children that are dynamically created/removed based on a closure.
+///
+/// The closure is called reactively, and whenever its output changes, children are
+/// automatically added or removed. Each child gets its own reactive scope that is
+/// properly disposed when the child is removed.
+///
+/// # Example
+/// ```rust,ignore
+/// let items = create_signal(vec!["a", "b", "c"]);
+/// div().child(
+///     reactive(|| {
+///         items.get().into_iter().map(|item| {
+///             div().child(text(item))
+///         }).collect::<Vec<_>>()
+///     })
+/// )
+/// ```
+pub fn reactive<F>(f: F) -> ElementBuilder<ReactiveChildren>
+where
+    F: Fn() -> BuilderList + 'static + Clone,
+{
+    let scope = Rc::new(Cell::new(create_child_scope(|| {})));
+    let current_scope = sycamore_reactive::use_current_scope();
+
+    ElementBuilder::new(
+        ReactiveChildren {
+            scope: scope.clone(),
+        },
+        // |inner| inner.scope.set(Some(create_child_scope(|| {}))),
+    )
+    .append_after_build(move |elem_id| {
+        let mgr = TreeManager::global();
+        let f = f.clone();
+        let scope = scope.clone();
+        create_effect(move || {
+            let new_scope = current_scope.run_in(|| create_child_scope(|| {}));
+            let old_scope = scope.replace(new_scope);
+            // .expect("we always have a scope set for a reactive element");
+
+            let children_builders = new_scope.run_in(|| f().0);
+            mgr.queue_replace_children(elem_id, children_builders, old_scope, new_scope);
+        })
+    })
 }

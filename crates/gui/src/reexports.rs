@@ -1,4 +1,4 @@
-pub mod reactive {
+pub mod reactivity {
     pub use sycamore_reactive::*;
 
     pub fn maybe_get_untracked<T: Copy + Into<MaybeDyn<T>>>(maybe_dyn: &MaybeDyn<T>) -> T {

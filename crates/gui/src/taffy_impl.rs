@@ -154,7 +154,7 @@ impl<'a> LayoutPartialTree for TaffyTree<'a> {
         self.alloc
             .get_mut(node_id.into())
             .expect("called set_unrounded_layout for a node not in the tree")
-            .set_unrounded_layout(*layout);
+            .set_relative_unrounded_layout(*layout);
     }
 
     fn resolve_calc_value(&self, _val: *const (), _basis: f32) -> f32 {
@@ -304,14 +304,14 @@ impl<'a> RoundTree for TaffyTree<'a> {
             .alloc
             .get(node_id.into())
             .expect("called get_unrounded_layout for a node not in the tree")
-            .get_unrounded_layout()
+            .get_relative_unrounded_layout()
     }
 
     fn set_final_layout(&mut self, node_id: NodeId, layout: &Layout) {
         self.alloc
             .get_mut(node_id.into())
             .expect("called set_final_layout for a node not in the tree")
-            .set_final_layout(*layout);
+            .set_relative_final_layout(*layout);
     }
 }
 
@@ -328,6 +328,6 @@ impl<'a> PrintTree for TaffyTree<'a> {
             .alloc
             .get(node_id.into())
             .expect("called get_final_layout for a node not in the tree")
-            .get_final_layout()
+            .get_relative_final_layout()
     }
 }

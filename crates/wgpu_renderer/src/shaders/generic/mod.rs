@@ -6,7 +6,6 @@ use crate::{
 };
 
 mod vertex;
-use euclid::default::Box2D;
 pub use vertex::{Vertex, VertexKind};
 
 pub struct VertexArenaMarker;
@@ -225,8 +224,8 @@ impl GenericRenderer {
         render_pass: &mut wgpu::RenderPass,
         alloc: &AllocMesh<VertexArenaMarker, IndexArenaMarker>,
     ) {
-        log::info!(
-            "rendering text alloc vertices: {:?} indices: {:?}",
+        log::trace!(
+            "rendering generic alloc vertices: {:?} indices: {:?}",
             alloc.vertices.len(),
             alloc.indices.len()
         );

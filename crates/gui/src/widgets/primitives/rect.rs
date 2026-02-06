@@ -1,58 +1,57 @@
-use std::{
-    cell::Cell,
-    time::{Duration, Instant},
-};
+use crate::time::Instant;
+use core::time::Duration;
+
+use std::cell::Cell;
 
 use color::AlphaColor;
-use euclid::default::{Point2D, Size2D};
+use euclid::default::{Point2D, SideOffsets2D, Size2D};
 use graphics::{BasicColor, Primitive, Rounding, primitives::Rectangle};
 use sycamore_reactive::{MaybeDyn, create_effect};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
-use crate::{AnimationHandle, MeasureCtx, reexports::reactive::maybe_get_untracked};
+use crate::{AnimationHandle, MeasureCtx, reexports::reactivity::maybe_get_untracked};
 
 use crate::{
     TreeManager,
     tree::{Widget, builder::ElementBuilder},
 };
 
-pub struct Div {
-    background: Option<BackgroundDiv>,
+pub struct Rect {
+    background: Option<BackgroundRect>,
 }
 
-struct BackgroundDiv {
-    options: MaybeDyn<DivOptions>,
+struct BackgroundRect {
+    options: MaybeDyn<RectOptions>,
 
     transition_duration: Option<Duration>,
     transition_state: Option<TransitionState>,
 
-    last_options: DivOptions,
+    last_options: RectOptions,
 }
 
 struct TransitionState {
     start: Instant,
 
-    from: DivOptions,
-    to: DivOptions,
+    from: RectOptions,
+    to: RectOptions,
 
-    last_set: DivOptions,
+    last_set: RectOptions,
 
     _animation_handle: AnimationHandle,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
-pub struct DivOptions {
+pub struct RectOptions {
     pub bg_color: Option<BasicColor>,
-    pub stroke_color: Option<BasicColor>,
-    pub stroke_width: Option<f32>,
+    pub border_color: Option<BasicColor>,
     pub rounding: Option<Rounding>,
 }
-impl From<DivOptions> for MaybeDyn<DivOptions> {
-    fn from(value: DivOptions) -> Self {
+impl From<RectOptions> for MaybeDyn<RectOptions> {
+    fn from(value: RectOptions) -> Self {
         MaybeDyn::Static(value)
     }
 }
-impl DivOptions {
+impl RectOptions {
     pub const fn bg_color(&self) -> BasicColor {
         if let Some(color) = self.bg_color {
             color
@@ -60,18 +59,11 @@ impl DivOptions {
             BasicColor::Solid(AlphaColor::TRANSPARENT)
         }
     }
-    pub const fn stroke_color(&self) -> BasicColor {
-        if let Some(color) = self.stroke_color {
+    pub const fn border_color(&self) -> BasicColor {
+        if let Some(color) = self.border_color {
             color
         } else {
             BasicColor::Solid(AlphaColor::TRANSPARENT)
-        }
-    }
-    pub const fn stroke_width(&self) -> f32 {
-        if let Some(width) = self.stroke_width {
-            width
-        } else {
-            0.
         }
     }
     pub const fn rounding(&self) -> Rounding {
@@ -81,29 +73,31 @@ impl DivOptions {
             Rounding::ZERO
         }
     }
-    pub fn to_rect(&self, origin: Point2D<f32>, size: Size2D<f32>) -> Rectangle {
+    pub fn to_rect(
+        &self,
+        origin: Point2D<f32>,
+        size: Size2D<f32>,
+        border: SideOffsets2D<f32>,
+    ) -> Rectangle {
         Rectangle {
             origin,
             size,
+            border,
             rounding: self.rounding(),
             color: self.bg_color(),
-            stroke_color: self.stroke_color(),
-            stroke_width: self.stroke_width(),
+            border_color: self.border_color(),
         }
     }
-    pub fn lerp(&self, other: &Self, t: f32) -> DivOptions {
+    pub fn lerp(&self, other: &Self, t: f32) -> RectOptions {
         Self {
             bg_color: Some(self.bg_color().lerp(other.bg_color(), t)),
-            stroke_color: Some(self.stroke_color().lerp(other.stroke_color(), t)),
-            stroke_width: Some(
-                self.stroke_width() + ((other.stroke_width() - self.stroke_width()) * t),
-            ),
+            border_color: Some(self.border_color().lerp(other.border_color(), t)),
             rounding: Some(self.rounding().lerp(&other.rounding(), t)),
         }
     }
 }
 
-impl Widget for Div {
+impl Widget for Rect {
     fn render(&mut self, layout: &Layout, _style: &Style) -> Option<Primitive> {
         let bg = self.background.as_mut()?;
 
@@ -149,12 +143,21 @@ impl Widget for Div {
             } else {
                 bg.last_options = state.to;
                 state.to
-            };
+            }
         };
 
         Some(Primitive::Rectangle(options.to_rect(
             Point2D::new(layout.location.x, layout.location.y),
-            Size2D::new(layout.size.width, layout.size.height),
+            Size2D::new(
+                layout.content_box_width().max(layout.size.width),
+                layout.content_box_height().max(layout.size.height),
+            ),
+            SideOffsets2D::new(
+                layout.border.top,
+                layout.border.right,
+                layout.border.bottom,
+                layout.border.left,
+            ),
         )))
     }
 
@@ -168,7 +171,7 @@ impl Widget for Div {
         known_dimensions.unwrap_or(Size::zero())
     }
     fn debug_label(&self) -> &'static str {
-        "Div"
+        "Rect"
     }
 
     fn focusable(&self) -> bool {
@@ -176,18 +179,18 @@ impl Widget for Div {
     }
 }
 
-pub fn div() -> ElementBuilder<Div> {
-    ElementBuilder::new(Div { background: None })
+pub fn rect() -> ElementBuilder<Rect> {
+    ElementBuilder::new(Rect { background: None })
 }
 
-impl ElementBuilder<Div> {
-    pub fn options(self, options: impl Into<MaybeDyn<DivOptions>>) -> Self {
+impl ElementBuilder<Rect> {
+    pub fn options(self, options: impl Into<MaybeDyn<RectOptions>>) -> Self {
         let options = options.into();
-        let bg_div = {
+        let bg_rect = {
             let _box_sizing = taffy::BoxSizing::default();
             let last_options = maybe_get_untracked(&options);
             // let rect = Rectangle::new(Point2D::zero(), Size2D::zero(), last_options);
-            BackgroundDiv {
+            BackgroundRect {
                 options: options.clone(),
                 // inner: rect,
                 transition_duration: None,
@@ -197,8 +200,8 @@ impl ElementBuilder<Div> {
             }
         };
 
-        let inner = Div {
-            background: Some(bg_div),
+        let inner = Rect {
+            background: Some(bg_rect),
         };
         self.set_inner(inner).append_after_build(move |_| {
             let mgr = TreeManager::global();
@@ -208,7 +211,7 @@ impl ElementBuilder<Div> {
             create_effect(move || {
                 options.track();
                 if !first_run.get() {
-                    log::debug!("updating div options");
+                    log::debug!("updating rect options");
                     mgr.now();
                 } else {
                     first_run.set(false);

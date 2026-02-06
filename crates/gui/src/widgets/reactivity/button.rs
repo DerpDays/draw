@@ -63,6 +63,20 @@ impl ButtonSignals {
             }
         })
     }
+
+    pub fn enabled(&self) -> ReadSignal<bool> {
+        self.enabled
+    }
+    pub fn active(&self) -> ReadSignal<bool> {
+        self.active
+    }
+
+    pub fn pressed(&self) -> Signal<bool> {
+        self.pressed
+    }
+    pub fn hovered(&self) -> Signal<bool> {
+        self.hovered
+    }
 }
 
 impl Widget for Button {
@@ -88,7 +102,6 @@ impl Widget for Button {
 
     fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>, _: &Layout) {
         if !ctx.in_capture_phase() {
-            log::info!("default mouse event!!");
             if !self.state.enabled.get_untracked() {
                 self.state.pressed.set(false);
                 self.state.hovered.set(false);

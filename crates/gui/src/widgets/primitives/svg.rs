@@ -1,8 +1,8 @@
 use std::{cell::Cell, sync::Arc};
 
+use color::{AlphaColor, Srgb};
 use euclid::default::{Point2D, Size2D};
 use graphics::{
-    BasicColor,
     Primitive,
     primitives::{self},
 };
@@ -12,7 +12,7 @@ use taffy::{AvailableSpace, Layout, Size, Style};
 use crate::{
     MeasureCtx,
     TreeManager,
-    reexports::reactive::maybe_get_clone_untracked,
+    reexports::reactivity::maybe_get_clone_untracked,
     tree::{Widget, builder::ElementBuilder},
 };
 
@@ -23,8 +23,8 @@ pub struct Svg {
 
 #[derive(Clone, Debug, Default)]
 pub struct SvgOptions {
-    pub fill_color: Option<BasicColor>,
-    pub stroke_color: Option<BasicColor>,
+    pub fill_color: Option<AlphaColor<Srgb>>,
+    pub stroke_color: Option<AlphaColor<Srgb>>,
 }
 impl SvgOptions {}
 impl From<SvgOptions> for MaybeDyn<SvgOptions> {

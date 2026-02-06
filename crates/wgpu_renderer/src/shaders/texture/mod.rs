@@ -131,6 +131,8 @@ impl TextureState {
                 resource: wgpu::BindingResource::Sampler(&device.create_sampler(
                     &wgpu::SamplerDescriptor {
                         label: Some("texture"),
+                        compare: None,
+                        anisotropy_clamp: 1,
                         ..Default::default()
                     },
                 )),

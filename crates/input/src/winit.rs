@@ -19,8 +19,8 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub enum KeyEventKind {
-    Press((KeyEvent, ModifiersState)),
-    Release((KeyEvent, ModifiersState)),
+    Press((KeyEvent, Modifiers)),
+    Release((KeyEvent, Modifiers)),
     ModifiersChanged(ModifiersState),
 }
 
@@ -100,12 +100,12 @@ pub fn pointer_event(kind: &CursorEventKind) -> MouseEventKind {
 pub fn keyboard_event(kind: &KeyEventKind) -> KeyboardEvent {
     match kind {
         KeyEventKind::Press((key, modifiers)) => KeyboardEvent {
-            modifiers: self::modifiers(modifiers),
-            kind: KeyboardEventKind::Press(self::key(&key)),
+            modifiers: *modifiers,
+            kind: KeyboardEventKind::Press(self::key(key)),
         },
         KeyEventKind::Release((key, modifiers)) => KeyboardEvent {
-            modifiers: self::modifiers(modifiers),
-            kind: KeyboardEventKind::Release(self::key(&key)),
+            modifiers: *modifiers,
+            kind: KeyboardEventKind::Release(self::key(key)),
         },
         KeyEventKind::ModifiersChanged(modifiers) => KeyboardEvent {
             modifiers: self::modifiers(modifiers),

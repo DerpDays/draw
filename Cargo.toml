@@ -93,6 +93,8 @@ parley = { version = "0.7.0", features = ["system"] }
 # for input type conversion
 winit = { version = "0.30.12" }
 
+web-sys = { version = "0.3.85", features = ["Window", "Performance"] }
+
 profiling = "1.0.17"
 
 

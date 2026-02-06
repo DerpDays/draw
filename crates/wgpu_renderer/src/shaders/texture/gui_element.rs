@@ -4,7 +4,7 @@ use gui::{
     MeasureCtx,
     TreeManager,
     prelude::{AvailableSpace, Layout, MaybeDyn, Size, Style, create_effect},
-    reexports::reactive::maybe_get_clone_untracked,
+    reexports::reactivity::maybe_get_clone_untracked,
     tree::{Widget, builder::ElementBuilder},
 };
 

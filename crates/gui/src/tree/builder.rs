@@ -1,4 +1,8 @@
-use std::{cell::Cell, rc::Rc, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    sync::Arc,
+};
 
 use input::{KeyboardEvent, MouseEvent};
 use slotmap::SlotMap;
@@ -12,8 +16,6 @@ use crate::{
     tree::{Element, MaybeDynStyle, StyleWrapper, Widget},
     zindex::ZIndexProperties,
 };
-
-use crate::widgets::reactivity::ReactiveChildren;
 
 pub trait ErasedBuilder {
     fn build(
@@ -43,7 +45,7 @@ pub struct ElementBuilder<W: Widget> {
     pub(crate) blur_handler: EventHandler<BlurEvent>,
 
     #[allow(clippy::type_complexity)]
-    pub(crate) before_build: Option<Arc<dyn Fn(&W)>>,
+    pub(crate) before_build: Option<Arc<dyn Fn(&mut W)>>,
     pub(crate) after_build: Option<Arc<dyn Fn(ElementId)>>,
 }
 
@@ -68,34 +70,34 @@ impl<W: Widget> ElementBuilder<W> {
 
     pub fn new_with_before_build<F>(inner: W, before_build: F) -> Self
     where
-        F: Fn(&W) + 'static,
+        F: Fn(&mut W) + 'static,
     {
         let mut builder = Self::new(inner);
-        builder.before_build = Some(Arc::new(before_build) as Arc<dyn Fn(&W)>);
+        builder.before_build = Some(Arc::new(before_build) as Arc<dyn Fn(&mut W)>);
         builder
     }
 
     pub fn append_before_build<F>(mut self, before_build: F) -> Self
     where
-        F: Fn(&W) + 'static,
+        F: Fn(&mut W) + 'static,
         W: 'static,
     {
         self.before_build = if let Some(prev_build) = self.before_build {
-            Some(Arc::new(move |inner: &W| {
+            Some(Arc::new(move |inner: &mut W| {
                 (prev_build)(inner);
                 (before_build)(inner);
-            }) as Arc<dyn Fn(&W)>)
+            }) as Arc<dyn Fn(&mut W)>)
         } else {
-            Some(Arc::new(before_build) as Arc<dyn Fn(&W)>)
+            Some(Arc::new(before_build) as Arc<dyn Fn(&mut W)>)
         };
         self
     }
 
     pub fn replace_before_build<F>(mut self, before_build: F) -> Self
     where
-        F: Fn(&W) + 'static,
+        F: Fn(&mut W) + 'static,
     {
-        self.before_build = Some(Arc::new(before_build) as Arc<dyn Fn(&W)>);
+        self.before_build = Some(Arc::new(before_build) as Arc<dyn Fn(&mut W)>);
         self
     }
 
@@ -144,52 +146,6 @@ impl<W: Widget> ElementBuilder<W> {
         self
     }
 
-    /// Add reactive children that are dynamically created/removed based on a closure.
-    ///
-    /// The closure is called reactively, and whenever its output changes, children are
-    /// automatically added or removed. Each child gets its own reactive scope that is
-    /// properly disposed when the child is removed.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// let items = create_signal(vec!["a", "b", "c"]);
-    /// div()
-    ///     .reactive_child(|| {
-    ///         items.get().into_iter().map(|item| {
-    ///             div().child(text(item))
-    ///         }).collect::<Vec<_>>()
-    ///     })
-    /// ```
-    pub fn reactive_child<F>(mut self, f: F) -> Self
-    where
-        F: Fn() -> Vec<Box<dyn ErasedBuilder>> + 'static,
-    {
-        let closure_for_effect = Rc::new(f);
-
-        // Set up the reactive effect in after_build
-        // We append to existing after_build if it exists
-        let existing_after_build = self.after_build.take();
-        self.after_build = Some(Arc::new(move |parent_id| {
-            // Call existing after_build if any
-            if let Some(ref existing) = existing_after_build {
-                existing(parent_id);
-            }
-
-            // Set up reactive children management
-            let reactive_children = ReactiveChildren::new(
-                {
-                    let closure = closure_for_effect.clone();
-                    move || closure()
-                },
-                parent_id,
-            );
-
-            reactive_children.setup_effect();
-        }));
-
-        self
-    }
-
     /// Assign a style to this element.
     ///
     /// ```rust
@@ -215,12 +171,12 @@ impl<W: Widget> ElementBuilder<W> {
 impl<W: Widget + 'static> ElementBuilder<W> {
     #[profiling::function]
     pub(crate) fn build(
-        self,
+        mut self,
         arena: &mut SlotMap<ElementId, Element>,
         parent_id: Option<ElementId>,
     ) -> ElementId {
         if let Some(hook) = self.before_build {
-            hook(&self.inner);
+            hook(&mut self.inner);
         }
 
         let key = arena.insert_with_key(|id| Element {
@@ -229,11 +185,13 @@ impl<W: Widget + 'static> ElementBuilder<W> {
 
             inner: Box::new(self.inner),
             style: self.style,
+            scroll_amount: 0.,
             zindex: self.zindex,
 
             rel_final_layout: Layout::new(),
             rel_unrounded_layout: Layout::new(),
-            layout: Layout::new(),
+            abs_layout: Layout::new(),
+
             cache: taffy::Cache::new(),
 
             children: Vec::new(),
@@ -261,16 +219,17 @@ impl<W: Widget + 'static> ElementBuilder<W> {
             let mgr = TreeManager::global();
             let style = arena[key].style.clone();
 
-            let mut last_display = style.get_clone().0.display;
+            let last_display = Rc::new(RefCell::new(style.get_clone().0.display));
             move || {
                 let new_display = style.get_clone().0.display;
                 if !first_run.get() {
                     log::trace!("node style changed: relayouting {key:?}");
-                    if new_display != last_display {
+                    if new_display != *last_display.borrow() {
+                        log::warn!("different from last_display");
                         // Display changes alter the render hierarchy (hiding/showing subtrees).
                         // We must rebuild the render order.
                         mgr.mark_structure_dirty();
-                        last_display = new_display;
+                        *last_display.borrow_mut() = new_display;
                     }
                     mgr.mark_layout_dirty(key);
                     mgr.now();
@@ -308,7 +267,12 @@ impl<W: Widget + 'static> ErasedBuilder for ElementBuilder<W> {
     }
 }
 
-pub struct BuilderList(Vec<Box<dyn ErasedBuilder>>);
+pub struct BuilderList(pub(crate) Vec<Box<dyn ErasedBuilder>>);
+impl BuilderList {
+    pub const fn empty() -> Self {
+        Self(vec![])
+    }
+}
 
 impl<T: ErasedBuilder + 'static> From<T> for BuilderList {
     fn from(val: T) -> Self {

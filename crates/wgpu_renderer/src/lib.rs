@@ -109,7 +109,7 @@ pub struct TextureState {
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum CacheKey {
     Text(GlyphCacheKey),
-    Image(String),
+    Hash(u64),
     // TODO: add cache entry for POD through hashes (e.g. images without metadata).
 }
 

@@ -1,7 +1,7 @@
 use std::{any::Any, fmt::Debug, sync::Arc};
 
 use color::{AlphaColor, Srgb};
-use euclid::default::{Point2D, Size2D, Vector2D};
+use euclid::default::{Point2D, SideOffsets2D, Size2D, Vector2D};
 
 use crate::{BasicColor, LineCap, Rounding};
 pub mod text;
@@ -142,21 +142,20 @@ pub struct Quad {
 
 /// A basic rectangle.
 ///
-/// Size is includes the stroke width (like border-box), meaning that the stroke is included in the given size of the
-/// rectangle. If the stroke width is greater than the size, only the visible part of the stroke
+/// Size includes the border size (like border-box), meaning that the border is included in the given size of the
+/// rectangle. If the border is greater than the inner size, only the visible part of the border
 /// will be rendered.
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rectangle {
     pub origin: Point2D<f32>,
     pub size: Size2D<f32>,
+    pub border: SideOffsets2D<f32>,
 
     pub rounding: Rounding,
 
     pub color: BasicColor,
-
-    pub stroke_color: BasicColor,
-    pub stroke_width: f32,
+    pub border_color: BasicColor,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -180,8 +179,8 @@ pub struct Svg {
 
     pub data: Arc<[u8]>,
 
-    pub fill_color: Option<BasicColor>,
-    pub stroke_color: Option<BasicColor>,
+    pub fill_color: Option<AlphaColor<Srgb>>,
+    pub stroke_color: Option<AlphaColor<Srgb>>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -216,12 +215,12 @@ pub enum AvailableSpace {
     MinContent,
     MaxContent,
 }
-#[derive(Clone, PartialEq, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TextMeasure {
-    pub max_width: Option<f32>,
-    pub available_space_width: AvailableSpace,
-
-    pub text: String,
-    pub text_layout: TextLayoutOptions,
-}
+// #[derive(Clone, PartialEq, Debug)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// pub struct TextMeasure {
+//     pub max_width: Option<f32>,
+//     pub available_space_width: AvailableSpace,
+//
+//     pub text: String,
+//     pub text_layout: TextLayoutOptions,
+// }

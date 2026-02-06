@@ -1,17 +1,19 @@
 use graphics::Primitive;
 use input::{KeyboardEvent, MouseEvent};
-use sycamore_reactive::{MaybeDyn, ReadSignal, Signal};
+use sycamore_reactive::MaybeDyn;
 use taffy::{AvailableSpace, Layout, Size};
 
 use crate::{
     ElementId,
     MeasureCtx,
     events::{BlurEvent, EventContext, EventHandler, FocusEvent},
-    reexports::reactive::{maybe_get_clone_untracked, maybe_get_untracked},
+    reexports::reactivity::{maybe_get_clone_untracked, maybe_get_untracked},
     zindex::ZIndexProperties,
 };
 
 pub mod builder;
+mod style;
+pub use style::{MaybeDynStyle, StyleWrapper};
 
 pub trait Node {
     fn render(&mut self, layout: &Layout) -> Option<Primitive>;
@@ -37,11 +39,14 @@ pub trait Node {
     // Taffy specific
     fn get_style(&self) -> taffy::Style;
 
-    fn get_unrounded_layout(&self) -> &taffy::Layout;
-    fn get_final_layout(&self) -> &taffy::Layout;
+    fn get_abs_layout(&self) -> &taffy::Layout;
 
-    fn set_unrounded_layout(&mut self, layout: Layout);
-    fn set_final_layout(&mut self, layout: Layout);
+    fn get_relative_unrounded_layout(&self) -> &taffy::Layout;
+    fn get_relative_final_layout(&self) -> &taffy::Layout;
+
+    fn set_relative_unrounded_layout(&mut self, layout: Layout);
+    fn set_relative_final_layout(&mut self, layout: Layout);
+    fn set_abs_layout(&mut self, layout: Layout);
 
     fn layout_cache(&self) -> &taffy::Cache;
     fn layout_cache_mut(&mut self) -> &mut taffy::Cache;
@@ -69,13 +74,18 @@ pub trait Widget {
     fn focusable(&self) -> bool;
 
     #[allow(unused_variables)]
-    fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>, layout: &Layout) {}
+    fn default_mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>, abs_layout: &Layout) {}
     #[allow(unused_variables)]
-    fn default_keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>, layout: &Layout) {}
+    fn default_keyboard_event(
+        &mut self,
+        ctx: &mut EventContext<KeyboardEvent>,
+        abs_layout: &Layout,
+    ) {
+    }
     #[allow(unused_variables)]
-    fn default_focus_event(&mut self, ctx: &mut EventContext<FocusEvent>, layout: &Layout) {}
+    fn default_focus_event(&mut self, ctx: &mut EventContext<FocusEvent>, abs_layout: &Layout) {}
     #[allow(unused_variables)]
-    fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>, layout: &Layout) {}
+    fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>, abs_layout: &Layout) {}
 }
 
 pub struct Element {
@@ -84,13 +94,15 @@ pub struct Element {
 
     pub inner: Box<dyn Widget>,
     style: MaybeDyn<StyleWrapper>,
+    // scroll amount in pixels
+    scroll_amount: f32,
     zindex: MaybeDyn<ZIndexProperties>,
 
     // taffy relative layouts
     rel_unrounded_layout: taffy::Layout,
     rel_final_layout: taffy::Layout,
     // absolute layout
-    layout: taffy::Layout,
+    abs_layout: taffy::Layout,
 
     cache: taffy::Cache,
 
@@ -105,61 +117,14 @@ impl std::fmt::Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Element")
             .field("node_id", &self.node_id)
+            .field("parent_id", &self.parent_id)
             .field("inner", &self.inner.debug_label())
             .field("rel_unrounded_layout", &self.rel_unrounded_layout)
             .field("rel_final_layout", &self.rel_final_layout)
-            .field("layout", &self.layout)
+            .field("abs_layout", &self.abs_layout)
             .field("cache", &self.cache)
             .field("children", &self.children)
             .finish()
-    }
-}
-
-#[derive(Clone, PartialEq, Debug, Default)]
-pub struct StyleWrapper(taffy::Style);
-// SAFETY: We do not use calc anywhere so it is safe for Style to be send.
-unsafe impl Send for StyleWrapper {}
-unsafe impl Sync for StyleWrapper {}
-impl From<taffy::Style> for StyleWrapper {
-    fn from(value: taffy::Style) -> Self {
-        Self(value)
-    }
-}
-impl From<StyleWrapper> for taffy::Style {
-    fn from(value: StyleWrapper) -> Self {
-        value.0
-    }
-}
-
-impl From<StyleWrapper> for MaybeDyn<StyleWrapper> {
-    fn from(value: StyleWrapper) -> Self {
-        MaybeDyn::Static(value)
-    }
-}
-
-pub struct MaybeDynStyle(MaybeDyn<StyleWrapper>);
-impl MaybeDynStyle {
-    #[inline(always)]
-    pub fn get(self) -> MaybeDyn<StyleWrapper> {
-        self.0
-    }
-}
-
-impl<T: Into<StyleWrapper>> From<T> for MaybeDynStyle {
-    fn from(value: T) -> Self {
-        MaybeDynStyle(MaybeDyn::Static(value.into()))
-    }
-}
-
-impl From<Signal<StyleWrapper>> for MaybeDynStyle {
-    fn from(value: Signal<StyleWrapper>) -> Self {
-        let (read_signal, _) = value.split();
-        MaybeDynStyle(MaybeDyn::Signal(read_signal))
-    }
-}
-impl From<ReadSignal<StyleWrapper>> for MaybeDynStyle {
-    fn from(value: ReadSignal<StyleWrapper>) -> Self {
-        MaybeDynStyle(MaybeDyn::Signal(value))
     }
 }
 
@@ -193,14 +158,14 @@ impl Node for Element {
     fn mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>) {
         self.mouse_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
-            self.inner.default_mouse_event(ctx, &self.layout);
+            self.inner.default_mouse_event(ctx, &self.abs_layout);
         }
     }
     #[inline(always)]
     fn keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>) {
         self.keyboard_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
-            self.inner.default_keyboard_event(ctx, &self.layout);
+            self.inner.default_keyboard_event(ctx, &self.abs_layout);
         }
     }
 
@@ -208,14 +173,14 @@ impl Node for Element {
     fn focus_event(&mut self, ctx: &mut EventContext<FocusEvent>) {
         self.focus_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
-            self.inner.default_focus_event(ctx, &self.layout);
+            self.inner.default_focus_event(ctx, &self.abs_layout);
         }
     }
     #[inline(always)]
     fn blur_event(&mut self, ctx: &mut EventContext<BlurEvent>) {
         self.blur_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
-            self.inner.default_blur_event(ctx, &self.layout);
+            self.inner.default_blur_event(ctx, &self.abs_layout);
         }
     }
 
@@ -229,21 +194,30 @@ impl Node for Element {
     }
 
     #[inline(always)]
-    fn get_unrounded_layout(&self) -> &taffy::Layout {
+    fn get_abs_layout(&self) -> &taffy::Layout {
+        &self.abs_layout
+    }
+
+    #[inline(always)]
+    fn get_relative_unrounded_layout(&self) -> &taffy::Layout {
         &self.rel_unrounded_layout
     }
     #[inline(always)]
-    fn get_final_layout(&self) -> &taffy::Layout {
+    fn get_relative_final_layout(&self) -> &taffy::Layout {
         &self.rel_final_layout
     }
 
     #[inline(always)]
-    fn set_unrounded_layout(&mut self, layout: Layout) {
+    fn set_relative_unrounded_layout(&mut self, layout: Layout) {
         self.rel_unrounded_layout = layout;
     }
     #[inline(always)]
-    fn set_final_layout(&mut self, layout: taffy::Layout) {
+    fn set_relative_final_layout(&mut self, layout: taffy::Layout) {
         self.rel_final_layout = layout;
+    }
+    #[inline(always)]
+    fn set_abs_layout(&mut self, layout: taffy::Layout) {
+        self.abs_layout = layout;
     }
 
     #[inline(always)]

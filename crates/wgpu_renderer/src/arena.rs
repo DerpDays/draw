@@ -102,11 +102,19 @@ impl<M> Arena<M> {
                 return self.write(device, queue, data, slot.byte_index());
             }
         }
-        if let Some(last) = self.allocations.last() {
-            self.write(device, queue, data, last.byte_index() + last.len())
+        let offset = if let Some(last) = self.allocations.last() {
+            last.byte_index() + last.len()
         } else {
-            self.write(device, queue, data, 0)
+            0
+        };
+
+        if let Some(last_free) = self.freelist.last()
+            && last_free.byte_index() == offset
+        {
+            self.freelist.pop();
         }
+
+        self.write(device, queue, data, offset)
     }
     pub fn remove(&mut self, key: Key<M>) {
         self.allocations.remove(
@@ -114,6 +122,56 @@ impl<M> Arena<M> {
                 .binary_search_by_key(&key.byte_index(), |x| x.byte_index())
                 .expect("removed key should be in the allocations"),
         );
+        self.add_to_freelist(key);
+    }
+
+    pub fn update(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        key: Key<M>,
+        data: &[u8],
+    ) -> Key<M> {
+        if data.len() <= key.len() {
+            self.buf.write(device, queue, key.byte_index(), data);
+            if data.len() < key.len() {
+                let diff = key.len() - data.len();
+                // Create a key for the unused tail and add it to freelist
+                let free_chunk = Key::new(key.byte_index() + data.len(), diff);
+                self.add_to_freelist(free_chunk);
+
+                // Update the length of the existing allocation
+                // We must find it in the vec to mutate it
+                if let Ok(idx) = self
+                    .allocations
+                    .binary_search_by_key(&key.byte_index(), |x| x.byte_index())
+                {
+                    self.allocations[idx].len = data.len();
+                }
+                Key::new(key.byte_index(), data.len())
+            } else {
+                key
+            }
+        } else {
+            self.remove(key);
+            self.insert(device, queue, data)
+        }
+    }
+
+    pub fn shrink_to_fit(&mut self, _queue: &wgpu::Queue) {
+        // TODO: actually shrink
+        if let Some(alloc) = self.allocations.last()
+            && let Some(free) = self.freelist.last()
+            && free.byte_index() >= alloc.byte_index() + alloc.len()
+        {
+            self.freelist.pop();
+            todo!()
+        }
+    }
+}
+
+impl<M> Arena<M> {
+    fn add_to_freelist(&mut self, key: Key<M>) {
         let inserted: Option<usize> = 'inserted: {
             for (idx, item) in self.freelist.iter_mut().enumerate() {
                 // if we have passed any possible keys to merge,
@@ -148,35 +206,6 @@ impl<M> Arena<M> {
             }
         }
     }
-
-    pub fn update(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        key: Key<M>,
-        data: &[u8],
-    ) -> Key<M> {
-        if data.len() <= key.len() {
-            self.buf.write(device, queue, key.byte_index(), data);
-            key
-        } else {
-            self.remove(key);
-            self.insert(device, queue, data)
-        }
-    }
-
-    pub fn shrink_to_fit(&mut self, queue: &wgpu::Queue) {
-        if let Some(alloc) = self.allocations.last()
-            && let Some(free) = self.freelist.last()
-            && free.byte_index() >= alloc.byte_index() + alloc.len()
-        {
-            self.freelist.pop();
-            todo!()
-        }
-    }
-}
-
-impl<M> Arena<M> {
     fn write(
         &mut self,
         device: &wgpu::Device,

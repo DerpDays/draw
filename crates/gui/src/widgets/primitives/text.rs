@@ -25,13 +25,16 @@ use taffy::{AvailableSpace, Layout, Size, Style};
 use crate::{
     MeasureCtx,
     TreeManager,
-    reexports::reactive::maybe_get_clone_untracked,
+    reexports::reactivity::maybe_get_clone_untracked,
     tree::{Widget, builder::ElementBuilder},
 };
 
 pub struct Text {
     pub text: ReadSignal<String>,
     options: MaybeDyn<TextOptions>,
+
+    last_measured_opts: Option<TextLayoutOptions>,
+    last_layout_size: Option<Size<f32>>,
 }
 #[derive(Clone, Debug, Default)]
 pub struct TextOptions {
@@ -97,17 +100,23 @@ impl Widget for Text {
         _: &Style,
     ) -> Size<f32> {
         let text = self.text.get_clone_untracked();
-        let options = maybe_get_clone_untracked(&self.options);
+        let options = maybe_get_clone_untracked(&self.options).to_layout_options();
+        let measured_size = if Some(options.clone()) != self.last_measured_opts
+            && let Some(last_size) = self.last_layout_size
+        {
+            last_size
+        } else {
+            measure_ctx.measure_text(
+                text,
+                options,
+                match available_space.width {
+                    AvailableSpace::Definite(x) => primitives::AvailableSpace::Definite(x),
+                    _ => primitives::AvailableSpace::MaxContent,
+                },
+                known_dimensions.width,
+            )
+        };
 
-        let measured_size = measure_ctx.measure_text(primitives::TextMeasure {
-            max_width: known_dimensions.width,
-            available_space_width: match available_space.width {
-                AvailableSpace::Definite(x) => primitives::AvailableSpace::Definite(x),
-                _ => primitives::AvailableSpace::MaxContent,
-            },
-            text,
-            text_layout: options.to_layout_options(),
-        });
         known_dimensions.unwrap_or(measured_size)
     }
     fn debug_label(&self) -> &'static str {
@@ -124,6 +133,9 @@ pub fn text(text: ReadSignal<String>) -> ElementBuilder<Text> {
         Text {
             text,
             options: MaybeDyn::Static(TextOptions::default()),
+
+            last_measured_opts: None,
+            last_layout_size: None,
         },
         move |elem_id| {
             let mgr = TreeManager::global();
@@ -143,6 +155,9 @@ impl ElementBuilder<Text> {
         let inner = Text {
             text: self.inner().text,
             options: options.clone(),
+
+            last_measured_opts: None,
+            last_layout_size: None,
         };
         self.set_inner(inner).append_after_build(move |_| {
             let mgr = TreeManager::global();

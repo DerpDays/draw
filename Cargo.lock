@@ -1059,6 +1059,7 @@ dependencies = [
  "slotmap",
  "sycamore-reactive",
  "taffy",
+ "web-sys",
 ]
 
 [[package]]

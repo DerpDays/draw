@@ -5,7 +5,7 @@ use std::{
 };
 
 use euclid::default::Point2D;
-use sycamore_reactive::{RootHandle, create_root};
+use sycamore_reactive::{NodeHandle, RootHandle, create_root};
 
 use input::{KeyboardEvent, MouseEvent, MouseEventKind};
 use slotmap::{Key, SlotMap};
@@ -15,13 +15,13 @@ pub mod events;
 mod layout_tree;
 pub mod reexports;
 mod taffy_impl;
+pub mod time;
 pub mod tree;
 pub mod widgets;
 mod zindex;
 
 use crate::{
-    events::{BlurEvent, EventContext, EventPhase},
-    layout_tree::LayoutTree,
+    events::{BlurEvent, EventContext, EventPhase, FocusEvent},
     taffy_impl::TaffyTree,
     tree::{Element, Node, Widget, builder::ElementBuilder},
     zindex::ZIndexOrdering,
@@ -30,7 +30,7 @@ use crate::{
 pub mod prelude {
     pub use crate::{
         events::{EventContext, EventPhase, *},
-        tree::builder::ErasedBuilder,
+        tree::builder::{BuilderList, ErasedBuilder},
         zindex::ZIndexProperties,
     };
     pub use color;
@@ -59,7 +59,13 @@ pub trait GuiRenderer {
 }
 
 pub trait MeasureCtx {
-    fn measure_text(&mut self, text: graphics::primitives::TextMeasure) -> taffy::Size<f32>;
+    fn measure_text(
+        &mut self,
+        text: String,
+        text_layout: graphics::primitives::TextLayoutOptions,
+        available_space_width: graphics::primitives::AvailableSpace,
+        max_width: Option<f32>,
+    ) -> taffy::Size<f32>;
 }
 
 pub struct Tree {
@@ -72,7 +78,6 @@ pub struct Tree {
     size: Size<AvailableSpace>,
 
     render_order: ZIndexOrdering,
-    pub layout_tree: LayoutTree,
 }
 
 /// State about the tree's current keyboard focus and mouse capture.
@@ -92,10 +97,21 @@ impl Tree {
     ///
     /// See: [`Tree::compute_root_layout`]
     #[profiling::function]
-    pub fn build<F, W>(
+    pub fn build<F, W>(size: Size<AvailableSpace>, manager: TreeManager, f: F) -> Self
+    where
+        F: FnOnce() -> ElementBuilder<W> + 'static,
+        W: Widget + 'static,
+    {
+        Self::build_with(size, manager, create_root(|| {}), f)
+    }
+    /// You should compute the root layout atleast once before attempting to render this tree.
+    ///
+    /// See: [`Tree::compute_root_layout`]
+    #[profiling::function]
+    pub fn build_with<F, W>(
         size: Size<AvailableSpace>,
-        // measure_ctx: &mut dyn MeasureCtx,
         manager: TreeManager,
+        owner: RootHandle,
         f: F,
     ) -> Self
     where
@@ -106,8 +122,8 @@ impl Tree {
 
         // SAFETY: This is unset from null straight after.
         let mut root_node: ElementId = ElementId::null();
-        let owner = manager.with(|| {
-            create_root(|| {
+        manager.with(|| {
+            owner.run_in(|| {
                 root_node = f().build(&mut alloc, None);
             })
         });
@@ -115,7 +131,6 @@ impl Tree {
         log::trace!("initial tree has been built");
 
         let render_order = ZIndexOrdering::default();
-        let layout_tree = LayoutTree::default();
 
         let mut tree = Self {
             owner,
@@ -127,7 +142,6 @@ impl Tree {
             capture: Capture::default(),
             size,
             render_order,
-            layout_tree,
         };
         tree.render_order = ZIndexOrdering::new(&tree);
 
@@ -175,7 +189,7 @@ impl Tree {
             .get(node_id)
             .expect("called `Tree::get` for a node not in the tree")
     }
-    pub fn get_mut(&mut self, node_id: ElementId) -> &Element {
+    pub fn get_mut(&mut self, node_id: ElementId) -> &mut Element {
         self.alloc
             .get_mut(node_id)
             .expect("called `Tree::get_mut` for a node not in the tree")
@@ -234,19 +248,6 @@ impl Tree {
             current = self.parent(node);
         }
     }
-
-    // #[profiling::function]
-    // fn clear_tree_layout(&mut self, measure_ctx: &mut dyn MeasureCtx, node: ElementId) {
-    //     // Clear layout cache for this node and all ancestors
-    //     let mut current = Some(node);
-    //     while let Some(node_id) = current {
-    //         self.clear_node_layout(measure_ctx, node_id);
-    //         current = self.parent(node_id);
-    //         self.manager.relayout(node);
-    //     }
-    //     // Mark render order as needing recomputation
-    //     self.manager.recompute_render_order();
-    // }
 }
 impl Tree {
     #[profiling::function]
@@ -261,15 +262,12 @@ impl Tree {
                         if let Some(prev) = self.capture.last_entered_node.take() {
                             // Send leave events to all nodes that were previously entered by going up the
                             // tree from the last entered node.
-                            let mut current = Some(prev);
-                            while let Some(inner) = current {
-                                let ctx = EventContext::non_bubbling(
-                                    MouseEvent::leave(event.position),
-                                    inner,
-                                );
-                                self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
-                                current = self.parent(inner);
-                            }
+                            self.dispatch_event_chain(
+                                self.root_node,
+                                prev,
+                                MouseEventKind::Leave,
+                                event,
+                            );
                         }
                         return Some(());
                     }
@@ -286,7 +284,19 @@ impl Tree {
                     return Some(());
                 }
 
-                let node = self.hit_layout(event.position).next()?;
+                let Some(node) = self.hit_layout(event.position).next() else {
+                    if let Some(prev) = self.capture.last_entered_node.take() {
+                        // Send leave events to all nodes that were previously entered by going up the
+                        // tree from the last entered node.
+                        self.dispatch_event_chain(
+                            self.root_node,
+                            prev,
+                            MouseEventKind::Leave,
+                            event,
+                        );
+                    }
+                    return None;
+                };
                 log::trace!("got hit for {node:?}");
 
                 // If we previously hit a node in our last mouse event, check if the new hit is the same,
@@ -376,14 +386,19 @@ impl Tree {
 
     #[profiling::function]
     pub fn on_keyboard(&mut self, event: KeyboardEvent) -> Option<()> {
-        // Only handle keyboard events if a node currently has keyboard focus.
-        log::trace!("checking kb_focus {:?}", self.capture.kb_focus);
-        let node = self.capture.kb_focus?;
+        self.owner.clone().run_in(|| {
+            self.manager.clone().with(|| {
+                // Only handle keyboard events if a node currently has keyboard focus.
+                log::trace!("checking kb_focus {:?}", self.capture.kb_focus);
+                let node = self.capture.kb_focus?;
 
-        log::trace!("sending direct keyboard event.");
-        let mut ctx = EventContext::direct(event, node);
-        self.alloc.get_mut(node).unwrap().keyboard_event(&mut ctx);
-        Some(())
+                log::trace!("sending direct keyboard event.");
+                let mut ctx = EventContext::direct(event, node);
+                self.alloc.get_mut(node).unwrap().keyboard_event(&mut ctx);
+                self.handle_event_dispatch_cleanup(ctx);
+                Some(())
+            })
+        })
     }
 
     // dispatch an event that doesnt bubble to each of the nodes from a target node to a parent.
@@ -395,15 +410,42 @@ impl Tree {
         kind: MouseEventKind,
         event: MouseEvent,
     ) {
+        let mut path = Vec::new();
+        // Snapshot the path before sending any events
         while target != ancestor {
-            let ctx = EventContext::non_bubbling(MouseEvent { kind, ..event }, target);
-            self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
-
+            path.push(target);
             match self.parent(target) {
                 Some(parent) => target = parent,
-                None => break, // Safety: prevents infinite loop if hierarchy is broken
+                None => break,
             }
         }
+        // Now dispatch. Even if a handler mutates the tree,
+        // we still have our list of IDs to notify.
+        if kind == MouseEventKind::Enter {
+            // Enters should typically go Root -> Leaf (Outside-In)
+            for node_id in path.into_iter().rev() {
+                log::info!("dispatching enter event to {node_id:?}");
+                let ctx = EventContext::non_bubbling(MouseEvent { kind, ..event }, node_id);
+                self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+            }
+        } else {
+            // Leaves should go Leaf -> Root (Inside-Out)
+            for node_id in path {
+                log::info!("dispatching leave event to {node_id:?}");
+                let ctx = EventContext::non_bubbling(MouseEvent { kind, ..event }, node_id);
+                self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+            }
+        }
+
+        // while target != ancestor {
+        //     let ctx = EventContext::non_bubbling(MouseEvent { kind, ..event }, target);
+        //     self.dispatch_generic_event(ctx, |node, ctx| node.mouse_event(ctx));
+        //
+        //     match self.parent(target) {
+        //         Some(parent) => target = parent,
+        //         None => break,
+        //     }
+        // }
     }
 
     #[profiling::function]
@@ -472,22 +514,25 @@ impl Tree {
     fn handle_kb_focus<E>(&mut self, ctx: &mut EventContext<E>) {
         if let Some(capture) = ctx.is_requesting_kb_focus_capture() {
             if let Some(prev) = self.capture.kb_focus {
-                self.dispatch_generic_event(EventContext::direct(BlurEvent, prev), |node, ctx| {
-                    node.blur_event(ctx)
-                });
+                self.dispatch_generic_event(
+                    EventContext::non_bubbling(BlurEvent, prev),
+                    |node, ctx| node.blur_event(ctx),
+                );
             }
             self.capture.kb_focus = Some(capture);
 
-            self.dispatch_generic_event(EventContext::direct(BlurEvent, capture), |node, ctx| {
-                node.blur_event(ctx)
-            });
+            self.dispatch_generic_event(
+                EventContext::non_bubbling(FocusEvent, capture),
+                |node, ctx| node.focus_event(ctx),
+            );
         } else if ctx.is_requesting_kb_focus_release() {
-            if let Some(prev) = self.capture.kb_focus {
-                self.dispatch_generic_event(EventContext::direct(BlurEvent, prev), |node, ctx| {
-                    node.blur_event(ctx)
-                });
+            log::trace!("requesting release");
+            if let Some(prev) = self.capture.kb_focus.take() {
+                self.dispatch_generic_event(
+                    EventContext::non_bubbling(BlurEvent, prev),
+                    |node, ctx| node.blur_event(ctx),
+                );
             }
-            self.capture.kb_focus = None;
         }
     }
 
@@ -518,37 +563,42 @@ impl Tree {
         let mut layout_changed = false;
 
         // 1. Handle Structure Changes (Add/Remove)
-        let mut child_ops = self.manager.take_child_operations();
-        if !child_ops.is_empty() {
-            structure_changed = true;
-            layout_changed = true; // Adding/removing usually shifts layout
+        while let mut ops = self.manager.take_replace_children_operations()
+            && !ops.is_empty()
+        {
+            let all_parents: Vec<_> = ops.iter().map(|op| op.parent).collect();
+            ops.retain(|op| {
+                !all_parents.iter().any(|&candidate_ancestor| {
+                    candidate_ancestor != op.parent
+                        && self.has_ancestor(op.parent, candidate_ancestor)
+                })
+            });
+            if ops.is_empty() {
+                continue;
+            }
 
-            for op in child_ops.drain(..) {
-                match op {
-                    ChildOperation::AddChild {
-                        parent,
-                        builder,
-                        callback,
-                    } => {
-                        let child = self.add_child_direct(renderer, parent, builder);
-                        // Add to LayoutTree map immediately (with dummy pos) or wait for full pass
-                        if let Some(cb) = callback {
-                            cb(child);
-                        }
-                    }
-                    ChildOperation::RemoveChild {
-                        parent,
-                        child,
-                        scope_dispose,
-                    } => {
-                        if let Some(dispose) = scope_dispose {
-                            dispose();
-                        }
-                        self.remove_child_direct(renderer, parent, child);
-                        // Remove from LayoutTree map
-                        self.remove_abs_layout(child);
-                    }
+            structure_changed = true;
+            // Adding/removing usually shifts layout
+            layout_changed = true;
+
+            for op in ops.drain(..) {
+                for child in self.get(op.parent).children().to_vec() {
+                    self.owner.clone().run_in(|| {
+                        self.manager.clone().with(|| {
+                            self.remove_child_direct(renderer, op.parent, child);
+                        });
+                    });
                 }
+                self.owner.clone().run_in(|| {
+                    self.manager.clone().with(|| {
+                        op.old_scope.dispose();
+                        op.new_scope.run_in(|| {
+                            for builder in op.builders {
+                                self.add_child_direct(renderer, op.parent, builder);
+                            }
+                        })
+                    });
+                });
             }
         }
 
@@ -570,7 +620,9 @@ impl Tree {
             for node in &dirty_nodes {
                 // Optimization: Only clear up to the point where layout boundaries stop propagating
                 // For now, clearing ancestor chain is safe.
-                self.clear_node_layout_upwards(renderer, *node);
+                if self.alloc.get(*node).is_some() {
+                    self.clear_node_layout_upwards(renderer, *node);
+                };
             }
 
             // B. Run Taffy Layout Algo
@@ -626,11 +678,7 @@ impl Tree {
     ) {
         // Validate parent-child relationship
         if self.parent(child) != Some(parent) {
-            log::warn!(
-                "Attempted to remove child {:?} from parent {:?}, but parent relationship doesn't match",
-                child,
-                parent
-            );
+            log::error!("attempted to remove child {child:?} from invalid parent {parent:?}",);
             return;
         }
 
@@ -647,17 +695,14 @@ impl Tree {
             }
         }
 
-        // Remove from parent's children list
-        if let Some(parent_elem) = self.alloc.get_mut(parent) {
-            parent_elem.children.retain(|&id| id != child);
-        }
-
         // Clean up focus/capture state
         for &removed_node in &to_remove {
             if self.capture.mouse_capture == Some(removed_node) {
                 self.capture.mouse_capture = None;
             }
             if self.capture.kb_focus == Some(removed_node) {
+                let ctx = EventContext::non_bubbling(BlurEvent, parent);
+                self.dispatch_generic_event(ctx, |node, ctx| node.blur_event(ctx));
                 self.capture.kb_focus = None;
             }
             if self.capture.last_entered_node == Some(removed_node) {
@@ -676,11 +721,15 @@ impl Tree {
             }
         }
 
+        // Remove from parent's children list
+        if let Some(parent_elem) = self.alloc.get_mut(parent) {
+            parent_elem.children.retain(|&id| id != child);
+        }
+
         // Remove from alloc and renderer cache
         for node_id in &to_remove {
             renderer.remove_cached(*node_id);
             self.alloc.remove(*node_id);
-            self.remove_abs_layout(*node_id);
         }
 
         // Invalidate parent's layout
@@ -693,7 +742,7 @@ impl Tree {
             self.manager.clone().with(|| {
                 let render_order = self.render_order.render_order().to_vec();
                 for node in &render_order {
-                    let layout = self.get_abs_layout(*node).unwrap().abs_layout;
+                    let layout = *self.get_abs_layout(*node);
                     let elem = self
                         .alloc
                         .get_mut(*node)
@@ -717,23 +766,18 @@ thread_local! {
 #[derive(Clone)]
 pub struct TreeManager(Rc<RefCell<TreeManagerInner>>);
 
-pub(crate) enum ChildOperation {
-    AddChild {
-        parent: ElementId,
-        builder: Box<dyn tree::builder::ErasedBuilder>,
-        callback: Option<Box<dyn FnOnce(ElementId)>>,
-    },
-    RemoveChild {
-        parent: ElementId,
-        child: ElementId,
-        scope_dispose: Option<Box<dyn FnOnce()>>,
-    },
+pub(crate) struct ReplaceChildrenOperation {
+    parent: ElementId,
+    builders: Vec<Box<dyn tree::builder::ErasedBuilder>>,
+    old_scope: NodeHandle,
+    new_scope: NodeHandle,
 }
 
 struct TreeManagerInner {
     redraw_now_fn: Arc<dyn Fn() + Send + Sync>,
     new_handle_fn: Arc<dyn Fn() -> AnimationHandle + Send + Sync>,
-    child_operations: Vec<ChildOperation>,
+
+    replace_children_operations: Vec<ReplaceChildrenOperation>,
 
     layout_dirty_nodes: Vec<ElementId>,
     /// Whether the z-index has changed, or a node has been added/removed,
@@ -752,7 +796,7 @@ impl TreeManager {
             redraw_now_fn: Arc::new(redraw_now_fn),
             new_handle_fn: Arc::new(new_handle_fn),
 
-            child_operations: vec![],
+            replace_children_operations: vec![],
 
             layout_dirty_nodes: vec![],
             structure_dirty: false,
@@ -826,40 +870,24 @@ impl TreeManager {
         handle
     }
 
-    pub fn queue_add_child<C>(
+    pub fn queue_replace_children(
         &self,
         parent: ElementId,
-        builder: Box<dyn tree::builder::ErasedBuilder>,
-        callback: Option<C>,
-    ) where
-        C: FnOnce(ElementId) + 'static,
-    {
-        let ops = &mut self.get_unwrap().child_operations;
-        ops.push(ChildOperation::AddChild {
+        builders: Vec<Box<dyn tree::builder::ErasedBuilder>>,
+        old_scope: NodeHandle,
+        new_scope: NodeHandle,
+    ) {
+        let ops = &mut self.get_unwrap().replace_children_operations;
+        ops.push(ReplaceChildrenOperation {
             parent,
-            builder,
-            callback: callback.map(|c| Box::new(c) as Box<dyn FnOnce(ElementId)>),
+            builders,
+            old_scope,
+            new_scope,
         });
     }
 
-    pub fn queue_remove_child<D>(
-        &self,
-        parent: ElementId,
-        child: ElementId,
-        scope_dispose: Option<D>,
-    ) where
-        D: FnOnce() + 'static,
-    {
-        let ops = &mut self.get_unwrap().child_operations;
-        ops.push(ChildOperation::RemoveChild {
-            parent,
-            child,
-            scope_dispose: scope_dispose.map(|d| Box::new(d) as Box<dyn FnOnce()>),
-        });
-    }
-
-    pub(crate) fn take_child_operations(&self) -> Vec<ChildOperation> {
-        std::mem::take(&mut self.get_unwrap().child_operations)
+    pub(crate) fn take_replace_children_operations(&self) -> Vec<ReplaceChildrenOperation> {
+        std::mem::take(&mut self.get_unwrap().replace_children_operations)
     }
 }
 
