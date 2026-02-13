@@ -4,6 +4,7 @@ use sycamore_reactive::{ReadSignal, Signal, batch, create_memo, create_signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
+    ElementId,
     MeasureCtx,
     prelude::EventContext,
     tree::{Widget, builder::ElementBuilder},
@@ -69,6 +70,7 @@ impl Widget for Slider {
     }
     fn measure(
         &mut self,
+        _: ElementId,
         _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _: Size<AvailableSpace>,
@@ -77,7 +79,7 @@ impl Widget for Slider {
         known_dimensions.unwrap_or(Size::zero())
     }
     fn debug_label(&self) -> &'static str {
-        "Button"
+        "Slider"
     }
 
     fn focusable(&self) -> bool {

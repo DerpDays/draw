@@ -1,6 +1,7 @@
 use euclid::default::{Box2D, Point2D, Size2D};
 use graphics::{Primitive, primitives::CustomPrimitive};
 use gui::{
+    ElementId,
     MeasureCtx,
     TreeManager,
     prelude::{AvailableSpace, Layout, MaybeDyn, Size, Style, create_effect},
@@ -34,6 +35,7 @@ impl Widget for WgpuTexture {
     }
     fn measure(
         &mut self,
+        _: ElementId,
         _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _: Size<AvailableSpace>,

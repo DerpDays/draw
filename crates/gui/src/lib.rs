@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock, Weak},
 };
 
-use euclid::default::Point2D;
+use euclid::default::{Box2D, Point2D};
 use sycamore_reactive::{NodeHandle, RootHandle, create_root};
 
 use input::{KeyboardEvent, MouseEvent, MouseEventKind};
@@ -61,6 +61,7 @@ pub trait GuiRenderer {
 pub trait MeasureCtx {
     fn measure_text(
         &mut self,
+        id: ElementId,
         text: String,
         text_layout: graphics::primitives::TextLayoutOptions,
         available_space_width: graphics::primitives::AvailableSpace,
@@ -172,13 +173,19 @@ impl Tree {
     /// It is important to note that this will not request a redraw, it is up to you,
     /// the callee to do this (if you want).
     #[profiling::function]
-    pub fn resize(&mut self, measure_ctx: &mut dyn MeasureCtx, size: Size<AvailableSpace>) {
+    pub fn resize<T: GuiRenderer + MeasureCtx>(
+        &mut self,
+        renderer: &mut T,
+        size: Size<AvailableSpace>,
+    ) {
         self.size = size;
         for node in self.nodes() {
             log::trace!("clearing cache for node: {node:?}");
-            self.clear_node_layout(measure_ctx, node);
+            self.clear_node_layout(renderer, node);
         }
-        self.compute_root_layout(measure_ctx);
+        self.process_changes(renderer);
+        self.compute_root_layout(renderer);
+        self.process_changes(renderer);
     }
     pub fn root_node(&self) -> ElementId {
         self.root_node
@@ -208,7 +215,11 @@ impl Tree {
     pub fn compute_root_layout(&mut self, measure_ctx: &mut dyn MeasureCtx) {
         self.compute_layout(self.root_node(), self.size, measure_ctx);
         let root_node = self.root_node;
-        self.update_abs_subtree(root_node, taffy::Point::ZERO);
+        self.update_abs_subtree(
+            root_node,
+            taffy::Point::ZERO,
+            Box2D::new(Point2D::splat(f32::MIN), Point2D::splat(f32::MAX)),
+        );
     }
 
     #[profiling::function]
@@ -246,6 +257,18 @@ impl Tree {
         while let Some(node) = current {
             self.clear_node_layout(measure_ctx, node);
             current = self.parent(node);
+        }
+    }
+    #[profiling::function]
+    fn clear_node_layout_downwards(
+        &mut self,
+        measure_ctx: &mut dyn MeasureCtx,
+        start_node: ElementId,
+    ) {
+        let mut stack = vec![start_node];
+        while let Some(node) = stack.pop() {
+            self.clear_node_layout(measure_ctx, node);
+            stack.extend(self.children(node));
         }
     }
 }
@@ -622,18 +645,11 @@ impl Tree {
                 // For now, clearing ancestor chain is safe.
                 if self.alloc.get(*node).is_some() {
                     self.clear_node_layout_upwards(renderer, *node);
+                    self.clear_node_layout_downwards(renderer, *node);
                 };
             }
 
-            // B. Run Taffy Layout Algo
-            // This updates the 'relative' layout in self.alloc
             self.compute_root_layout(renderer);
-
-            // C. Update Absolute Positions in LayoutTree
-            // Optimization: If we knew exactly which subtree changed, we could pass that.
-            // For now, updating the whole absolute tree is still much faster than re-allocating it.
-            // A better approach: find common ancestor of dirty nodes, but Root is safest fallback.
-            self.update_abs_subtree(self.root_node(), taffy::Point::ZERO);
         }
 
         if structure_changed || layout_changed || !dirty_nodes.is_empty() {

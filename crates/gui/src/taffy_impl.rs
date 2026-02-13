@@ -106,29 +106,20 @@ impl<'a> TaffyTree<'a> {
                 (taffy::Display::Grid, true) => taffy::compute_grid_layout(tree, node, inputs),
                 (_, false) => {
                     let style_clone = style.clone();
-
-                    {
-                        // // SAFETY:
-                        // // The renderer is borrowed only while computing a leaf layout.
-                        // // `compute_leaf_layout` calls the measure closure synchronously, and leaf
-                        // // measurement does not have access to the tree, and hence can't re-borrow.
-                        // let mut renderer = tree.renderer.borrow_mut();
-                        // let measure_ctx: &mut dyn MeasureCtx = &mut *renderer;
-                        let measure_function = |known_dimensions, available_space| {
-                            tree.alloc
-                                .get_mut(node.into())
-                                .expect("tried to measure a node not in the tree")
-                                .measure(
-                                    tree.measure_ctx,
-                                    known_dimensions,
-                                    available_space,
-                                    &style_clone,
-                                )
-                        };
-                        // INFO: we do not use the calc (hence why style can be send), hence we return
-                        // zero for the calc fn.
-                        taffy::compute_leaf_layout(inputs, &style, |_, _| 0.0, measure_function)
-                    }
+                    let measure_function = |known_dimensions, available_space| {
+                        tree.alloc
+                            .get_mut(node.into())
+                            .expect("tried to measure a node not in the tree")
+                            .measure(
+                                tree.measure_ctx,
+                                known_dimensions,
+                                available_space,
+                                &style_clone,
+                            )
+                    };
+                    // INFO: we do not use the calc (hence why style can be send), hence we return
+                    // zero for the calc fn.
+                    taffy::compute_leaf_layout(inputs, &style, |_, _| 0.0, measure_function)
                 }
             }
         })

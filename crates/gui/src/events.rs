@@ -245,7 +245,6 @@ impl<E> EventContext<E> {
         self.requesting_mouse_release
     }
 }
-
 pub struct EventHandler<E> {
     inner: Option<EventHandlerInner<E>>,
 }

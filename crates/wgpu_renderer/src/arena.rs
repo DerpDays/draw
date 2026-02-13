@@ -90,7 +90,6 @@ impl<M> Arena<M> {
         self.allocations.iter()
     }
     pub fn insert(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8]) -> Key<M> {
-        log::info!("inserting data into arena {data:?}");
         for (idx, slot) in self.freelist.iter().map(Key::copy).enumerate() {
             if data.len() <= slot.len() {
                 if data.len() == slot.len() {

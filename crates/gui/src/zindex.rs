@@ -6,7 +6,7 @@ use crate::{ElementId, Tree, tree::Node};
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ZIndexProperties {
     /// The z-index set for this node
-    pub z_index: usize,
+    pub z_index: isize,
     /// Whether to isolate the child nodes z-index from the rest of the siblings/ancestors.
     ///
     /// When this is set to true, the node is rendered last in its z-layer for its current z
@@ -30,7 +30,7 @@ impl ZIndexProperties {
         isolate_z: false,
     };
 
-    pub const fn new(z_index: usize, isolate_z: bool) -> Self {
+    pub const fn new(z_index: isize, isolate_z: bool) -> Self {
         Self { z_index, isolate_z }
     }
 }

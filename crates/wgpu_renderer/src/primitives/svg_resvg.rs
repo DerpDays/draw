@@ -101,6 +101,7 @@ pub fn render_svg(
     *cache = Some(PrimitiveCache {
         mask_textures: vec![],
         color_textures: vec![allocated_texture],
+        text_layout: None,
     });
 
     Mesh {

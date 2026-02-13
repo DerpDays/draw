@@ -4,8 +4,9 @@ use sycamore_reactive::{ReadSignal, Signal, batch, create_memo, create_signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
+    ElementId,
     MeasureCtx,
-    prelude::EventContext,
+    prelude::{BlurEvent, EventContext, FocusEvent},
     tree::{Widget, builder::ElementBuilder},
 };
 
@@ -38,17 +39,20 @@ pub struct ButtonSignals {
 
     pressed: Signal<bool>,
     hovered: Signal<bool>,
+
+    focused: Signal<bool>,
 }
 
 impl ButtonSignals {
     /// Create a read signal that reacts to changes in the visual state
-    pub fn to_visual(self) -> ReadSignal<ButtonVisualState> {
+    pub fn to_visual(&self) -> ReadSignal<ButtonVisualState> {
         let Self {
             enabled,
             active,
             pressed,
             hovered,
-        } = self;
+            ..
+        } = *self;
         create_memo(move || {
             if !enabled.get() {
                 ButtonVisualState::Disabled
@@ -77,6 +81,9 @@ impl ButtonSignals {
     pub fn hovered(&self) -> Signal<bool> {
         self.hovered
     }
+    pub fn focused(&self) -> Signal<bool> {
+        self.focused
+    }
 }
 
 impl Widget for Button {
@@ -85,6 +92,7 @@ impl Widget for Button {
     }
     fn measure(
         &mut self,
+        _: ElementId,
         _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _: Size<AvailableSpace>,
@@ -132,14 +140,27 @@ impl Widget for Button {
             }
         }
     }
+    fn default_focus_event(&mut self, ctx: &mut EventContext<FocusEvent>, _: &Layout) {
+        if !ctx.in_capture_phase() {
+            self.state.focused.set(true);
+        }
+    }
+    fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>, _: &Layout) {
+        if !ctx.in_capture_phase() {
+            self.state.focused.set(false);
+        }
+    }
 }
 
 pub fn button() -> (ElementBuilder<Button>, ButtonSignals) {
     let state = ButtonSignals {
         enabled: create_memo(|| true),
         active: create_memo(|| false),
+
         pressed: create_signal(false),
         hovered: create_signal(false),
+
+        focused: create_signal(false),
     };
     (ElementBuilder::new(Button { state }), state)
 }
@@ -151,8 +172,11 @@ pub fn button_with(
     let state = ButtonSignals {
         enabled,
         active,
+
         pressed: create_signal(false),
         hovered: create_signal(false),
+
+        focused: create_signal(false),
     };
     (ElementBuilder::new(Button { state }), state)
 }

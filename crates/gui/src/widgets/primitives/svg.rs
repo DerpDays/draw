@@ -10,6 +10,7 @@ use sycamore_reactive::{MaybeDyn, ReadSignal, create_effect};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
+    ElementId,
     MeasureCtx,
     TreeManager,
     reexports::reactivity::maybe_get_clone_untracked,
@@ -48,6 +49,7 @@ impl Widget for Svg {
     }
     fn measure(
         &mut self,
+        _: ElementId,
         _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _: Size<AvailableSpace>,

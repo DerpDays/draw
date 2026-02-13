@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc};
 
 use atlas::{
     AllocatedTexture,
@@ -6,8 +6,10 @@ use atlas::{
     formats::{Mask, Rgba8},
 };
 use color::{LinearSrgb, PremulColor};
+use graphics::primitives::AvailableSpace;
 use parley::{
     FontContext,
+    Layout,
     LayoutContext,
     swash::scale::{ScaleContext, image::Image},
 };
@@ -21,10 +23,23 @@ pub mod primitives;
 #[cfg(feature = "gui")]
 pub mod shaders;
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct TextLayoutKey {
+    pub text: String,
+    pub available_space_width: AvailableSpace,
+    pub options: graphics::primitives::TextLayoutOptions,
+}
+
 #[derive(Clone)]
+pub struct TextLayoutCache {
+    pub key: TextLayoutKey,
+    pub layout: Layout<ColorBrush>,
+}
+#[derive(Clone, Default)]
 pub struct PrimitiveCache {
     pub mask_textures: Vec<Arc<AllocatedTexture<Mask, TextureData>>>,
     pub color_textures: Vec<Arc<AllocatedTexture<Rgba8, TextureData>>>,
+    pub text_layout: Option<TextLayoutCache>,
 }
 
 pub struct Mesh<V> {
@@ -82,15 +97,15 @@ impl GraphicsContext {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ColorBrush {
-    pub color: PremulColor<LinearSrgb>,
+    pub color: Cell<PremulColor<LinearSrgb>>,
 }
 
 impl Default for ColorBrush {
     fn default() -> Self {
         Self {
-            color: color::AlphaColor::WHITE.premultiply(),
+            color: Cell::new(color::AlphaColor::WHITE.premultiply()),
         }
     }
 }

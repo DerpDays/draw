@@ -12,34 +12,23 @@ use sycamore_reactive::{ReadSignal, Signal};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
+    ElementId,
     MeasureCtx,
-    prelude::{BlurEvent, EventContext},
+    prelude::EventContext,
     tree::{Widget, builder::ElementBuilder},
 };
 
-pub struct InputField<I, B>
-where
-    I: Fn(Signal<String>, KeyboardEventKind),
-    B: Fn(Signal<String>),
-{
-    value: Signal<String>,
-
+pub struct InputField {
     enabled: ReadSignal<bool>,
-
-    input_fn: I,
-    blur_fn: B,
 }
 
-impl<I, B> Widget for InputField<I, B>
-where
-    I: Fn(Signal<String>, KeyboardEventKind),
-    B: Fn(Signal<String>),
-{
+impl Widget for InputField {
     fn render(&mut self, _: &Layout, _: &Style) -> Option<Primitive> {
         None
     }
     fn measure(
         &mut self,
+        _: ElementId,
         _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _: Size<AvailableSpace>,
@@ -71,92 +60,215 @@ where
         }
     }
     fn default_keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>, _: &Layout) {
-        if !ctx.in_capture_phase() {
-            if self.enabled.is_alive() && !self.enabled.get_untracked() {
-                return;
-            }
-            (self.input_fn)(self.value, ctx.payload().kind.clone());
-            if let KeyboardEventKind::Press(Key::SpecialKey(SpecialKey::Escape)) =
+        if !ctx.in_capture_phase()
+            && let KeyboardEventKind::Press(Key::SpecialKey(SpecialKey::Escape)) =
                 ctx.payload().kind
-            {
-                ctx.request_kb_focus_release();
-            }
-        }
-    }
-    fn default_blur_event(&mut self, ctx: &mut EventContext<BlurEvent>, _: &Layout) {
-        if !ctx.in_capture_phase() {
-            (self.blur_fn)(self.value);
+        {
+            ctx.request_kb_focus_release();
         }
     }
 }
 
 #[inline(always)]
-pub fn input_field<I, B>(
-    value: Signal<String>,
-    enabled: ReadSignal<bool>,
-    input_fn: I,
-    blur_fn: B,
-) -> ElementBuilder<InputField<I, B>>
-where
-    I: Fn(Signal<String>, KeyboardEventKind),
-    B: Fn(Signal<String>),
-{
-    ElementBuilder::new(InputField {
-        value,
-        enabled,
-        input_fn,
-        blur_fn,
-    })
+pub fn input_field(enabled: ReadSignal<bool>) -> ElementBuilder<InputField> {
+    ElementBuilder::new(InputField { enabled })
 }
 
-#[inline(always)]
-#[allow(clippy::type_complexity)]
+pub fn color_hex_input_field_blur(value_signal: Signal<String>) {
+    let val = value_signal.get_clone_untracked();
+    if val.len() != 6 {
+        if val.len() == 3 {
+            value_signal.set(
+                val.chars()
+                    .map(|c| format!("{0}{0}", c))
+                    .collect::<String>(),
+            );
+        } else {
+            value_signal.set(format!("{:0<6}", val).to_string())
+        }
+    };
+}
+
 pub fn color_hex_input_field(
-    value: Signal<String>,
+    value_signal: Signal<String>,
     enabled: ReadSignal<bool>,
-) -> ElementBuilder<InputField<impl Fn(Signal<String>, KeyboardEventKind), impl Fn(Signal<String>)>>
-{
-    input_field(
-        value,
-        enabled,
-        |signal, event| {
-            let mut value = signal.get_clone_untracked();
+) -> ElementBuilder<InputField> {
+    input_field(enabled)
+        .on_keyboard(move |_, ctx| {
+            if !ctx.in_capture_phase() {
+                let mut value = value_signal.get_clone_untracked();
+                let mut updated = false;
+                if let KeyboardEventKind::Press(key) = &ctx.payload().kind {
+                    match key {
+                        Key::SpecialKey(SpecialKey::Enter) => {
+                            ctx.request_kb_focus_release();
+                        }
+                        Key::SpecialKey(SpecialKey::Backspace) => {
+                            value.pop();
+                            updated = true;
+                        }
+                        Key::Character(string) => {
+                            for i in string.chars().filter(|x| x.is_ascii_hexdigit()) {
+                                if value.len() < 6 {
+                                    value.push(i.to_ascii_uppercase());
+                                }
+                            }
+                            updated = true;
+                        }
+                        _ => {}
+                    }
+                    if updated {
+                        value_signal.set(value)
+                    }
+                }
+            }
+        })
+        .on_blur(move |_, ctx| {
+            if !ctx.in_capture_phase() {
+                color_hex_input_field_blur(value_signal)
+            }
+        })
+}
+
+pub fn uint_input_field(
+    value_signal: Signal<String>,
+    enabled: ReadSignal<bool>,
+    min: usize,
+    max: usize,
+) -> ElementBuilder<InputField> {
+    input_field(enabled)
+        .on_keyboard(move |_, ctx| {
+            if !ctx.in_capture_phase() {
+                let mut value = value_signal.get_clone_untracked();
+                let mut updated = false;
+                if let KeyboardEventKind::Press(key) = &ctx.payload().kind {
+                    match key {
+                        Key::SpecialKey(SpecialKey::Enter) => {
+                            ctx.request_kb_focus_release();
+                        }
+                        Key::SpecialKey(SpecialKey::Backspace) => {
+                            value.pop();
+                            updated = true;
+                        }
+                        Key::Character(string) => {
+                            for i in string.chars().filter(|x| x.is_numeric()) {
+                                value.push(i);
+                            }
+                            let parsed = value.parse::<usize>().unwrap_or(min);
+                            if parsed > max {
+                                value = max.to_string();
+                            } else if parsed < min {
+                                value = min.to_string();
+                            }
+                            updated = true;
+                        }
+                        _ => {}
+                    }
+                    if updated {
+                        value_signal.set(value)
+                    }
+                }
+            }
+        })
+        .on_blur(move |_, ctx| {
+            if !ctx.in_capture_phase() {
+                let value = value_signal.get_clone_untracked();
+                let parsed = value.parse::<usize>().unwrap_or(min).clamp(min, max);
+                let parsed_str = parsed.to_string();
+                if parsed_str != value {
+                    value_signal.set(parsed_str)
+                }
+            }
+        })
+}
+
+pub fn float_input_field(
+    value_signal: Signal<String>,
+    enabled: ReadSignal<bool>,
+    max_precision: usize,
+) -> ElementBuilder<InputField> {
+    input_field(enabled)
+        .on_keyboard(move |_, ctx| {
+            if !ctx.in_capture_phase() {
+                let mut value = value_signal.get_clone_untracked();
+                let mut updated = false;
+                if let KeyboardEventKind::Press(key) = &ctx.payload().kind {
+                    match key {
+                        Key::SpecialKey(SpecialKey::Enter) => {
+                            ctx.request_kb_focus_release();
+                        }
+                        Key::SpecialKey(SpecialKey::Backspace) => {
+                            value.pop();
+                            updated = true;
+                        }
+                        Key::Character(string) => {
+                            for i in string
+                                .chars()
+                                .filter(|x| x.is_numeric() || *x == '.' || *x == '-')
+                            {
+                                if i == '-' {
+                                    if value.is_empty() {
+                                        value.push(i)
+                                    }
+                                    continue;
+                                }
+                                if let Some(idx) = value.find('.') {
+                                    if i != '.' && value.len() - idx < max_precision {
+                                        value.push(i);
+                                    }
+                                } else {
+                                    value.push(i);
+                                }
+                            }
+                            updated = true;
+                        }
+                        _ => {}
+                    }
+                    if updated {
+                        value_signal.set(value)
+                    }
+                }
+            }
+        })
+        .on_blur(move |_, ctx| {
+            if !ctx.in_capture_phase() {
+                let value = value_signal.get_clone_untracked();
+                if value.is_empty() {
+                    value_signal.set(0.0.to_string())
+                }
+            }
+        })
+}
+
+pub fn single_line_input_field(
+    value_signal: Signal<String>,
+    enabled: ReadSignal<bool>,
+) -> ElementBuilder<InputField> {
+    input_field(enabled).on_keyboard(move |_, ctx| {
+        if !ctx.in_capture_phase() {
+            let mut value = value_signal.get_clone_untracked();
             let mut updated = false;
-            if let KeyboardEventKind::Press(key) = event {
+            if let KeyboardEventKind::Press(key) = &ctx.payload().kind {
                 match key {
+                    Key::SpecialKey(SpecialKey::Enter) => {
+                        ctx.request_kb_focus_release();
+                    }
                     Key::SpecialKey(SpecialKey::Backspace) => {
                         value.pop();
                         updated = true;
                     }
                     Key::Character(string) => {
-                        for i in string.chars().filter(|x| x.is_ascii_hexdigit()) {
-                            if value.len() < 6 {
-                                value.push(i.to_ascii_uppercase());
-                            }
+                        for i in string.chars() {
+                            value.push(i);
                         }
                         updated = true;
                     }
                     _ => {}
                 }
                 if updated {
-                    signal.set(value)
+                    value_signal.set(value)
                 }
             }
-        },
-        |signal| {
-            log::error!("got blur event!");
-            let val = signal.get_clone_untracked();
-            if val.len() != 6 {
-                if val.len() == 3 {
-                    signal.set(
-                        val.chars()
-                            .map(|c| format!("{0}{0}", c))
-                            .collect::<String>(),
-                    );
-                } else {
-                    signal.set(format!("{:0<6}", val).to_string())
-                }
-            };
-        },
-    )
+        }
+    })
 }

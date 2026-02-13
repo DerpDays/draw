@@ -1,5 +1,5 @@
 use color::LinearSrgb;
-use euclid::default::{Box2D, SideOffsets2D};
+use euclid::default::{Box2D, Point2D, SideOffsets2D};
 use graphics::{BasicColor, make_positive_box, primitives::Rectangle};
 use lyon::{
     path::{Path, Winding},
@@ -17,7 +17,6 @@ pub fn render_rectangle(rect: &Rectangle) -> Mesh<Vertex> {
         return render_rounded_rectangle(rect);
     }
 
-    log::error!("rendering rectangle {:?}", rect);
     let area = make_positive_box(
         Box2D::from_origin_and_size(rect.origin, rect.size).inner_box(rect.border),
     );
@@ -34,35 +33,35 @@ pub fn render_rectangle(rect: &Rectangle) -> Mesh<Vertex> {
     // base rect
     basic_quad(&mut mesh, area, &rect.color);
 
-    if rect.border.top > 0.0 {
+    if rect.border.top != 0.0 {
         let top_area = make_positive_box(Box2D::new(
-            euclid::point2(area.min.x - rect.border.left, area.min.y - rect.border.top),
-            euclid::point2(area.max.x + rect.border.right, area.min.y),
+            Point2D::new(area.min.x - rect.border.left, area.min.y - rect.border.top),
+            Point2D::new(area.max.x + rect.border.right, area.min.y),
         ));
         basic_quad(&mut mesh, top_area, &rect.border_color);
     }
-    if rect.border.bottom > 0.0 {
+    if rect.border.bottom != 0.0 {
         let bottom_area = make_positive_box(Box2D::new(
-            euclid::point2(area.min.x - rect.border.left, area.max.y),
-            euclid::point2(
+            Point2D::new(area.min.x - rect.border.left, area.max.y),
+            Point2D::new(
                 area.max.x + rect.border.right,
                 area.max.y + rect.border.bottom,
             ),
         ));
         basic_quad(&mut mesh, bottom_area, &rect.border_color);
     }
-    if rect.border.left > 0.0 {
+    if rect.border.left != 0.0 {
         let left_area = make_positive_box(Box2D::new(
-            euclid::point2(area.min.x - rect.border.left, area.min.y),
-            euclid::point2(area.min.x, area.max.y),
+            Point2D::new(area.min.x - rect.border.left, area.min.y),
+            Point2D::new(area.min.x, area.max.y),
         ));
         basic_quad(&mut mesh, left_area, &rect.border_color);
     }
 
-    if rect.border.right > 0.0 {
+    if rect.border.right != 0.0 {
         let right_area = make_positive_box(Box2D::new(
-            euclid::point2(area.max.x, area.min.y),
-            euclid::point2(area.max.x + rect.border.right, area.max.y),
+            Point2D::new(area.max.x, area.min.y),
+            Point2D::new(area.max.x + rect.border.right, area.max.y),
         ));
         basic_quad(&mut mesh, right_area, &rect.border_color);
     }

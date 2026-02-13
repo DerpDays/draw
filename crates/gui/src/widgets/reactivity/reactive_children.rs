@@ -5,6 +5,7 @@ use sycamore_reactive::{NodeHandle, create_child_scope, create_effect};
 use taffy::{AvailableSpace, Layout, Size};
 
 use crate::{
+    ElementId,
     MeasureCtx,
     TreeManager,
     tree::{
@@ -20,6 +21,7 @@ impl Widget for ReactiveChildren {
 
     fn measure(
         &mut self,
+        _: ElementId,
         _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _available: Size<AvailableSpace>,

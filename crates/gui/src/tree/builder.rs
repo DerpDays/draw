@@ -185,12 +185,12 @@ impl<W: Widget + 'static> ElementBuilder<W> {
 
             inner: Box::new(self.inner),
             style: self.style,
-            scroll_amount: 0.,
             zindex: self.zindex,
 
             rel_final_layout: Layout::new(),
             rel_unrounded_layout: Layout::new(),
             abs_layout: Layout::new(),
+            clip_rect: Default::default(),
 
             cache: taffy::Cache::new(),
 

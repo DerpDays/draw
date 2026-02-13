@@ -8,6 +8,7 @@ use gui::{ElementId, GuiRenderer, MeasureCtx};
 
 use crate::{
     GraphicsContext,
+    TextLayoutKey,
     arena::Key,
     primitives::{DrawType, PrimitiveMesh, PrimitiveToMesh},
     shaders::{generic::GenericRenderer, texture::TextureState},
@@ -21,7 +22,7 @@ pub mod generic;
 pub mod texture;
 
 pub struct CacheEntry {
-    previous_elem: graphics::Primitive,
+    previous_elem: Option<graphics::Primitive>,
     cache: Option<crate::PrimitiveCache>,
     alloc: Alloc,
 }
@@ -45,8 +46,6 @@ pub struct WgpuRenderer {
     pub viewport: ViewportBinds,
 
     pub generic_renderer: GenericRenderer,
-    // pub basic_shapes: BasicShapeState,
-    // pub text_state: TextState,
     pub texture_state: TextureState,
 }
 
@@ -115,7 +114,6 @@ impl RendererPass<'_> {
         scissor_rect: Box2D<u32>,
     ) {
         let Some(elem) = renderer.gui_cache.get(&elem) else {
-            log::warn!("tried to draw a gui element without a cache entry");
             return;
         };
 
@@ -168,7 +166,7 @@ impl GuiRenderer for WgpuRenderer {
     fn update_cached(&mut self, elem_id: ElementId, primitive: graphics::Primitive) {
         // if already existing
         if let Some(entry) = self.gui_cache.get_mut(&elem_id) {
-            if entry.previous_elem != primitive {
+            if entry.previous_elem.as_ref() != Some(&primitive) {
                 log::trace!("updating primitive: {primitive:?}");
                 let mesh = primitive.to_mesh(&mut self.ctx, &mut entry.cache);
                 match mesh {
@@ -214,15 +212,14 @@ impl GuiRenderer for WgpuRenderer {
                     }
                 }
 
-                entry.previous_elem = primitive;
+                entry.previous_elem = Some(primitive);
             }
         } else {
             log::info!("inserting primitive into cache: {primitive:?}");
             let mut cache = None;
             let mesh = primitive.to_mesh(&mut self.ctx, &mut cache);
-            // log::info!("mesh is: {:?} for primitive {primitive:?}", mesh.vertices);
             let entry = CacheEntry {
-                previous_elem: primitive,
+                previous_elem: Some(primitive),
                 cache,
                 alloc: match mesh {
                     PrimitiveMesh::Generic(mesh) => {
@@ -259,34 +256,72 @@ impl GuiRenderer for WgpuRenderer {
 
 #[cfg(feature = "gui")]
 impl MeasureCtx for WgpuRenderer {
-    // FIXME: cache generated layout
     fn measure_text(
         &mut self,
+        id: ElementId,
         text: String,
         text_layout: graphics::primitives::TextLayoutOptions,
         available_space_width: graphics::primitives::AvailableSpace,
         max_width: Option<f32>,
     ) -> gui::reexports::taffy::Size<f32> {
-        let layout = crate::primitives::prepare_text_layout(
-            &mut self.ctx,
-            &text,
-            color::AlphaColor::BLACK,
-            &text_layout,
-            max_width.or(match available_space_width {
-                graphics::primitives::AvailableSpace::Definite(x) => Some(x),
-                _ => None,
-            }),
-            1.25,
-        );
+        let key = TextLayoutKey {
+            text,
+            available_space_width: available_space_width.clone(),
+            options: text_layout,
+        };
+
+        let entry = self.gui_cache.entry(id).or_insert_with(|| CacheEntry {
+            previous_elem: None,
+            cache: Some(crate::PrimitiveCache::default()),
+            alloc: Alloc::Empty,
+        });
+        let layout = if let Some(cache) = &mut entry.cache
+            && let Some(text_cache) = &mut cache.text_layout
+            && text_cache.key == key
+        {
+            &text_cache.layout
+        } else {
+            let layout = crate::primitives::prepare_text_layout(
+                &mut self.ctx,
+                &key.text,
+                color::AlphaColor::BLACK,
+                &key.options,
+                max_width.or(match available_space_width {
+                    graphics::primitives::AvailableSpace::Definite(x) => Some(x),
+                    _ => None,
+                }),
+                1.,
+            );
+            let cache_entry = crate::TextLayoutCache { key, layout };
+            if let Some(cache) = &mut entry.cache {
+                cache.text_layout = Some(cache_entry);
+            } else {
+                entry.cache = Some(crate::PrimitiveCache {
+                    text_layout: Some(cache_entry),
+                    ..Default::default()
+                })
+            }
+            &entry
+                .cache
+                .as_ref()
+                .unwrap()
+                .text_layout
+                .as_ref()
+                .unwrap()
+                .layout
+        };
+
+        // Handle Taffy's Min/Max content logic
         let width = match available_space_width {
             graphics::primitives::AvailableSpace::Definite(_) => layout.width(),
             graphics::primitives::AvailableSpace::MinContent => {
-                layout.calculate_content_widths().min + 1.
+                layout.calculate_content_widths().min + 1.0
             }
             graphics::primitives::AvailableSpace::MaxContent => {
-                layout.calculate_content_widths().max + 1.
+                layout.calculate_content_widths().max + 1.0
             }
         };
+
         gui::reexports::taffy::Size {
             width,
             height: layout.height(),

@@ -17,7 +17,8 @@ pub enum Primitive {
     Svg(Svg),
     Text(Text),
     Triangle(Triangle),
-
+    /// A custom primitive type that can be downcast into a rendererer specific specialisation.
+    /// Typically the chosen rendererer provides the concrete custom types.
     Custom(Box<dyn CustomPrimitive>),
 }
 impl Clone for Primitive {

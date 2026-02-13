@@ -23,6 +23,7 @@ use sycamore_reactive::{MaybeDyn, ReadSignal, create_effect};
 use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
+    ElementId,
     MeasureCtx,
     TreeManager,
     reexports::reactivity::maybe_get_clone_untracked,
@@ -33,9 +34,15 @@ pub struct Text {
     pub text: ReadSignal<String>,
     options: MaybeDyn<TextOptions>,
 
-    last_measured_opts: Option<TextLayoutOptions>,
-    last_layout_size: Option<Size<f32>>,
+    last_measured: Option<LayoutMeasure>,
 }
+struct LayoutMeasure {
+    text: String,
+    layout: TextLayoutOptions,
+    width_constraint: TextLayoutOptions,
+    size: Size<f32>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct TextOptions {
     pub color: Option<AlphaColor<Srgb>>,
@@ -55,7 +62,7 @@ impl TextOptions {
             font_family: self
                 .font_family
                 .unwrap_or(FontFamily::Generic(GenericFamily::UiSansSerif)),
-            font_size: self.font_size.unwrap_or(14.),
+            font_size: self.font_size.unwrap_or(18.),
             font_style: self
                 .font_style
                 .unwrap_or(primitives::text::FontStyle::Normal),
@@ -94,6 +101,7 @@ impl Widget for Text {
     }
     fn measure(
         &mut self,
+        id: ElementId,
         measure_ctx: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         available_space: Size<AvailableSpace>,
@@ -101,12 +109,14 @@ impl Widget for Text {
     ) -> Size<f32> {
         let text = self.text.get_clone_untracked();
         let options = maybe_get_clone_untracked(&self.options).to_layout_options();
-        let measured_size = if Some(options.clone()) != self.last_measured_opts
-            && let Some(last_size) = self.last_layout_size
+        let measured_size = if let Some(measured) = &self.last_measured
+            && measured.text == text
+            && measured.layout == options
         {
-            last_size
+            measured.size
         } else {
             measure_ctx.measure_text(
+                id,
                 text,
                 options,
                 match available_space.width {
@@ -134,8 +144,7 @@ pub fn text(text: ReadSignal<String>) -> ElementBuilder<Text> {
             text,
             options: MaybeDyn::Static(TextOptions::default()),
 
-            last_measured_opts: None,
-            last_layout_size: None,
+            last_measured: None,
         },
         move |elem_id| {
             let mgr = TreeManager::global();
@@ -156,8 +165,7 @@ impl ElementBuilder<Text> {
             text: self.inner().text,
             options: options.clone(),
 
-            last_measured_opts: None,
-            last_layout_size: None,
+            last_measured: None,
         };
         self.set_inner(inner).append_after_build(move |_| {
             let mgr = TreeManager::global();

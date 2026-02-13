@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc};
 use thiserror::Error;
 
 use atlas::{AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture};
@@ -32,6 +32,8 @@ use crate::{
     Mesh,
     PrimitiveCache,
     TextData,
+    TextLayoutCache,
+    TextLayoutKey,
     TextureData,
     TextureState,
     shaders::generic::{Vertex, VertexKind},
@@ -47,16 +49,43 @@ pub fn render_text(
 
     let start_position = area.min.round();
 
-    let layout = prepare_text_layout(
-        ctx,
-        &text.text,
-        text.color,
-        &text.text_layout,
-        Some(text.size.width),
-        1.25,
-    );
+    let layout_key = TextLayoutKey {
+        text: text.text.clone(),
+        available_space_width: graphics::primitives::AvailableSpace::Definite(text.size.width),
+        options: text.text_layout.clone(),
+    };
 
-    // let cursor = Cursor::from_byte_index(&layout, 3, parley::Affinity::Downstream);
+    let layout = cache
+        .take()
+        .and_then(|x| {
+            if let Some(cache) = x.text_layout {
+                if cache.key == layout_key
+                    || !matches!(
+                        cache.key.available_space_width,
+                        graphics::primitives::AvailableSpace::Definite(_)
+                    )
+                {
+                    for style in cache.layout.styles() {
+                        style.brush.color.set(text.color.convert().premultiply());
+                    }
+                    Some(cache.layout)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| {
+            prepare_text_layout(
+                ctx,
+                &text.text,
+                text.color,
+                &text.text_layout,
+                Some(text.size.width),
+                1.,
+            )
+        });
 
     let mut mesh: Mesh<Vertex> = Mesh::empty();
 
@@ -65,6 +94,7 @@ pub fn render_text(
         // Assume most text outputs as mask textures, so allocate with that in mind.
         mask_textures: Vec::with_capacity(text.text.len()),
         color_textures: Vec::new(),
+        text_layout: None,
     };
 
     let &mut GraphicsContext {
@@ -111,6 +141,10 @@ pub fn render_text(
         }
     }
 
+    new_cache.text_layout = Some(TextLayoutCache {
+        key: layout_key,
+        layout,
+    });
     *cache = Some(new_cache);
     mesh
 }
@@ -131,7 +165,7 @@ pub fn prepare_text_layout(
         font_style: options.font_style.into(),
         font_weight: options.font_weight.into(),
         brush: ColorBrush {
-            color: color.convert().premultiply(),
+            color: Cell::new(color.convert().premultiply()),
         },
         line_height: options.line_height.into(),
         word_break: options.word_break_strength.into(),
@@ -147,7 +181,7 @@ pub fn prepare_text_layout(
 
     let mut layout: Layout<ColorBrush> = builder.build().0;
     layout.break_all_lines(max_width);
-    layout.align(max_width, Alignment::Start, AlignmentOptions::default());
+    // layout.align(max_width, Alignment::Start, AlignmentOptions::default());
     layout
 }
 
@@ -366,7 +400,7 @@ impl<'a> GlyphRunRenderer<'a> {
 
     #[profiling::function]
     fn try_glyph_cache(&mut self, cache_key: CacheKey, position: Point2D<f32>) -> Option<()> {
-        let fill = self.glyph_run.style().brush.color;
+        let fill = self.glyph_run.style().brush.color.get();
         if Self::try_generic_glyph_cache(
             self.mesh,
             cache_key.clone(),
@@ -446,7 +480,7 @@ impl<'a> GlyphRunRenderer<'a> {
                     glyph_area,
                     &allocated_glyph,
                     &self.texture_state.mask_atlas,
-                    self.glyph_run.style().brush.color,
+                    self.glyph_run.style().brush.color.get(),
                     VertexKind::MaskTexture,
                 ));
                 self.cache.mask_textures.push(allocated_glyph);
@@ -468,7 +502,7 @@ impl<'a> GlyphRunRenderer<'a> {
                     glyph_area,
                     &allocated_glyph,
                     &self.texture_state.color_atlas,
-                    self.glyph_run.style().brush.color,
+                    self.glyph_run.style().brush.color.get(),
                     VertexKind::ColorTexture,
                 ));
                 self.cache.color_textures.push(allocated_glyph);
@@ -491,7 +525,7 @@ impl<'a> GlyphRunRenderer<'a> {
                     self.start_position.x + self.glyph_run.offset() + self.glyph_run.advance(),
                     self.start_position.y + y + width,
                 ],
-                self.glyph_run.style().brush.color,
+                self.glyph_run.style().brush.color.get(),
             ),
             vec![0, 1, 2, 0, 2, 3],
         );

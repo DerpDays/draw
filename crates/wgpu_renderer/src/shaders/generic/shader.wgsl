@@ -43,7 +43,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     } else if (in.kind == 1u) {
         let mask = textureSampleLevel(mask_atlas, tex_sampler, in.tex_coords, in.texture, 0.0).r;
         // in.color.rgb is premultiplied
-        // return vec4(1., 1., 1., 1.);
         return vec4(in.color.rgb * mask, in.color.a * mask);
     }
     return textureSampleLevel(color_atlas, tex_sampler, in.tex_coords, in.texture, 0.);

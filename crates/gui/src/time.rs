@@ -6,30 +6,29 @@ use core::time::Duration;
 
 #[cfg(target_arch = "wasm32")]
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
-pub struct Instant {
-    t: f64, // milliseconds from performance.now()
-}
+/// milliseconds from performance.now()
+pub struct Instant(pub u64);
+
 #[cfg(target_arch = "wasm32")]
-fn get_wasm_now() -> f64 {
+fn get_wasm_now() -> u64 {
     thread_local! {
         static PERF: web_sys::Performance = web_sys::window()
             .unwrap()
             .performance()
             .unwrap();
     }
-    PERF.with(|p| p.now())
+    PERF.with(|p| p.now() as u64)
 }
 
 #[cfg(target_arch = "wasm32")]
 impl Instant {
     #[inline]
     pub fn now() -> Self {
-        Self { t: get_wasm_now() }
+        Self(get_wasm_now())
     }
 
     #[inline]
     pub fn elapsed(self) -> Duration {
-        let dt = get_wasm_now() - self.t;
-        Duration::from_secs_f64((dt.max(0.0)) / 1000.0)
+        Duration::from_millis((get_wasm_now() - self.0).max(0))
     }
 }

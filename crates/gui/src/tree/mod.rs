@@ -1,3 +1,4 @@
+use euclid::default::Box2D;
 use graphics::Primitive;
 use input::{KeyboardEvent, MouseEvent};
 use sycamore_reactive::MaybeDyn;
@@ -39,14 +40,15 @@ pub trait Node {
     // Taffy specific
     fn get_style(&self) -> taffy::Style;
 
-    fn get_abs_layout(&self) -> &taffy::Layout;
-
     fn get_relative_unrounded_layout(&self) -> &taffy::Layout;
     fn get_relative_final_layout(&self) -> &taffy::Layout;
+    fn get_abs_layout(&self) -> &taffy::Layout;
+    fn get_clip_rect(&self) -> &Box2D<f32>;
 
     fn set_relative_unrounded_layout(&mut self, layout: Layout);
     fn set_relative_final_layout(&mut self, layout: Layout);
     fn set_abs_layout(&mut self, layout: Layout);
+    fn set_clip_rect(&mut self, clip: Box2D<f32>);
 
     fn layout_cache(&self) -> &taffy::Cache;
     fn layout_cache_mut(&mut self) -> &mut taffy::Cache;
@@ -63,6 +65,7 @@ pub trait Widget {
     /// NOTE: this is only ran when the element is a leaf node (i.e. no children).
     fn measure(
         &mut self,
+        id: ElementId,
         measure_ctx: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         available: Size<AvailableSpace>,
@@ -94,8 +97,6 @@ pub struct Element {
 
     pub inner: Box<dyn Widget>,
     style: MaybeDyn<StyleWrapper>,
-    // scroll amount in pixels
-    scroll_amount: f32,
     zindex: MaybeDyn<ZIndexProperties>,
 
     // taffy relative layouts
@@ -103,6 +104,7 @@ pub struct Element {
     rel_final_layout: taffy::Layout,
     // absolute layout
     abs_layout: taffy::Layout,
+    clip_rect: Box2D<f32>,
 
     cache: taffy::Cache,
 
@@ -113,15 +115,25 @@ pub struct Element {
     pub(crate) focus_handler: EventHandler<FocusEvent>,
     pub(crate) blur_handler: EventHandler<BlurEvent>,
 }
+impl std::fmt::Debug for Box<dyn Widget> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Widget")
+            .field("label", &self.debug_label())
+            .finish()
+    }
+}
 impl std::fmt::Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Element")
             .field("node_id", &self.node_id)
             .field("parent_id", &self.parent_id)
-            .field("inner", &self.inner.debug_label())
+            .field("inner", &self.inner)
+            .field("style", &self.get_style())
+            .field("zindex", &self.get_zindex_properties())
             .field("rel_unrounded_layout", &self.rel_unrounded_layout)
             .field("rel_final_layout", &self.rel_final_layout)
             .field("abs_layout", &self.abs_layout)
+            .field("clip_rect", &self.clip_rect)
             .field("cache", &self.cache)
             .field("children", &self.children)
             .finish()
@@ -129,12 +141,12 @@ impl std::fmt::Debug for Element {
 }
 
 impl Node for Element {
-    #[inline(always)]
+    #[inline]
     fn render(&mut self, layout: &Layout) -> Option<Primitive> {
         self.inner
             .render(layout, &maybe_get_clone_untracked(&self.style).into())
     }
-    #[inline(always)]
+    #[inline]
     fn measure(
         &mut self,
         measure_ctx: &mut dyn MeasureCtx,
@@ -142,10 +154,15 @@ impl Node for Element {
         available_space: Size<AvailableSpace>,
         style: &taffy::Style,
     ) -> Size<f32> {
-        self.inner
-            .measure(measure_ctx, known_dimensions, available_space, style)
+        self.inner.measure(
+            self.node_id,
+            measure_ctx,
+            known_dimensions,
+            available_space,
+            style,
+        )
     }
-    #[inline(always)]
+    #[inline]
     fn debug_label(&self) -> &'static str {
         self.inner.debug_label()
     }
@@ -154,14 +171,14 @@ impl Node for Element {
         &self.children
     }
 
-    #[inline(always)]
+    #[inline]
     fn mouse_event(&mut self, ctx: &mut EventContext<MouseEvent>) {
         self.mouse_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
             self.inner.default_mouse_event(ctx, &self.abs_layout);
         }
     }
-    #[inline(always)]
+    #[inline]
     fn keyboard_event(&mut self, ctx: &mut EventContext<KeyboardEvent>) {
         self.keyboard_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
@@ -169,14 +186,14 @@ impl Node for Element {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn focus_event(&mut self, ctx: &mut EventContext<FocusEvent>) {
         self.focus_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
             self.inner.default_focus_event(ctx, &self.abs_layout);
         }
     }
-    #[inline(always)]
+    #[inline]
     fn blur_event(&mut self, ctx: &mut EventContext<BlurEvent>) {
         self.blur_handler.handle(self, ctx);
         if !ctx.is_preventing_default() {
@@ -188,43 +205,50 @@ impl Node for Element {
         maybe_get_untracked(&self.zindex)
     }
 
-    #[inline(always)]
+    #[inline]
     fn get_style(&self) -> taffy::Style {
         maybe_get_clone_untracked(&self.style).into()
     }
 
-    #[inline(always)]
-    fn get_abs_layout(&self) -> &taffy::Layout {
-        &self.abs_layout
-    }
-
-    #[inline(always)]
+    #[inline]
     fn get_relative_unrounded_layout(&self) -> &taffy::Layout {
         &self.rel_unrounded_layout
     }
-    #[inline(always)]
+    #[inline]
     fn get_relative_final_layout(&self) -> &taffy::Layout {
         &self.rel_final_layout
     }
+    #[inline]
+    fn get_abs_layout(&self) -> &taffy::Layout {
+        &self.abs_layout
+    }
+    #[inline]
+    fn get_clip_rect(&self) -> &Box2D<f32> {
+        &self.clip_rect
+    }
 
-    #[inline(always)]
+    #[inline]
     fn set_relative_unrounded_layout(&mut self, layout: Layout) {
         self.rel_unrounded_layout = layout;
     }
-    #[inline(always)]
+    #[inline]
     fn set_relative_final_layout(&mut self, layout: taffy::Layout) {
         self.rel_final_layout = layout;
     }
-    #[inline(always)]
+    #[inline]
     fn set_abs_layout(&mut self, layout: taffy::Layout) {
         self.abs_layout = layout;
     }
+    #[inline]
+    fn set_clip_rect(&mut self, clip: Box2D<f32>) {
+        self.clip_rect = clip;
+    }
 
-    #[inline(always)]
+    #[inline]
     fn layout_cache(&self) -> &taffy::Cache {
         &self.cache
     }
-    #[inline(always)]
+    #[inline]
     fn layout_cache_mut(&mut self) -> &mut taffy::Cache {
         &mut self.cache
     }

@@ -1,4 +1,4 @@
-use crate::time::Instant;
+use crate::{ElementId, time::Instant};
 use core::time::Duration;
 
 use std::cell::Cell;
@@ -100,53 +100,74 @@ impl RectOptions {
 impl Widget for Rect {
     fn render(&mut self, layout: &Layout, _style: &Style) -> Option<Primitive> {
         let bg = self.background.as_mut()?;
+        // The new desired state from the application
+        let target_options = maybe_get_untracked(&bg.options);
 
-        let mut options = maybe_get_untracked(&bg.options);
+        // The state the widget is currently trying to reach.
+        // If animating, it's the animation target. If idle, it's the last set value.
+        let current_active_target = if let Some(state) = &bg.transition_state {
+            state.to
+        } else {
+            bg.last_options
+        };
 
-        if options != bg.last_options {
+        // Check if the target has changed
+        if target_options != current_active_target {
             if let Some(state) = &mut bg.transition_state {
-                // only start a new transition if the target changed
-                // otherwise do nothing — let the existing transition continue
-                if options != state.to {
-                    state.start = Instant::now();
-                    state.from = state.last_set;
-                    state.to = options;
-                }
+                // INTERRUPTION: The target changed while we were already moving.
+                // 1. We start the new animation from the current visual state (last_set)
+                //    This creates the smooth "handoff" you see in CSS.
+                state.from = state.last_set;
+                state.to = target_options;
+
+                // 2. Reset the timer so the new transition takes the full duration
+                state.start = Instant::now();
             } else if bg.transition_duration.is_some() {
+                // START NEW: We were idle, now we move.
                 let mgr = TreeManager::global();
-                // start a new transition from last_options
                 bg.transition_state = Some(TransitionState {
                     start: Instant::now(),
                     from: bg.last_options,
-                    to: options,
+                    to: target_options,
                     last_set: bg.last_options,
                     _animation_handle: mgr.new_animation_handle(),
                 });
             } else {
-                // no transition: snap immediately
-                bg.last_options = options;
+                // SNAP: No duration defined, just update immediately.
+                bg.last_options = target_options;
             }
         }
-        // If we are in a transition, interpolate
+
+        // --- Render / Interpolation Logic ---
+
+        // This variable holds the value we will actually draw this frame
+        let mut draw_options = target_options;
+
         if let Some(mut state) = bg.transition_state.take() {
             let elapsed = state.start.elapsed();
             let duration = bg
                 .transition_duration
-                .expect("should only have a transition state when a transition duration is set");
+                .expect("Transition state exists, so duration must exist");
 
-            options = if elapsed < duration {
+            if elapsed < duration {
+                // Still animating
                 let t = elapsed.div_duration_f32(duration);
+
+                // Interpolate from the interruption point (state.from) to the new target
                 let lerped = state.from.lerp(&state.to, t);
-                state.last_set = lerped;
-                bg.transition_state = Some(state);
-                lerped
+
+                state.last_set = lerped; // Save current visual state for potential future interruptions
+                bg.transition_state = Some(state); // Put state back
+                draw_options = lerped;
             } else {
+                // Animation finished
                 bg.last_options = state.to;
-                state.to
+                draw_options = state.to;
+                // We do NOT put bg.transition_state back, so it becomes None
             }
         };
 
-        Some(Primitive::Rectangle(options.to_rect(
+        Some(Primitive::Rectangle(draw_options.to_rect(
             Point2D::new(layout.location.x, layout.location.y),
             Size2D::new(
                 layout.content_box_width().max(layout.size.width),
@@ -163,6 +184,7 @@ impl Widget for Rect {
 
     fn measure(
         &mut self,
+        _: ElementId,
         _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _: Size<AvailableSpace>,
