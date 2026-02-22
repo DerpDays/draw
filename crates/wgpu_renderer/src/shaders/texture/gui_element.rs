@@ -5,7 +5,6 @@ use gui::{
     MeasureCtx,
     TreeManager,
     prelude::{AvailableSpace, Layout, MaybeDyn, Size, Style, create_effect},
-    reexports::reactivity::maybe_get_clone_untracked,
     tree::{Widget, builder::ElementBuilder},
 };
 
@@ -24,7 +23,7 @@ impl Widget for WgpuTexture {
     fn render(&mut self, layout: &Layout, _: &Style) -> Option<Primitive> {
         Some(Primitive::Custom(
             TexturePrimitive {
-                bind_group: maybe_get_clone_untracked(&self.bind_group),
+                bind_group: self.bind_group.get_clone_untracked(),
                 area: Box2D::from_origin_and_size(
                     Point2D::new(layout.location.x, layout.location.y),
                     Size2D::new(layout.size.width, layout.size.height),

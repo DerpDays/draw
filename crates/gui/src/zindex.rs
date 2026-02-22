@@ -1,16 +1,15 @@
-use sycamore_reactive::MaybeDyn;
+use crate::{ElementId, Tree, prelude::MaybeDyn, tree::Node};
 
-use crate::{ElementId, Tree, tree::Node};
-
-/// Metadata about a gui tree node's z-index
+// Sets the z-index used for this node
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ZIndexProperties {
-    /// The z-index set for this node
+    /// The z-index for this node, which determines its stacking order.
+    /// Higher values place the element in front of lower ones.
     pub z_index: isize,
     /// Whether to isolate the child nodes z-index from the rest of the siblings/ancestors.
     ///
-    /// When this is set to true, the node is rendered last in its z-layer for its current z
-    /// context.
+    /// When this is true, children nodes will always be rendered in the zindex of the current node,
+    /// with their own independent zindex stacking ordering.
     pub isolate_z: bool,
 }
 impl From<ZIndexProperties> for MaybeDyn<ZIndexProperties> {
@@ -36,7 +35,7 @@ impl ZIndexProperties {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
-pub struct ZIndexOrdering {
+pub(crate) struct ZIndexOrdering {
     render_order: Vec<ElementId>,
 }
 
@@ -62,10 +61,13 @@ impl ZIndexOrdering {
         stack.reverse();
 
         while let Some(node) = stack.pop() {
-            if tree.get(node).get_style().display == taffy::Display::None {
+            if tree.get(node).get_style_clone().display == taffy::Display::None {
                 continue;
             }
-            let z_indexing = tree.get(node).get_zindex_properties();
+            let z_indexing = tree
+                .get(node)
+                .get_style()
+                .with_untracked(|style| style.zindex);
             if z_indexing.isolate_z {
                 sorted.push((
                     NodeGrouping::IsolatedContext(Self::sort_stacking_context(tree, node)),

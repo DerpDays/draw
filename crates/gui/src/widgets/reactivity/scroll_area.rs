@@ -4,17 +4,21 @@ use graphics::{Primitive, Rounding};
 use input::{MouseButton, MouseEventKind};
 use std::cell::Cell;
 use sycamore_reactive::{Signal, create_memo};
-use taffy::{AvailableSpace, Layout, Size, Style};
+
+use crate::prelude::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
     ElementId,
     MeasureCtx,
     TreeManager,
     events::EventPhase,
-    tree::{StyleWrapper, Widget, builder::ElementBuilder},
+    tree::{Widget, builder::ElementBuilder},
     widgets::primitives::rect,
 };
 
+// FIXME: This is honestly terrible - both for performance and as its impl
+
+#[derive(Debug)]
 struct ScrollGeometry {
     scrollbar_w: f32,
     max_scroll: f32,
@@ -72,6 +76,7 @@ const MIN_SCROLLBAR_HEIGHT: f32 = 12.;
 impl Widget for ScrollArea {
     fn render(&mut self, layout: &Layout, _: &Style) -> Option<Primitive> {
         let geo = ScrollGeometry::from_layout(layout, self.scroll_amount.get_untracked());
+        log::error!("scrollbar geometry: {geo:?}");
 
         if geo.visible_ratio >= 1.0 || geo.scrollbar_w <= 0.0 {
             return None;
@@ -189,25 +194,23 @@ pub fn scroll_container(
         })
         .child(
             rect()
-                .style(create_memo(move || {
-                    StyleWrapper(Style {
-                        display: taffy::Display::Flex,
-                        flex_direction: taffy::FlexDirection::Column,
-                        inset: taffy::Rect {
-                            top: taffy::prelude::length(-scroll_pos.get()),
-                            ..taffy::prelude::zero()
-                        },
-                        margin: taffy::Rect {
-                            bottom: taffy::prelude::length(scroll_pos.get()),
-                            ..taffy::prelude::zero()
-                        },
-                        gap: taffy::prelude::length(gap),
-                        size: taffy::Size {
-                            width: taffy::prelude::percent(1.0),
-                            height: taffy::prelude::auto(),
-                        },
-                        ..Default::default()
-                    })
+                .style(create_memo(move || Style {
+                    display: taffy::Display::Flex,
+                    flex_direction: taffy::FlexDirection::Column,
+                    inset: taffy::Rect {
+                        top: taffy::prelude::length(-scroll_pos.get()),
+                        ..taffy::prelude::zero()
+                    },
+                    margin: taffy::Rect {
+                        bottom: taffy::prelude::length(scroll_pos.get()),
+                        ..taffy::prelude::zero()
+                    },
+                    gap: taffy::prelude::length(gap),
+                    size: taffy::Size {
+                        width: taffy::prelude::percent(1.0),
+                        height: taffy::prelude::auto(),
+                    },
+                    ..Default::default()
                 }))
                 .child(children),
         )

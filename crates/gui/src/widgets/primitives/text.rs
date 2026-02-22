@@ -19,14 +19,13 @@ use graphics::{
         },
     },
 };
-use sycamore_reactive::{MaybeDyn, ReadSignal, create_effect};
-use taffy::{AvailableSpace, Layout, Size, Style};
+
+use crate::prelude::{AvailableSpace, Layout, MaybeDyn, ReadSignal, Size, Style, create_effect};
 
 use crate::{
     ElementId,
     MeasureCtx,
     TreeManager,
-    reexports::reactivity::maybe_get_clone_untracked,
     tree::{Widget, builder::ElementBuilder},
 };
 
@@ -39,7 +38,6 @@ pub struct Text {
 struct LayoutMeasure {
     text: String,
     layout: TextLayoutOptions,
-    width_constraint: TextLayoutOptions,
     size: Size<f32>,
 }
 
@@ -89,7 +87,7 @@ impl From<TextOptions> for MaybeDyn<TextOptions> {
 impl Widget for Text {
     fn render(&mut self, layout: &Layout, _: &Style) -> Option<Primitive> {
         let text = self.text.get_clone_untracked();
-        let options = maybe_get_clone_untracked(&self.options);
+        let options = self.options.get_clone_untracked();
 
         Some(Primitive::Text(primitives::Text {
             origin: Point2D::new(layout.location.x, layout.location.y),
@@ -108,7 +106,7 @@ impl Widget for Text {
         _: &Style,
     ) -> Size<f32> {
         let text = self.text.get_clone_untracked();
-        let options = maybe_get_clone_untracked(&self.options).to_layout_options();
+        let options = self.options.get_clone_untracked().to_layout_options();
         let measured_size = if let Some(measured) = &self.last_measured
             && measured.text == text
             && measured.layout == options

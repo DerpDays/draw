@@ -4,17 +4,16 @@ use std::{
     sync::Arc,
 };
 
+use crate::prelude::{Layout, MaybeDyn, create_effect};
 use input::{KeyboardEvent, MouseEvent};
 use slotmap::SlotMap;
-use sycamore_reactive::{MaybeDyn, create_effect};
-use taffy::Layout;
 
 use crate::{
     ElementId,
     TreeManager,
     events::{BlurEvent, EventHandler, FocusEvent},
-    tree::{Element, MaybeDynStyle, StyleWrapper, Widget},
-    zindex::ZIndexProperties,
+    prelude::Style,
+    tree::{Element, Widget},
 };
 
 pub trait ErasedBuilder {
@@ -34,8 +33,7 @@ pub trait ErasedBuilder {
 
 pub struct ElementBuilder<W: Widget> {
     inner: W,
-    style: MaybeDyn<StyleWrapper>,
-    zindex: MaybeDyn<ZIndexProperties>,
+    style: MaybeDyn<Style>,
 
     children: Vec<Box<dyn ErasedBuilder>>,
 
@@ -53,8 +51,7 @@ impl<W: Widget> ElementBuilder<W> {
     pub fn new(inner: W) -> Self {
         Self {
             inner,
-            style: MaybeDyn::Static(StyleWrapper::default()),
-            zindex: MaybeDyn::Static(ZIndexProperties::DEFAULT),
+            style: MaybeDyn::Static(Style::DEFAULT),
 
             children: Vec::new(),
 
@@ -151,20 +148,8 @@ impl<W: Widget> ElementBuilder<W> {
     /// ```rust
     /// div().style(Style::DEFAULT);
     /// ```
-    pub fn style(mut self, style: impl Into<MaybeDynStyle>) -> Self {
-        let style = style.into().get();
-        self.style = style.clone();
-        self
-    }
-
-    /// Assign a z index properties to this element.
-    ///
-    /// ```rust
-    /// div().zindex(ZIndexProperties::DEFAULT);
-    /// ```
-    pub fn zindex(mut self, zindex: impl Into<MaybeDyn<ZIndexProperties>>) -> Self {
-        let zindex = zindex.into();
-        self.zindex = zindex.clone();
+    pub fn style(mut self, style: impl Into<MaybeDyn<Style>>) -> Self {
+        self.style = style.into();
         self
     }
 }
@@ -185,7 +170,6 @@ impl<W: Widget + 'static> ElementBuilder<W> {
 
             inner: Box::new(self.inner),
             style: self.style,
-            zindex: self.zindex,
 
             rel_final_layout: Layout::new(),
             rel_unrounded_layout: Layout::new(),
@@ -219,33 +203,27 @@ impl<W: Widget + 'static> ElementBuilder<W> {
             let mgr = TreeManager::global();
             let style = arena[key].style.clone();
 
-            let last_display = Rc::new(RefCell::new(style.get_clone().0.display));
+            let initial_style = style.get_clone_untracked();
+
+            let last_display = Rc::new(RefCell::new(initial_style.display));
+            let last_zindex = Rc::new(RefCell::new(initial_style.zindex));
             move || {
-                let new_display = style.get_clone().0.display;
+                let (display, zindex) = style.with(|s| (s.display, s.zindex));
                 if !first_run.get() {
                     log::trace!("node style changed: relayouting {key:?}");
-                    if new_display != *last_display.borrow() {
+                    if display != *last_display.borrow() {
                         log::warn!("different from last_display");
                         // Display changes alter the render hierarchy (hiding/showing subtrees).
                         // We must rebuild the render order.
                         mgr.mark_structure_dirty();
-                        *last_display.borrow_mut() = new_display;
+                        *last_display.borrow_mut() = display;
+                    }
+                    if zindex != *last_zindex.borrow() {
+                        log::warn!("different from last_zindex");
+                        mgr.mark_structure_dirty();
+                        *last_zindex.borrow_mut() = zindex;
                     }
                     mgr.mark_layout_dirty(key);
-                    mgr.now();
-                } else {
-                    first_run.set(false);
-                }
-            }
-        });
-        create_effect({
-            let first_run = Cell::new(true);
-            let mgr = TreeManager::global();
-            let zindex = arena[key].zindex.clone();
-            move || {
-                zindex.track();
-                if !first_run.get() {
-                    mgr.mark_structure_dirty();
                     mgr.now();
                 } else {
                     first_run.set(false);

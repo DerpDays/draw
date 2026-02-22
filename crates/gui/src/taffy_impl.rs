@@ -8,12 +8,16 @@ use taffy::{
     NodeId,
     PrintTree,
     RoundTree,
-    Style,
     TraversePartialTree,
     TraverseTree,
 };
 
-use crate::{ElementId, MeasureCtx, tree::Node};
+use crate::{
+    ElementId,
+    MeasureCtx,
+    prelude::{CheapCloneStr, Style},
+    tree::Node,
+};
 
 pub struct TaffyTree<'a> {
     pub alloc: &'a mut slotmap::SlotMap<ElementId, crate::tree::Element>,
@@ -21,7 +25,7 @@ pub struct TaffyTree<'a> {
 }
 
 pub struct ChildIter<'a>(std::slice::Iter<'a, ElementId>);
-impl<'a> Iterator for ChildIter<'a> {
+impl Iterator for ChildIter<'_> {
     type Item = NodeId;
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().cloned().map(NodeId::from)
@@ -91,7 +95,7 @@ impl<'a> TaffyTree<'a> {
                 .alloc
                 .get(node.into())
                 .expect("tried to get the style for a node not in the tree")
-                .get_style();
+                .get_style_clone();
 
             let display_mode = style.display;
             let has_children = tree.child_count(node) > 0;
@@ -132,13 +136,13 @@ impl<'a> LayoutPartialTree for TaffyTree<'a> {
     where
         Self: 'b;
 
-    type CustomIdent = String;
+    type CustomIdent = CheapCloneStr;
 
     fn get_core_container_style(&self, node_id: NodeId) -> Self::CoreContainerStyle<'_> {
         self.alloc
             .get(node_id.into())
             .expect("called get_core_container_style for a node not in the tree")
-            .get_style()
+            .get_style_clone()
     }
 
     fn set_unrounded_layout(&mut self, node_id: NodeId, layout: &Layout) {
@@ -216,7 +220,7 @@ impl<'a> LayoutBlockContainer for TaffyTree<'a> {
         self.alloc
             .get(node_id.into())
             .expect("called get_block_container_style for a node not in the tree")
-            .get_style()
+            .get_style_clone()
     }
 
     #[inline(always)]
@@ -224,7 +228,7 @@ impl<'a> LayoutBlockContainer for TaffyTree<'a> {
         self.alloc
             .get(child_node_id.into())
             .expect("called get_block_child_style for a node not in the tree")
-            .get_style()
+            .get_style_clone()
     }
 
     fn compute_block_child_layout(
@@ -252,14 +256,14 @@ impl<'a> LayoutFlexboxContainer for TaffyTree<'a> {
         self.alloc
             .get(node_id.into())
             .expect("called get_flexbox_container_style for a node not in the tree")
-            .get_style()
+            .get_style_clone()
     }
 
     fn get_flexbox_child_style(&self, child_node_id: NodeId) -> Self::FlexboxItemStyle<'_> {
         self.alloc
             .get(child_node_id.into())
             .expect("called get_flexbox_child_style for a node not in the tree")
-            .get_style()
+            .get_style_clone()
     }
 }
 
@@ -278,14 +282,14 @@ impl<'a> LayoutGridContainer for TaffyTree<'a> {
         self.alloc
             .get(node_id.into())
             .expect("called get_grid_container_style for a node not in the tree")
-            .get_style()
+            .get_style_clone()
     }
 
     fn get_grid_child_style(&self, child_node_id: NodeId) -> Self::GridItemStyle<'_> {
         self.alloc
             .get(child_node_id.into())
             .expect("called get_grid_child_style for a node not in the tree")
-            .get_style()
+            .get_style_clone()
     }
 }
 

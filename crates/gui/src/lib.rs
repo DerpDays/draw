@@ -11,17 +11,20 @@ use input::{KeyboardEvent, MouseEvent, MouseEventKind};
 use slotmap::{Key, SlotMap};
 use taffy::{AvailableSpace, CacheTree, Size};
 
-pub mod events;
+mod events;
+mod style;
+mod zindex;
+
 mod layout_tree;
-pub mod reexports;
+mod reactivity;
 mod taffy_impl;
 pub mod time;
 pub mod tree;
 pub mod widgets;
-mod zindex;
 
 use crate::{
     events::{BlurEvent, EventContext, EventPhase, FocusEvent},
+    style::PointerEvents,
     taffy_impl::TaffyTree,
     tree::{Element, Node, Widget, builder::ElementBuilder},
     zindex::ZIndexOrdering,
@@ -29,14 +32,15 @@ use crate::{
 
 pub mod prelude {
     pub use crate::{
-        events::{EventContext, EventPhase, *},
+        events::*,
+        reactivity::*,
+        style::*,
         tree::builder::{BuilderList, ErasedBuilder},
-        zindex::ZIndexProperties,
+        zindex::*,
     };
     pub use color;
     pub use graphics;
-    pub use sycamore_reactive::*;
-    pub use taffy::prelude::*;
+    pub use input;
 }
 
 slotmap::new_key_type! { pub struct ElementId; }
@@ -74,6 +78,8 @@ pub struct Tree {
     pub manager: TreeManager,
 
     root_node: ElementId,
+    // TODO: investigate if it is worth it to swap to a bump allocator, with child allocators (for
+    // reactive contexts).
     alloc: SlotMap<ElementId, Element>,
     capture: Capture,
     size: Size<AvailableSpace>,
@@ -307,7 +313,10 @@ impl Tree {
                     return Some(());
                 }
 
-                let Some(node) = self.hit_layout(event.position).next() else {
+                let Some(node) = self.hit_layout(event.position).find(|id| {
+                    self.get(*id).style.with_untracked(|s| s.pointer_events)
+                        == PointerEvents::Enabled
+                }) else {
                     if let Some(prev) = self.capture.last_entered_node.take() {
                         // Send leave events to all nodes that were previously entered by going up the
                         // tree from the last entered node.

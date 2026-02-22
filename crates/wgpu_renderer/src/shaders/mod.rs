@@ -263,7 +263,7 @@ impl MeasureCtx for WgpuRenderer {
         text_layout: graphics::primitives::TextLayoutOptions,
         available_space_width: graphics::primitives::AvailableSpace,
         max_width: Option<f32>,
-    ) -> gui::reexports::taffy::Size<f32> {
+    ) -> gui::prelude::Size<f32> {
         let key = TextLayoutKey {
             text,
             available_space_width: available_space_width.clone(),
@@ -322,7 +322,7 @@ impl MeasureCtx for WgpuRenderer {
             }
         };
 
-        gui::reexports::taffy::Size {
+        gui::prelude::Size {
             width,
             height: layout.height(),
         }

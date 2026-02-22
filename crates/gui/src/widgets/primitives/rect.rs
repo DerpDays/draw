@@ -6,10 +6,10 @@ use std::cell::Cell;
 use color::AlphaColor;
 use euclid::default::{Point2D, SideOffsets2D, Size2D};
 use graphics::{BasicColor, Primitive, Rounding, primitives::Rectangle};
-use sycamore_reactive::{MaybeDyn, create_effect};
-use taffy::{AvailableSpace, Layout, Size, Style};
 
-use crate::{AnimationHandle, MeasureCtx, reexports::reactivity::maybe_get_untracked};
+use crate::prelude::{AvailableSpace, Layout, MaybeDyn, Size, Style, create_effect};
+
+use crate::{AnimationHandle, MeasureCtx};
 
 use crate::{
     TreeManager,
@@ -23,7 +23,7 @@ pub struct Rect {
 struct BackgroundRect {
     options: MaybeDyn<RectOptions>,
 
-    transition_duration: Option<Duration>,
+    transition_duration: Option<MaybeDyn<Duration>>,
     transition_state: Option<TransitionState>,
 
     last_options: RectOptions,
@@ -101,7 +101,7 @@ impl Widget for Rect {
     fn render(&mut self, layout: &Layout, _style: &Style) -> Option<Primitive> {
         let bg = self.background.as_mut()?;
         // The new desired state from the application
-        let target_options = maybe_get_untracked(&bg.options);
+        let target_options = bg.options.get_untracked();
 
         // The state the widget is currently trying to reach.
         // If animating, it's the animation target. If idle, it's the last set value.
@@ -147,7 +147,9 @@ impl Widget for Rect {
             let elapsed = state.start.elapsed();
             let duration = bg
                 .transition_duration
-                .expect("Transition state exists, so duration must exist");
+                .as_ref()
+                .expect("Transition state exists, so duration must exist")
+                .get_untracked();
 
             if elapsed < duration {
                 // Still animating
@@ -210,7 +212,7 @@ impl ElementBuilder<Rect> {
         let options = options.into();
         let bg_rect = {
             let _box_sizing = taffy::BoxSizing::default();
-            let last_options = maybe_get_untracked(&options);
+            let last_options = options.get_untracked();
             // let rect = Rectangle::new(Point2D::zero(), Size2D::zero(), last_options);
             BackgroundRect {
                 options: options.clone(),
@@ -242,7 +244,7 @@ impl ElementBuilder<Rect> {
         })
     }
 
-    pub fn transition_duration(mut self, duration: impl Into<Duration>) -> Self {
+    pub fn transition_duration(mut self, duration: impl Into<MaybeDyn<Duration>>) -> Self {
         let duration = duration.into();
         if let Some(bg) = &mut self.inner_mut().background {
             bg.transition_duration = Some(duration);

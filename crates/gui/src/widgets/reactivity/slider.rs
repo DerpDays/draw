@@ -1,12 +1,11 @@
+use crate::prelude::{AvailableSpace, EventContext, Layout, Size, Style};
 use graphics::Primitive;
 use input::{MouseButton, MouseEvent, MouseEventKind};
 use sycamore_reactive::{ReadSignal, Signal, batch, create_memo, create_signal};
-use taffy::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
     ElementId,
     MeasureCtx,
-    prelude::EventContext,
     tree::{Widget, builder::ElementBuilder},
     widgets::reactivity::slider::sealed::BoundedRange,
 };

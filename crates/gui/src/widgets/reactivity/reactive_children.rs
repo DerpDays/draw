@@ -1,8 +1,9 @@
 use std::{cell::Cell, rc::Rc};
 
 use graphics::Primitive;
-use sycamore_reactive::{NodeHandle, create_child_scope, create_effect};
-use taffy::{AvailableSpace, Layout, Size};
+use sycamore_reactive::{create_child_scope, create_effect};
+
+use crate::prelude::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
     ElementId,
@@ -14,8 +15,8 @@ use crate::{
     },
 };
 
-impl Widget for ReactiveChildren {
-    fn render(&mut self, _layout: &Layout, _style: &taffy::Style) -> Option<Primitive> {
+impl Widget for Reactive {
+    fn render(&mut self, _layout: &Layout, _style: &Style) -> Option<Primitive> {
         None
     }
 
@@ -25,7 +26,7 @@ impl Widget for ReactiveChildren {
         _: &mut dyn MeasureCtx,
         known_dimensions: Size<Option<f32>>,
         _available: Size<AvailableSpace>,
-        _style: &taffy::Style,
+        _style: &Style,
     ) -> Size<f32> {
         known_dimensions.unwrap_or(Size::zero())
     }
@@ -39,9 +40,7 @@ impl Widget for ReactiveChildren {
     }
 }
 
-pub struct ReactiveChildren {
-    scope: Rc<Cell<NodeHandle>>,
-}
+pub struct Reactive;
 
 /// Add reactive children that are dynamically created/removed based on a closure.
 ///
@@ -60,20 +59,14 @@ pub struct ReactiveChildren {
 ///     })
 /// )
 /// ```
-pub fn reactive<F>(f: F) -> ElementBuilder<ReactiveChildren>
+pub fn reactive<F>(f: F) -> ElementBuilder<Reactive>
 where
     F: Fn() -> BuilderList + 'static + Clone,
 {
     let scope = Rc::new(Cell::new(create_child_scope(|| {})));
     let current_scope = sycamore_reactive::use_current_scope();
 
-    ElementBuilder::new(
-        ReactiveChildren {
-            scope: scope.clone(),
-        },
-        // |inner| inner.scope.set(Some(create_child_scope(|| {}))),
-    )
-    .append_after_build(move |elem_id| {
+    ElementBuilder::new(Reactive).append_after_build(move |elem_id| {
         let mgr = TreeManager::global();
         let f = f.clone();
         let scope = scope.clone();

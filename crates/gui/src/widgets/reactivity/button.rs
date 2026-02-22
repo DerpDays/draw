@@ -1,7 +1,8 @@
 use graphics::Primitive;
 use input::{MouseButton, MouseEvent, MouseEventKind};
-use sycamore_reactive::{ReadSignal, Signal, batch, create_memo, create_signal};
-use taffy::{AvailableSpace, Layout, Size, Style};
+use sycamore_reactive::{ReadSignal, Signal, batch, create_selector, create_signal};
+
+use crate::prelude::{AvailableSpace, Layout, Size, Style};
 
 use crate::{
     ElementId,
@@ -31,6 +32,26 @@ pub enum ButtonVisualState {
 pub struct Button {
     state: ButtonSignals,
 }
+impl Button {
+    pub fn new(enabled: ReadSignal<bool>, active: ReadSignal<bool>) -> Self {
+        Self {
+            state: ButtonSignals {
+                enabled,
+                active,
+                pressed: create_signal(false),
+                hovered: create_signal(false),
+                focused: create_signal(false),
+            },
+        }
+    }
+
+    pub fn replace_enabled_signal(&mut self, enabled: ReadSignal<bool>) {
+        self.state.enabled = enabled;
+    }
+    pub fn replace_active_signal(&mut self, active: ReadSignal<bool>) {
+        self.state.active = active;
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct ButtonSignals {
@@ -45,7 +66,7 @@ pub struct ButtonSignals {
 
 impl ButtonSignals {
     /// Create a read signal that reacts to changes in the visual state
-    pub fn to_visual(&self) -> ReadSignal<ButtonVisualState> {
+    pub fn as_visual(&self) -> ReadSignal<ButtonVisualState> {
         let Self {
             enabled,
             active,
@@ -53,7 +74,7 @@ impl ButtonSignals {
             hovered,
             ..
         } = *self;
-        create_memo(move || {
+        create_selector(move || {
             if !enabled.get() {
                 ButtonVisualState::Disabled
             } else if pressed.get() {
@@ -153,30 +174,16 @@ impl Widget for Button {
 }
 
 pub fn button() -> (ElementBuilder<Button>, ButtonSignals) {
-    let state = ButtonSignals {
-        enabled: create_memo(|| true),
-        active: create_memo(|| false),
-
-        pressed: create_signal(false),
-        hovered: create_signal(false),
-
-        focused: create_signal(false),
-    };
-    (ElementBuilder::new(Button { state }), state)
+    let btn = Button::new(*create_signal(true), *create_signal(false));
+    let state = btn.state;
+    (ElementBuilder::new(btn), state)
 }
 
 pub fn button_with(
     enabled: ReadSignal<bool>,
     active: ReadSignal<bool>,
 ) -> (ElementBuilder<Button>, ButtonSignals) {
-    let state = ButtonSignals {
-        enabled,
-        active,
-
-        pressed: create_signal(false),
-        hovered: create_signal(false),
-
-        focused: create_signal(false),
-    };
-    (ElementBuilder::new(Button { state }), state)
+    let btn = Button::new(enabled, active);
+    let state = btn.state;
+    (ElementBuilder::new(btn), state)
 }

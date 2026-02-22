@@ -33,7 +33,7 @@ impl Tree {
             let elem = self.get_mut(node_id);
             let relative_layout = elem.get_relative_final_layout();
 
-            let style = elem.get_style();
+            let style = elem.get_style_clone();
 
             let abs_location = parent_abs_location
                 + taffy::Point::<f32> {

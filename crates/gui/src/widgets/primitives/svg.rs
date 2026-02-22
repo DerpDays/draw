@@ -6,14 +6,13 @@ use graphics::{
     Primitive,
     primitives::{self},
 };
-use sycamore_reactive::{MaybeDyn, ReadSignal, create_effect};
-use taffy::{AvailableSpace, Layout, Size, Style};
+
+use crate::prelude::{AvailableSpace, Layout, MaybeDyn, ReadSignal, Size, Style, create_effect};
 
 use crate::{
     ElementId,
     MeasureCtx,
     TreeManager,
-    reexports::reactivity::maybe_get_clone_untracked,
     tree::{Widget, builder::ElementBuilder},
 };
 
@@ -22,7 +21,7 @@ pub struct Svg {
     options: MaybeDyn<SvgOptions>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct SvgOptions {
     pub fill_color: Option<AlphaColor<Srgb>>,
     pub stroke_color: Option<AlphaColor<Srgb>>,
@@ -36,7 +35,7 @@ impl From<SvgOptions> for MaybeDyn<SvgOptions> {
 
 impl Widget for Svg {
     fn render(&mut self, layout: &Layout, _: &Style) -> Option<Primitive> {
-        let options = maybe_get_clone_untracked(&self.options);
+        let options = self.options.get_untracked();
 
         Some(Primitive::Svg(primitives::Svg {
             origin: Point2D::new(layout.location.x, layout.location.y),
