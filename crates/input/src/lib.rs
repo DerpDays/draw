@@ -1,4 +1,7 @@
 // Parts of this is derived from https://github.com/Smithay/client-toolkit input events.
+pub mod reexports {
+    pub use bitflags;
+}
 use bitflags::bitflags;
 use euclid::default::Point2D;
 #[cfg(feature = "serde")]

@@ -14,13 +14,17 @@ use crate::{
     ElementId,
     MeasureCtx,
     prelude::{AvailableSpace, EventContext, Layout, Size, Style},
-    tree::{Widget, builder::ElementBuilder},
+    tree::{
+        Widget,
+        builder::{ElementBuilder, HasChildren},
+    },
 };
 
 pub struct InputField {
     enabled: ReadSignal<bool>,
 }
 
+impl HasChildren for InputField {}
 impl Widget for InputField {
     fn render(&mut self, _: &Layout, _: &Style) -> Option<Primitive> {
         None

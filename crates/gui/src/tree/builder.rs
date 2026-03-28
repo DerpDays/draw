@@ -137,16 +137,30 @@ impl<W: Widget> ElementBuilder<W> {
     }
 }
 
-impl<W: Widget> ElementBuilder<W> {
+pub trait HasChildren {}
+
+impl<W: Widget + HasChildren> ElementBuilder<W> {
+    /// Add children to this element
+    ///
+    /// ```rust
+    /// rect().child(rect());
+    /// rect().child((rect(), rect()));
+    /// rect().child(vec![rect(), rect()].into());
+    /// ```
+    ///
+    /// You may want to look at [`ErasedBuilder::into_box_dyn`] (which is implemented for all
+    /// widgets) to have cohesive types for use in [`Vec`].
     pub fn child(mut self, child: impl Into<BuilderList>) -> Self {
         self.children.extend(child.into().0);
         self
     }
+}
 
+impl<W: Widget> ElementBuilder<W> {
     /// Assign a style to this element.
     ///
     /// ```rust
-    /// div().style(Style::DEFAULT);
+    /// rect().style(Style::DEFAULT);
     /// ```
     pub fn style(mut self, style: impl Into<MaybeDyn<Style>>) -> Self {
         self.style = style.into();

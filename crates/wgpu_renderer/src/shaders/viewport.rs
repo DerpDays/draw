@@ -80,3 +80,29 @@ impl ViewportBinds {
         &self.bind_group
     }
 }
+impl ViewportBinds {
+    pub fn new_bind_group(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        viewport: ViewportTransform,
+    ) -> (wgpu::BindGroup, wgpu::Buffer) {
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("ViewportBinds"),
+            contents: bytemuck::bytes_of(&viewport),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ViewportBinds"),
+            layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &buffer,
+                    offset: 0,
+                    size: Some(Self::VIEWPORT_BINDS_SIZE),
+                }),
+            }],
+        });
+        (bind_group, buffer)
+    }
+}

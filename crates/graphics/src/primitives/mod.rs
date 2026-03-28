@@ -1,4 +1,4 @@
-use std::{any::Any, fmt::Debug, sync::Arc};
+use std::{any::Any, fmt::Debug, ops::Range, sync::Arc};
 
 use color::{AlphaColor, Srgb};
 use euclid::default::{Point2D, SideOffsets2D, Size2D, Vector2D};
@@ -193,6 +193,17 @@ pub struct Text {
     pub text: String,
     pub color: AlphaColor<Srgb>,
     pub text_layout: TextLayoutOptions,
+
+    pub selection_color: BasicColor,
+    pub selection: Option<TextSelection>,
+}
+
+/// A cursor/selection at a given byte index
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TextSelection {
+    Cursor(usize),
+    Range(Range<usize>),
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -216,12 +227,3 @@ pub enum AvailableSpace {
     MinContent,
     MaxContent,
 }
-// #[derive(Clone, PartialEq, Debug)]
-// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-// pub struct TextMeasure {
-//     pub max_width: Option<f32>,
-//     pub available_space_width: AvailableSpace,
-//
-//     pub text: String,
-//     pub text_layout: TextLayoutOptions,
-// }

@@ -3,21 +3,12 @@ use thiserror::Error;
 
 use atlas::{AllocatedTexture, AtlasFormat, LayeredAtlas, UnallocatedTexture};
 use color::{AlphaColor, LinearSrgb, PremulColor, Srgb};
-use euclid::default::{Box2D, Point2D, Size2D};
+use euclid::default::{Box2D, Point2D, Size2D, Vector2D};
 use graphics::{
     make_positive_box,
-    primitives::{Text, TextLayoutOptions},
+    primitives::{Text, TextLayoutOptions, TextSelection, text::LineHeight},
 };
-use parley::{
-    Alignment,
-    AlignmentOptions,
-    FontStack,
-    Glyph,
-    GlyphRun,
-    Layout,
-    PositionedLayoutItem,
-    StyleProperty,
-};
+use parley::{Cursor, FontStack, Glyph, GlyphRun, Layout, PositionedLayoutItem, Selection};
 use swash::{
     FontRef,
     scale::{Render, ScaleContext, Scaler, Source, StrikeWith, image::Content},
@@ -36,6 +27,7 @@ use crate::{
     TextLayoutKey,
     TextureData,
     TextureState,
+    primitives::rectangle::basic_quad,
     shaders::generic::{Vertex, VertexKind},
 };
 
@@ -105,37 +97,98 @@ pub fn render_text(
         ..
     }: &mut GraphicsContext = ctx;
 
-    log::trace!("rendering text primitive");
-    for line in layout.lines() {
-        for item in line.items() {
-            match item {
-                PositionedLayoutItem::GlyphRun(glyph_run) => {
-                    let mut renderer = GlyphRunRenderer::new(
+    // draw cursor/selection if there is one
+    if let Some(selection) = &text.selection {
+        let byte_index = match selection {
+            TextSelection::Cursor(byte_index) => *byte_index,
+            TextSelection::Range(range) => {
+                let start_byte_index = range.start;
+                let end_byte_index = range.end.min(text.text.len());
+                let start_cursor = Cursor::from_byte_index(
+                    &layout,
+                    start_byte_index,
+                    parley::Affinity::Downstream,
+                );
+                let end_cursor =
+                    Cursor::from_byte_index(&layout, end_byte_index, parley::Affinity::Downstream);
+                Selection::new(start_cursor, end_cursor).geometry_with(&layout, |bounds, _| {
+                    basic_quad(
                         &mut mesh,
-                        &mut new_cache,
-                        device,
-                        queue,
-                        texture_state,
-                        &glyph_run,
-                        start_position,
+                        make_positive_box(Box2D::from_origin_and_size(
+                            start_position + Vector2D::new(bounds.x0 as f32, bounds.y0 as f32),
+                            Size2D::new(bounds.width() as f32, bounds.height() as f32),
+                        )),
+                        &text.selection_color,
                     );
-                    renderer.render(&mut text_state.scale_ctx);
-                }
-                PositionedLayoutItem::InlineBox(inline_box) => {
-                    mesh.append(
-                        &Vertex::new_solid_rect(
-                            [
-                                start_position.x + inline_box.x,
-                                start_position.y + inline_box.y,
-                            ],
-                            [
-                                start_position.x + inline_box.x + inline_box.width,
-                                start_position.y + inline_box.y + inline_box.height,
-                            ],
-                            text.color.convert().premultiply(),
-                        ),
-                        vec![0, 1, 2, 0, 2, 3],
-                    );
+                });
+                range.end
+            }
+        };
+        // FIXME: we're missing the cursor on selection from left to right
+        let cursor = Cursor::from_byte_index(
+            &layout,
+            byte_index,
+            if byte_index == 0 {
+                parley::Affinity::Upstream
+            } else {
+                parley::Affinity::Downstream
+            },
+        );
+        let geom = cursor.geometry(&layout, 1.);
+        // TODO: we probably want to get the height from font metrics if theres no content,
+        // (as parley does this for an empty line, the height goes to 0).
+        let height = if geom.height() != 0. {
+            geom.height() as f32
+        } else {
+            match text.text_layout.line_height {
+                LineHeight::MetricsRelative(_) => text.text_layout.font_size,
+                LineHeight::FontSizeRelative(x) => text.text_layout.font_size * x,
+                LineHeight::Absolute(x) => x,
+            }
+        };
+        basic_quad(
+            &mut mesh,
+            make_positive_box(Box2D::from_origin_and_size(
+                start_position + Vector2D::new(geom.x0 as f32, geom.y0 as f32),
+                Size2D::new(geom.width() as f32, height),
+            )),
+            &graphics::BasicColor::Solid(text.color),
+        );
+    }
+
+    if !text.text.is_empty() {
+        log::trace!("rendering text primitive");
+        for line in layout.lines() {
+            for item in line.items() {
+                match item {
+                    PositionedLayoutItem::GlyphRun(glyph_run) => {
+                        let mut renderer = GlyphRunRenderer::new(
+                            &mut mesh,
+                            &mut new_cache,
+                            device,
+                            queue,
+                            texture_state,
+                            &glyph_run,
+                            start_position,
+                        );
+                        renderer.render(&mut text_state.scale_ctx);
+                    }
+                    PositionedLayoutItem::InlineBox(inline_box) => {
+                        mesh.append(
+                            &Vertex::new_solid_rect(
+                                [
+                                    start_position.x + inline_box.x,
+                                    start_position.y + inline_box.y,
+                                ],
+                                [
+                                    start_position.x + inline_box.x + inline_box.width,
+                                    start_position.y + inline_box.y + inline_box.height,
+                                ],
+                                text.color.convert().premultiply(),
+                            ),
+                            vec![0, 1, 2, 0, 2, 3],
+                        );
+                    }
                 }
             }
         }
@@ -170,6 +223,7 @@ pub fn prepare_text_layout(
         line_height: options.line_height.into(),
         word_break: options.word_break_strength.into(),
         overflow_wrap: options.overflow_wrap.into(),
+        text_wrap_mode: parley::TextWrapMode::NoWrap,
         ..Default::default()
     };
     let mut builder =

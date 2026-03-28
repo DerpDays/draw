@@ -3,10 +3,12 @@ use std::cell::Cell;
 use color::{AlphaColor, Srgb};
 use euclid::default::{Point2D, Size2D};
 use graphics::{
+    BasicColor,
     Primitive,
     primitives::{
         self,
         TextLayoutOptions,
+        TextSelection,
         text::{
             self,
             FontFamily,
@@ -32,6 +34,7 @@ use crate::{
 pub struct Text {
     pub text: ReadSignal<String>,
     options: MaybeDyn<TextOptions>,
+    selection: MaybeDyn<Option<TextSelection>>,
 
     last_measured: Option<LayoutMeasure>,
 }
@@ -53,6 +56,8 @@ pub struct TextOptions {
     pub overflow_wrap: Option<text::OverflowWrap>,
     pub whitespace_collapse: Option<text::WhiteSpaceCollapse>,
     pub word_break_strength: Option<text::WordBreakStrength>,
+
+    pub selection_color: Option<BasicColor>,
 }
 impl TextOptions {
     pub fn to_layout_options(self) -> TextLayoutOptions {
@@ -66,7 +71,9 @@ impl TextOptions {
                 .unwrap_or(primitives::text::FontStyle::Normal),
             font_weight: self.font_weight.unwrap_or(FontWeight::NORMAL),
             font_width: self.font_width.unwrap_or(FontWidth::NORMAL),
-            line_height: self.line_height.unwrap_or_default(),
+            line_height: self
+                .line_height
+                .unwrap_or(text::LineHeight::FontSizeRelative(1.25)),
             overflow_wrap: self.overflow_wrap.unwrap_or(OverflowWrap::Normal),
             whitespace_collapse: self
                 .whitespace_collapse
@@ -84,17 +91,27 @@ impl From<TextOptions> for MaybeDyn<TextOptions> {
     }
 }
 
+// TODO: implement cursor blink
 impl Widget for Text {
     fn render(&mut self, layout: &Layout, _: &Style) -> Option<Primitive> {
         let text = self.text.get_clone_untracked();
         let options = self.options.get_clone_untracked();
 
+        let color = options.color.unwrap_or(AlphaColor::WHITE);
+        let selection_color = options
+            .selection_color
+            .unwrap_or(AlphaColor::WHITE.with_alpha(0.2).into());
+        let text_layout = options.to_layout_options();
+
         Some(Primitive::Text(primitives::Text {
             origin: Point2D::new(layout.location.x, layout.location.y),
             size: Size2D::new(layout.size.width, layout.size.height),
             text,
-            color: options.color.unwrap_or(AlphaColor::WHITE),
-            text_layout: options.to_layout_options(),
+            color,
+            text_layout,
+
+            selection: self.selection.get_clone_untracked(),
+            selection_color,
         }))
     }
     fn measure(
@@ -117,6 +134,7 @@ impl Widget for Text {
                 id,
                 text,
                 options,
+                self.selection.get_clone_untracked(),
                 match available_space.width {
                     AvailableSpace::Definite(x) => primitives::AvailableSpace::Definite(x),
                     _ => primitives::AvailableSpace::MaxContent,
@@ -141,6 +159,7 @@ pub fn text(text: ReadSignal<String>) -> ElementBuilder<Text> {
         Text {
             text,
             options: MaybeDyn::Static(TextOptions::default()),
+            selection: MaybeDyn::Static(None),
 
             last_measured: None,
         },
@@ -162,6 +181,7 @@ impl ElementBuilder<Text> {
         let inner = Text {
             text: self.inner().text,
             options: options.clone(),
+            selection: self.inner().selection.clone(),
 
             last_measured: None,
         };
@@ -173,7 +193,26 @@ impl ElementBuilder<Text> {
             create_effect(move || {
                 options.track();
                 if !first_run.get() {
-                    log::debug!("updating text options");
+                    mgr.now();
+                } else {
+                    first_run.set(false);
+                }
+            });
+        })
+    }
+
+    pub fn selection(mut self, selection: impl Into<MaybeDyn<Option<TextSelection>>>) -> Self {
+        let selection = selection.into();
+        self.inner_mut().selection = selection.clone();
+        self.inner_mut().last_measured = None;
+        self.append_after_build(move |_| {
+            let mgr = TreeManager::global();
+            let selection = selection.clone();
+
+            let first_run = Cell::new(true);
+            create_effect(move || {
+                selection.track();
+                if !first_run.get() {
                     mgr.now();
                 } else {
                     first_run.set(false);

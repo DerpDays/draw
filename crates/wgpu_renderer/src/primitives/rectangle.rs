@@ -70,8 +70,8 @@ pub fn render_rectangle(rect: &Rectangle) -> Mesh<Vertex> {
 }
 
 #[inline(always)]
-fn basic_quad(mesh: &mut Mesh<Vertex>, area: Box2D<f32>, color: &BasicColor) {
-    let start_idx = mesh.vertices.len() as u32; // Assuming u32 indices
+pub(crate) fn basic_quad(mesh: &mut Mesh<Vertex>, area: Box2D<f32>, color: &BasicColor) {
+    let start_idx = mesh.vertices.len() as u32;
     mesh.vertices.extend_from_slice(&match color {
         BasicColor::Solid(color) => Vertex::new_solid_rect(
             area.min.to_array(),

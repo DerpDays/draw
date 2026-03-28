@@ -8,7 +8,10 @@ use crate::{
     ElementId,
     MeasureCtx,
     prelude::{BlurEvent, EventContext, FocusEvent},
-    tree::{Widget, builder::ElementBuilder},
+    tree::{
+        Widget,
+        builder::{ElementBuilder, HasChildren},
+    },
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -107,6 +110,7 @@ impl ButtonSignals {
     }
 }
 
+impl HasChildren for Button {}
 impl Widget for Button {
     fn render(&mut self, _: &Layout, _: &Style) -> Option<Primitive> {
         None

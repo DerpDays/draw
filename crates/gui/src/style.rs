@@ -16,6 +16,7 @@ pub use taffy::{
     GridPlacement,
     GridTemplateArea,
     GridTemplateComponent,
+    GridTemplateRepetition,
     JustifyContent,
     JustifyItems,
     JustifySelf,
@@ -24,6 +25,7 @@ pub use taffy::{
     LengthPercentageAuto,
     Line,
     Overflow,
+    Point,
     Position,
     Rect,
     Size,
@@ -41,8 +43,6 @@ use taffy::{
     GenericGridTemplateComponent,
     GridContainerStyle,
     GridItemStyle,
-    GridTemplateRepetition,
-    Point,
 };
 
 use crate::{prelude::MaybeDyn, zindex::ZIndexProperties};

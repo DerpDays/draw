@@ -261,6 +261,7 @@ impl MeasureCtx for WgpuRenderer {
         id: ElementId,
         text: String,
         text_layout: graphics::primitives::TextLayoutOptions,
+        _: Option<graphics::primitives::TextSelection>,
         available_space_width: graphics::primitives::AvailableSpace,
         max_width: Option<f32>,
     ) -> gui::prelude::Size<f32> {
@@ -286,9 +287,11 @@ impl MeasureCtx for WgpuRenderer {
                 &key.text,
                 color::AlphaColor::BLACK,
                 &key.options,
-                max_width.or(match available_space_width {
-                    graphics::primitives::AvailableSpace::Definite(x) => Some(x),
-                    _ => None,
+                max_width.or({
+                    match available_space_width {
+                        graphics::primitives::AvailableSpace::Definite(x) => Some(x),
+                        _ => None,
+                    }
                 }),
                 1.,
             );
@@ -311,15 +314,12 @@ impl MeasureCtx for WgpuRenderer {
                 .layout
         };
 
-        // Handle Taffy's Min/Max content logic
         let width = match available_space_width {
-            graphics::primitives::AvailableSpace::Definite(_) => layout.width(),
+            graphics::primitives::AvailableSpace::Definite(_) => layout.width().ceil() + 1.,
             graphics::primitives::AvailableSpace::MinContent => {
-                layout.calculate_content_widths().min + 1.0
+                layout.calculate_content_widths().min.ceil() + 1.
             }
-            graphics::primitives::AvailableSpace::MaxContent => {
-                layout.calculate_content_widths().max + 1.0
-            }
+            graphics::primitives::AvailableSpace::MaxContent => layout.width().ceil() + 1.,
         };
 
         gui::prelude::Size {

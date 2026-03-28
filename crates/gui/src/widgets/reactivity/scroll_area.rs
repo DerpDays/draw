@@ -12,7 +12,10 @@ use crate::{
     MeasureCtx,
     TreeManager,
     events::EventPhase,
-    tree::{Widget, builder::ElementBuilder},
+    tree::{
+        Widget,
+        builder::{ElementBuilder, HasChildren},
+    },
     widgets::primitives::rect,
 };
 
@@ -73,10 +76,10 @@ pub struct ScrollArea {
 
 const MIN_SCROLLBAR_HEIGHT: f32 = 12.;
 
+impl HasChildren for ScrollArea {}
 impl Widget for ScrollArea {
     fn render(&mut self, layout: &Layout, _: &Style) -> Option<Primitive> {
         let geo = ScrollGeometry::from_layout(layout, self.scroll_amount.get_untracked());
-        log::error!("scrollbar geometry: {geo:?}");
 
         if geo.visible_ratio >= 1.0 || geo.scrollbar_w <= 0.0 {
             return None;

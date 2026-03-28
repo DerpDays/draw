@@ -1,4 +1,7 @@
-use crate::prelude::{AvailableSpace, EventContext, Layout, Size, Style};
+use crate::{
+    prelude::{AvailableSpace, EventContext, Layout, Size, Style},
+    tree::builder::HasChildren,
+};
 use graphics::Primitive;
 use input::{MouseButton, MouseEvent, MouseEventKind};
 use sycamore_reactive::{ReadSignal, Signal, batch, create_memo, create_signal};
@@ -63,6 +66,7 @@ impl SliderSignals {
     }
 }
 
+impl HasChildren for Slider {}
 impl Widget for Slider {
     fn render(&mut self, _: &Layout, _: &Style) -> Option<Primitive> {
         None

@@ -259,6 +259,18 @@ impl Rounding {
         }
     }
 }
+impl std::ops::Mul<f32> for Rounding {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Self {
+            top_left: self.top_left * rhs,
+            top_right: self.top_right * rhs,
+            bottom_left: self.bottom_left * rhs,
+            bottom_right: self.bottom_right * rhs,
+        }
+    }
+}
 #[cfg(feature = "lyon")]
 impl Rounding {
     pub fn to_lyon(self) -> lyon::path::builder::BorderRadii {

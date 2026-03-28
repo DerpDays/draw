@@ -55,6 +55,13 @@ impl<V: Clone> Mesh<V> {
         }
     }
 
+    pub fn vertices(&self) -> &[V] {
+        &self.vertices
+    }
+    pub fn indices(&self) -> &[u32] {
+        &self.indices
+    }
+
     pub fn append(&mut self, vertices: &[V], mut indices: Vec<u32>) {
         indices.iter_mut().for_each(|x| {
             *x += self.vertices.len() as u32;

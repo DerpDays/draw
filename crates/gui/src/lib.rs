@@ -7,7 +7,7 @@ use std::{
 use euclid::default::{Box2D, Point2D};
 use sycamore_reactive::{NodeHandle, RootHandle, create_root};
 
-use input::{KeyboardEvent, MouseEvent, MouseEventKind};
+use input::{KeyboardEvent, KeyboardEventKind, MouseEvent, MouseEventKind};
 use slotmap::{Key, SlotMap};
 use taffy::{AvailableSpace, CacheTree, Size};
 
@@ -68,6 +68,7 @@ pub trait MeasureCtx {
         id: ElementId,
         text: String,
         text_layout: graphics::primitives::TextLayoutOptions,
+        selection: Option<graphics::primitives::TextSelection>,
         available_space_width: graphics::primitives::AvailableSpace,
         max_width: Option<f32>,
     ) -> taffy::Size<f32>;

@@ -1,4 +1,4 @@
-use crate::{ElementId, time::Instant};
+use crate::{ElementId, time::Instant, tree::builder::HasChildren};
 use core::time::Duration;
 
 use std::cell::Cell;
@@ -16,20 +16,21 @@ use crate::{
     tree::{Widget, builder::ElementBuilder},
 };
 
+#[derive(Default)]
 pub struct Rect {
-    background: Option<BackgroundRect>,
+    pub background: Option<BackgroundRect>,
 }
 
-struct BackgroundRect {
-    options: MaybeDyn<RectOptions>,
+pub struct BackgroundRect {
+    pub options: MaybeDyn<RectOptions>,
 
-    transition_duration: Option<MaybeDyn<Duration>>,
-    transition_state: Option<TransitionState>,
+    pub transition_duration: Option<MaybeDyn<Duration>>,
+    pub transition_state: Option<TransitionState>,
 
-    last_options: RectOptions,
+    pub last_options: RectOptions,
 }
 
-struct TransitionState {
+pub struct TransitionState {
     start: Instant,
 
     from: RectOptions,
@@ -97,6 +98,7 @@ impl RectOptions {
     }
 }
 
+impl HasChildren for Rect {}
 impl Widget for Rect {
     fn render(&mut self, layout: &Layout, _style: &Style) -> Option<Primitive> {
         let bg = self.background.as_mut()?;
