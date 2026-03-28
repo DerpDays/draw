@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock, Weak},
 };
 
-use euclid::default::{Box2D, Point2D};
+use euclid::default::{Box2D, Point2D, Vector2D};
 use sycamore_reactive::{NodeHandle, RootHandle, create_root};
 
 use input::{KeyboardEvent, KeyboardEventKind, MouseEvent, MouseEventKind};
@@ -646,7 +646,16 @@ impl Tree {
             self.render_order = ZIndexOrdering::new(self);
         }
 
-        // 4. Handle Layout Changes
+        // 4. Apply pending scroll offsets to elements (before layout, so update_abs_subtree sees them)
+        let scroll_updates = self.manager.take_scroll_updates();
+        let scroll_changed = !scroll_updates.is_empty();
+        for (elem_id, offset) in scroll_updates {
+            if let Some(elem) = self.alloc.get_mut(elem_id) {
+                elem.scroll_offset = offset;
+            }
+        }
+
+        // 5. Handle Layout Changes
         let dirty_nodes = self.manager.take_dirty_layout_nodes();
         if layout_changed || !dirty_nodes.is_empty() {
             // A. Clear Taffy Cache for dirty nodes
@@ -659,10 +668,21 @@ impl Tree {
                 };
             }
 
+            // compute_root_layout calls update_abs_subtree, which picks up scroll_offsets set above
             self.compute_root_layout(renderer);
         }
 
-        if structure_changed || layout_changed || !dirty_nodes.is_empty() {
+        // 6. If only scroll changed (no layout ran), recompute absolute positions from root
+        if scroll_changed && !layout_changed && dirty_nodes.is_empty() {
+            let root = self.root_node;
+            self.update_abs_subtree(
+                root,
+                taffy::Point::ZERO,
+                Box2D::new(Point2D::splat(f32::MIN), Point2D::splat(f32::MAX)),
+            );
+        }
+
+        if structure_changed || layout_changed || !dirty_nodes.is_empty() || scroll_changed {
             Some(())
         } else {
             None
@@ -809,6 +829,8 @@ struct TreeManagerInner {
     /// Whether the z-index has changed, or a node has been added/removed,
     /// fundamentally changing the UI structure.
     structure_dirty: bool,
+
+    scroll_updates: Vec<(ElementId, Vector2D<f32>)>,
 }
 
 impl TreeManager {
@@ -826,6 +848,8 @@ impl TreeManager {
 
             layout_dirty_nodes: vec![],
             structure_dirty: false,
+
+            scroll_updates: vec![],
         })))
     }
     /// Set the global handler for the entire process.
@@ -914,6 +938,14 @@ impl TreeManager {
 
     pub(crate) fn take_replace_children_operations(&self) -> Vec<ReplaceChildrenOperation> {
         std::mem::take(&mut self.get_unwrap().replace_children_operations)
+    }
+
+    pub fn queue_scroll_update(&self, elem_id: ElementId, offset: Vector2D<f32>) {
+        self.get_unwrap().scroll_updates.push((elem_id, offset));
+    }
+
+    fn take_scroll_updates(&self) -> Vec<(ElementId, Vector2D<f32>)> {
+        std::mem::take(&mut self.get_unwrap().scroll_updates)
     }
 }
 

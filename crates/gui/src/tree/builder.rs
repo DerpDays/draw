@@ -190,6 +190,8 @@ impl<W: Widget + 'static> ElementBuilder<W> {
             abs_layout: Layout::new(),
             clip_rect: Default::default(),
 
+            scroll_offset: euclid::default::Vector2D::zero(),
+
             cache: taffy::Cache::new(),
 
             children: Vec::new(),

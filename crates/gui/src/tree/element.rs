@@ -1,4 +1,4 @@
-use euclid::default::Box2D;
+use euclid::default::{Box2D, Vector2D};
 use graphics::Primitive;
 use input::{KeyboardEvent, MouseEvent};
 use taffy::{AvailableSpace, Layout, Size};
@@ -98,6 +98,8 @@ pub struct Element {
     // absolute layout
     pub(crate) abs_layout: taffy::Layout,
     pub(crate) clip_rect: Box2D<f32>,
+
+    pub(crate) scroll_offset: Vector2D<f32>,
 
     pub(crate) cache: taffy::Cache,
 

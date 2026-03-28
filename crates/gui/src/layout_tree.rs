@@ -49,6 +49,7 @@ impl Tree {
                 ..*relative_layout
             });
             elem.set_clip_rect(incoming_clip);
+            let scroll = elem.scroll_offset;
 
             let should_clip_children =
                 style.overflow.x != Overflow::Visible || style.overflow.y != Overflow::Visible;
@@ -68,10 +69,15 @@ impl Tree {
                 incoming_clip
             };
 
-            // 5. Recurse
-            // We iterate children in default order. Z-index sorting happens later in rendering.
+            // Apply scroll offset: shift children in the opposite direction of scroll.
+            let child_origin = taffy::Point {
+                x: abs_location.x - scroll.x,
+                y: abs_location.y - scroll.y,
+            };
+
+            // Recurse. We iterate children in default order. Z-index sorting happens later.
             for child in self.children(node_id).to_vec() {
-                stack.push((child, abs_location, child_clip));
+                stack.push((child, child_origin, child_clip));
             }
         }
     }
