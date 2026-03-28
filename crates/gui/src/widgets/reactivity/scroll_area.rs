@@ -123,8 +123,7 @@ pub fn scroll_area(scroll_amount: Signal<f32>) -> ElementBuilder<ScrollArea> {
         .append_after_build(move |elem_id| {
             let current = scroll_amount.get_untracked();
             if current != 0.0 {
-                TreeManager::global()
-                    .queue_scroll_update(elem_id, Vector2D::new(0., current));
+                TreeManager::global().queue_scroll_update(elem_id, Vector2D::new(0., current));
             }
         })
         .on_mouse(move |node, ctx| {
@@ -158,8 +157,7 @@ pub fn scroll_area(scroll_amount: Signal<f32>) -> ElementBuilder<ScrollArea> {
                     }
                 }
                 MouseEventKind::Motion { .. }
-                    if ctx.current_phase() == EventPhase::Direct
-                        && drag_offset.get().is_some() =>
+                    if ctx.current_phase() == EventPhase::Direct && drag_offset.get().is_some() =>
                 {
                     let local_mouse_y =
                         ctx.payload().position.y - layout.location.y - layout.border.top;
@@ -173,7 +171,8 @@ pub fn scroll_area(scroll_amount: Signal<f32>) -> ElementBuilder<ScrollArea> {
                     ctx.request_mouse_release();
                     drag_offset.set(None);
                 }
-                MouseEventKind::Axis { vertical, .. } => {
+                MouseEventKind::Axis { vertical, .. } if !ctx.in_capture_phase() => {
+                    ctx.stop_propagating();
                     scroll_amount.set(
                         (scroll_amount.get_untracked() - vertical.absolute as f32)
                             .clamp(0.0, geo.max_scroll),
