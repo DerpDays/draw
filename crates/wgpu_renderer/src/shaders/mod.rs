@@ -8,6 +8,8 @@ use gui::{ElementId, GuiRenderer, MeasureCtx};
 
 use crate::{
     GraphicsContext,
+    ShapedLayoutCache,
+    ShapedLayoutKey,
     TextLayoutKey,
     arena::Key,
     primitives::{DrawType, PrimitiveMesh, PrimitiveToMesh},
@@ -276,43 +278,102 @@ impl MeasureCtx for WgpuRenderer {
             cache: Some(crate::PrimitiveCache::default()),
             alloc: Alloc::Empty,
         });
-        let layout = if let Some(cache) = &mut entry.cache
-            && let Some(text_cache) = &mut cache.text_layout
+
+        // Tier 1: full cache hit (text + options + available_space unchanged)
+        if let Some(cache) = &entry.cache
+            && let Some(text_cache) = &cache.text_layout
             && text_cache.key == key
         {
-            &text_cache.layout
+            let layout = &entry.cache.as_ref().unwrap().text_layout.as_ref().unwrap().layout;
+            let width = match available_space_width {
+                graphics::primitives::AvailableSpace::Definite(_) => layout.width().ceil() + 1.,
+                graphics::primitives::AvailableSpace::MinContent => {
+                    layout.calculate_content_widths().min.ceil() + 1.
+                }
+                graphics::primitives::AvailableSpace::MaxContent => layout.width().ceil() + 1.,
+            };
+            return gui::prelude::Size { width, height: layout.height() };
+        }
+
+        let shaped_key = ShapedLayoutKey {
+            text: key.text.clone(),
+            options: key.options.clone(),
+        };
+        let break_width = max_width.or(match available_space_width {
+            graphics::primitives::AvailableSpace::Definite(x) => Some(x),
+            _ => None,
+        });
+
+        // Tier 2: shaped cache hit (text + options match, only width changed)
+        let shaped_hit = entry
+            .cache
+            .as_ref()
+            .and_then(|c| c.shaped_layout.as_ref())
+            .map(|s| s.key == shaped_key)
+            .unwrap_or(false);
+
+        let layout = if shaped_hit {
+            let mut layout = entry
+                .cache
+                .as_ref()
+                .unwrap()
+                .shaped_layout
+                .as_ref()
+                .unwrap()
+                .layout
+                .clone();
+            layout.break_all_lines(break_width);
+            layout
         } else {
-            let layout = crate::primitives::prepare_text_layout(
+            // Tier 3: full miss — shape + break
+            crate::primitives::build_shaped_layout(
                 &mut self.ctx,
                 &key.text,
                 color::AlphaColor::BLACK,
                 &key.options,
-                max_width.or({
-                    match available_space_width {
-                        graphics::primitives::AvailableSpace::Definite(x) => Some(x),
-                        _ => None,
-                    }
-                }),
                 1.,
-            );
-            let cache_entry = crate::TextLayoutCache { key, layout };
+            )
+        };
+
+        // If we did a full miss, store the pre-break shaped layout and then break lines.
+        let layout = if !shaped_hit {
+            let shaped_cache = ShapedLayoutCache {
+                key: shaped_key,
+                layout: layout.clone(),
+            };
+            let mut broken = layout;
+            broken.break_all_lines(break_width);
+            // Store both caches
             if let Some(cache) = &mut entry.cache {
-                cache.text_layout = Some(cache_entry);
+                cache.shaped_layout = Some(shaped_cache);
             } else {
                 entry.cache = Some(crate::PrimitiveCache {
-                    text_layout: Some(cache_entry),
+                    shaped_layout: Some(shaped_cache),
                     ..Default::default()
-                })
+                });
             }
-            &entry
-                .cache
-                .as_ref()
-                .unwrap()
-                .text_layout
-                .as_ref()
-                .unwrap()
-                .layout
+            broken
+        } else {
+            layout
         };
+
+        let cache_entry = crate::TextLayoutCache { key, layout };
+        if let Some(cache) = &mut entry.cache {
+            cache.text_layout = Some(cache_entry);
+        } else {
+            entry.cache = Some(crate::PrimitiveCache {
+                text_layout: Some(cache_entry),
+                ..Default::default()
+            });
+        }
+        let layout = &entry
+            .cache
+            .as_ref()
+            .unwrap()
+            .text_layout
+            .as_ref()
+            .unwrap()
+            .layout;
 
         let width = match available_space_width {
             graphics::primitives::AvailableSpace::Definite(_) => layout.width().ceil() + 1.,

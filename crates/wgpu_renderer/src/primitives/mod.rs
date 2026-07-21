@@ -6,7 +6,7 @@ mod ellipse;
 pub use ellipse::render_ellipse;
 
 mod text;
-pub use text::{prepare_text_layout, render_text};
+pub use text::{build_shaped_layout, prepare_text_layout, render_text};
 
 // mod svg;
 // pub use svg::render_svg;

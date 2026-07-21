@@ -102,6 +102,7 @@ pub fn render_svg(
         mask_textures: vec![],
         color_textures: vec![allocated_texture],
         text_layout: None,
+        shaped_layout: None,
     });
 
     Mesh {

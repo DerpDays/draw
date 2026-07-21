@@ -47,8 +47,10 @@ pub fn render_text(
         options: text.text_layout.clone(),
     };
 
-    let layout = cache
-        .take()
+    let old_cache = cache.take();
+    let old_shaped = old_cache.as_ref().and_then(|c| c.shaped_layout.clone());
+
+    let layout = old_cache
         .and_then(|x| {
             if let Some(cache) = x.text_layout {
                 if cache.key == layout_key
@@ -87,6 +89,7 @@ pub fn render_text(
         mask_textures: Vec::with_capacity(text.text.len()),
         color_textures: Vec::new(),
         text_layout: None,
+        shaped_layout: old_shaped,
     };
 
     let &mut GraphicsContext {
@@ -202,13 +205,14 @@ pub fn render_text(
     mesh
 }
 
+/// Phase 1: shape text (expensive — font selection, bidi, glyph shaping).
+/// Returns a Layout before line-breaking. Store in [`ShapedLayoutCache`].
 #[profiling::function]
-pub fn prepare_text_layout(
+pub fn build_shaped_layout(
     ctx: &mut GraphicsContext,
     text: &str,
     color: AlphaColor<Srgb>,
     options: &TextLayoutOptions,
-    max_width: Option<f32>,
     scale: f32,
 ) -> Layout<ColorBrush> {
     let style = parley::TextStyle {
@@ -232,8 +236,19 @@ pub fn prepare_text_layout(
             .tree_builder(&mut ctx.text_state.font_ctx, scale, true, &style);
     builder.set_white_space_mode(options.whitespace_collapse.into());
     builder.push_text(text);
+    builder.build().0
+}
 
-    let mut layout: Layout<ColorBrush> = builder.build().0;
+#[profiling::function]
+pub fn prepare_text_layout(
+    ctx: &mut GraphicsContext,
+    text: &str,
+    color: AlphaColor<Srgb>,
+    options: &TextLayoutOptions,
+    max_width: Option<f32>,
+    scale: f32,
+) -> Layout<ColorBrush> {
+    let mut layout = build_shaped_layout(ctx, text, color, options, scale);
     layout.break_all_lines(max_width);
     // layout.align(max_width, Alignment::Start, AlignmentOptions::default());
     layout

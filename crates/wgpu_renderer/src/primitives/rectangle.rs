@@ -96,7 +96,7 @@ pub(crate) fn basic_quad(mesh: &mut Mesh<Vertex>, area: Box2D<f32>, color: &Basi
 #[profiling::function]
 fn render_rounded_rectangle(rect: &Rectangle) -> Mesh<Vertex> {
     let outer_area = make_positive_box(Box2D::from_origin_and_size(rect.origin, rect.size));
-    let inner_area = outer_area.inner_box(rect.border);
+    let inner_area = make_positive_box(outer_area.inner_box(rect.border));
 
     let inner_radii = rect.rounding.to_lyon();
     let outer_radii = add_border_to_radii(&inner_radii, &rect.border);

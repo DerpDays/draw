@@ -580,8 +580,12 @@ impl Tree {
     }
 
     pub fn has_ancestor(&self, node: ElementId, ancestor: ElementId) -> bool {
+        if self.alloc.get(node).is_none() || self.alloc.get(ancestor).is_none() {
+            return false;
+        }
+
         let mut current = node;
-        while let Some(parent) = self.parent(current) {
+        while let Some(parent) = self.alloc.get(current).and_then(|elem| elem.parent_id()) {
             if parent == ancestor {
                 return true;
             }
@@ -599,7 +603,12 @@ impl Tree {
         while let mut ops = self.manager.take_replace_children_operations()
             && !ops.is_empty()
         {
-            let all_parents: Vec<_> = ops.iter().map(|op| op.parent).collect();
+            let all_parents: Vec<_> = ops
+                .iter()
+                .map(|op| op.parent)
+                .filter(|&parent| self.alloc.get(parent).is_some())
+                .collect();
+            ops.retain(|op| self.alloc.get(op.parent).is_some());
             ops.retain(|op| {
                 !all_parents.iter().any(|&candidate_ancestor| {
                     candidate_ancestor != op.parent
@@ -615,6 +624,11 @@ impl Tree {
             layout_changed = true;
 
             for op in ops.drain(..) {
+                if self.alloc.get(op.parent).is_none() {
+                    op.new_scope.dispose();
+                    continue;
+                }
+
                 for child in self.get(op.parent).children().to_vec() {
                     self.owner.clone().run_in(|| {
                         self.manager.clone().with(|| {
@@ -664,7 +678,7 @@ impl Tree {
                 // For now, clearing ancestor chain is safe.
                 if self.alloc.get(*node).is_some() {
                     self.clear_node_layout_upwards(renderer, *node);
-                    self.clear_node_layout_downwards(renderer, *node);
+                    // self.clear_node_layout_downwards(renderer, *node);
                 };
             }
 

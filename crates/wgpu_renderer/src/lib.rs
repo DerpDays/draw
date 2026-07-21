@@ -35,11 +35,26 @@ pub struct TextLayoutCache {
     pub key: TextLayoutKey,
     pub layout: Layout<ColorBrush>,
 }
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ShapedLayoutKey {
+    pub text: String,
+    pub options: graphics::primitives::TextLayoutOptions,
+}
+
+/// Parley Layout after builder.build() but before break_all_lines().
+#[derive(Clone)]
+pub struct ShapedLayoutCache {
+    pub key: ShapedLayoutKey,
+    pub layout: Layout<ColorBrush>,
+}
+
 #[derive(Clone, Default)]
 pub struct PrimitiveCache {
     pub mask_textures: Vec<Arc<AllocatedTexture<Mask, TextureData>>>,
     pub color_textures: Vec<Arc<AllocatedTexture<Rgba8, TextureData>>>,
     pub text_layout: Option<TextLayoutCache>,
+    pub shaped_layout: Option<ShapedLayoutCache>,
 }
 
 pub struct Mesh<V> {
